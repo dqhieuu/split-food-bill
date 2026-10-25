@@ -145,9 +145,8 @@
 
 <div class="page-heading">
 	<div>
-		<div class="eyebrow">LỊCH SỬ ĐƯỢC GIỮ LẠI</div>
-		<h1>Sổ giao dịch</h1>
-		<p>Từ bữa trưa đầu tiên đến lần hoàn tiền gần nhất.</p>
+		<h1>Ledger</h1>
+		<p>Hóa đơn, khoản nợ và hoàn tiền.</p>
 	</div>
 	<Button variant="outline" onclick={downloadCsv}><Download size={16} /> Xuất sổ đã lọc</Button>
 </div>

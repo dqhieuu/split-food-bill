@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AppState, Bill, LedgerEntry, Member, SettlementPlan } from './types';
 import { importEntrySchema } from './import';
+import { resolveBank } from './qr';
 
 export class DomainError extends Error {
 	constructor(
@@ -81,9 +82,7 @@ export function requireAdmin(state: AppState, actor: string) {
 	if (requireMember(state, actor, true).role !== 'admin')
 		throw new DomainError('Chỉ quản trị viên được thực hiện thao tác này.', 403);
 }
-export function settlementPlan(state: AppState, now = new Date().toISOString()): SettlementPlan {
-	if (state.intents.some((i) => i.status === 'pending' && i.expiresAt > now))
-		throw new DomainError('Đang có yêu cầu thanh toán QR. Vui lòng chờ hết hạn hoặc hủy yêu cầu.', 409);
+export function settlementPlan(state: AppState): SettlementPlan {
 	// Include inactive historical members so no position silently disappears.
 	const positions = state.members.map((m) => ({ id: m.id, net: netBalance(state.ledger, m.id) }));
 	const hub = [...positions].sort((a, b) => a.net - b.net)[0]?.id ?? '';
@@ -111,7 +110,7 @@ export function settlementPlan(state: AppState, now = new Date().toISOString()):
 			to: position.net < 0 ? hub : position.id,
 			amount: Math.abs(position.net),
 			type: 'debt',
-			description: 'Điều phối công nợ qua đầu mối',
+			description: 'Điều phối nợ qua đầu mối',
 			note: 'Giữ nguyên số dư ròng của từng người',
 			source: 'settlement'
 		});
@@ -261,70 +260,44 @@ export function applyCommand(
 			reference: data.id
 		});
 		reference = data.id;
-	} else if (command === 'createIntent') {
-		const data = z.object({ id: identifier, to: identifier }).parse(input);
-		const recipient = requireMember(state, data.to);
-		if (!recipient.bankCode || !recipient.bankAccount)
-			throw new DomainError('Người nhận chưa có thông tin ngân hàng.');
-		const balance = pairBalance(state.ledger, actor, data.to);
-		if (balance <= 0) throw new DomainError('Bạn không có khoản nợ cần thanh toán cho người này.');
-		const existing = state.intents.find((i) => i.id === data.id);
+	} else if (command === 'confirmQrPayment') {
+		const data = z.object({ id: identifier, to: identifier, amount }).parse(input);
+		const entryId = `qr-${data.id}`;
+		const existing = state.ledger.find((entry) => entry.id === entryId);
 		if (existing) {
-			if (existing.from !== actor) throw new DomainError('Mã yêu cầu đã tồn tại.', 409);
-			return { reference: existing.id };
-		}
-		if (
-			state.intents.some(
-				(i) => i.from === actor && i.to === data.to && i.status === 'pending' && i.expiresAt > now
+			if (
+				existing.creator !== actor ||
+				existing.from !== actor ||
+				existing.to !== data.to ||
+				existing.amount !== data.amount ||
+				existing.source !== 'qr'
 			)
-		)
-			throw new DomainError('Bạn đã có một yêu cầu QR đang chờ cho người này.', 409);
-		state.intents.push({
-			id: data.id,
+				throw new DomainError('Mã thanh toán đã được sử dụng cho một giao dịch khác.', 409);
+			return { reference: data.id };
+		}
+		requireMember(state, data.to);
+		if (data.to === actor) throw new DomainError('Không thể thanh toán cho chính mình.');
+		state.ledger.push({
+			id: entryId,
 			from: actor,
 			to: data.to,
-			amount: balance,
-			balance,
-			createdAt: now,
-			expiresAt: new Date(new Date(now).getTime() + 120_000).toISOString(),
-			status: 'pending'
+			type: 'payment',
+			amount: data.amount,
+			date: now,
+			description: 'Xác nhận chuyển khoản bằng QR',
+			note: 'Người trả tự xác nhận',
+			creator: actor,
+			source: 'qr',
+			reference: data.id
 		});
 		reference = data.id;
-	} else if (command === 'confirmIntent' || command === 'cancelIntent') {
-		const data = z.object({ id: identifier }).parse(input);
-		const intent = state.intents.find((i) => i.id === data.id && i.from === actor);
-		if (!intent) throw new DomainError('Không tìm thấy yêu cầu thanh toán.', 404);
-		if (intent.status === 'confirmed') return { reference: intent.id };
-		if (command === 'cancelIntent') intent.status = 'cancelled';
-		else {
-			if (intent.status !== 'pending' || intent.expiresAt <= now)
-				throw new DomainError('Yêu cầu đã hết hạn hoặc đã hủy. Vui lòng tạo mã mới.', 409);
-			if (pairBalance(state.ledger, actor, intent.to) !== intent.balance)
-				throw new DomainError('Số dư đã thay đổi. Hãy hủy yêu cầu và tạo mã mới.', 409);
-			requireAvailableEntryIds(state, [`qr-${intent.id}`]);
-			state.ledger.push({
-				id: `qr-${intent.id}`,
-				from: actor,
-				to: intent.to,
-				type: 'payment',
-				amount: intent.amount,
-				date: now,
-				description: 'Xác nhận chuyển khoản bằng QR',
-				note: 'Người trả tự xác nhận; chưa được ngân hàng xác minh',
-				creator: actor,
-				source: 'qr',
-				reference: intent.id
-			});
-			intent.status = 'confirmed';
-		}
-		reference = intent.id;
 	} else if (command === 'settleDebts') {
 		requireAdmin(state, actor);
 		const data = z.object({ id: identifier, version: z.number().int() }).parse(input);
 		if (state.settlements.some((s) => s.id === data.id)) return { reference: data.id };
 		if (data.version !== state.version)
-			throw new DomainError('Sổ giao dịch đã thay đổi. Vui lòng xem lại phương án mới.', 409);
-		const plan = settlementPlan(state, now);
+			throw new DomainError('Ledger đã thay đổi. Vui lòng xem lại phương án mới.', 409);
+		const plan = settlementPlan(state);
 		if (!plan.entries.length) throw new DomainError('Không có khoản nợ cần điều phối.');
 		requireAvailableEntryIds(
 			state,
@@ -349,13 +322,13 @@ export function applyCommand(
 				id: identifier,
 				name: text,
 				email: z.email(),
-				team: text,
 				active: z.boolean(),
 				role: z.enum(['admin', 'member']),
 				bankCode: z
 					.string()
 					.max(30)
 					.regex(/^[a-zA-Z0-9]*$/),
+				bankLabel: z.string().trim().max(100).optional(),
 				bankAccount: z
 					.string()
 					.max(40)
@@ -364,6 +337,9 @@ export function applyCommand(
 				color: z.string().regex(/^#[0-9a-fA-F]{6}$/)
 			})
 			.parse(input);
+		const bank = resolveBank(data.bankLabel ?? data.bankCode);
+		data.bankCode = bank.code;
+		data.bankLabel = bank.label;
 		if (data.id === actor && (!data.active || data.role !== 'admin'))
 			throw new DomainError('Bạn không thể tự gỡ quyền quản trị hoặc khóa tài khoản đang dùng.');
 		if (state.members.some((m) => m.id !== data.id && m.email.toLowerCase() === data.email.toLowerCase()))
@@ -372,21 +348,6 @@ export function applyCommand(
 		if (index < 0) state.members.push(data);
 		else state.members[index] = data;
 		reference = data.id;
-	} else if (command === 'saveMeals') {
-		const data = z
-			.array(
-				z.object({
-					id: identifier,
-					day: text,
-					dish: text,
-					note: z.string().max(300),
-					date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-				})
-			)
-			.length(5)
-			.parse(input);
-		state.meals = data;
-		reference = 'week';
 	} else if (command === 'simulateReceipt') {
 		const data = z.object({ id: identifier, fail: z.boolean() }).parse(input);
 		const receipt = state.receipts.find((r) => r.id === data.id);
@@ -434,7 +395,6 @@ export function applyCommand(
 						id,
 						name: id,
 						email: `${id}@example.test`,
-						team: 'Lịch sử',
 						active: false,
 						role: 'member',
 						bankCode: '',
@@ -460,5 +420,5 @@ export function escapeHtml(value: string) {
 export function receiptHtml(bill: Bill, members: Member[]) {
 	const name = (id: string) =>
 		escapeHtml(bill.memberNames?.[id] || members.find((m) => m.id === id)?.name || id);
-	return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f6f3ec;font-family:Arial,sans-serif;color:#272c27"><table role="presentation" width="100%"><tr><td style="padding:32px 12px"><table role="presentation" style="max-width:600px;margin:auto;background:white;border-radius:16px;width:100%;border-collapse:collapse"><tr><td style="padding:32px"><p style="color:#315e47;font-size:13px;letter-spacing:3px">BẾP CHUNG</p><h1 style="font-size:26px">Bữa ngon, chia thật gọn.</h1><p>${escapeHtml(bill.description)}</p><p>Người thanh toán: <strong>${name(bill.organizer)}</strong> · ${dateLabel(bill.date)}</p><table style="width:100%;text-align:left;border-collapse:collapse"><tr style="border-bottom:1px solid #ddd"><th style="padding:14px 0">Thành viên</th><th>Món ăn</th><th style="text-align:right">Số tiền</th></tr>${bill.lines.map((l) => `<tr><td style="padding:14px 0">${name(l.memberId)}</td><td>${escapeHtml(l.description)}${l.note ? `<br><small>${escapeHtml(l.note)}</small>` : ''}</td><td style="text-align:right">${currency(l.amount)}</td></tr>`).join('')}<tr style="border-top:1px dashed #aaa"><td colspan="2" style="padding:20px 0"><strong>Tổng cộng</strong></td><td style="text-align:right"><strong>${currency(bill.total)}</strong></td></tr></table><p style="color:#777;font-size:12px">Bản xem trước nội bộ · Chưa gửi email · Thanh toán được đối trừ theo từng cặp thành viên.</p></td></tr></table></td></tr></table></body></html>`;
+	return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f6f3ec;font-family:Arial,sans-serif;color:#272c27"><table role="presentation" width="100%"><tr><td style="padding:32px 12px"><table role="presentation" style="max-width:600px;margin:auto;background:white;border-radius:16px;width:100%;border-collapse:collapse"><tr><td style="padding:32px"><p style="color:#315e47;font-size:13px;letter-spacing:3px">CHIA TIỀN ĂN</p><h1 style="font-size:26px">Biên nhận hóa đơn</h1><p>${escapeHtml(bill.description)}</p><p>Người thanh toán: <strong>${name(bill.organizer)}</strong> · ${dateLabel(bill.date)}</p><table style="width:100%;text-align:left;border-collapse:collapse"><tr style="border-bottom:1px solid #ddd"><th style="padding:14px 0">Thành viên</th><th>Món ăn</th><th style="text-align:right">Số tiền</th></tr>${bill.lines.map((l) => `<tr><td style="padding:14px 0">${name(l.memberId)}</td><td>${escapeHtml(l.description)}${l.note ? `<br><small>${escapeHtml(l.note)}</small>` : ''}</td><td style="text-align:right">${currency(l.amount)}</td></tr>`).join('')}<tr style="border-top:1px dashed #aaa"><td colspan="2" style="padding:20px 0"><strong>Tổng cộng</strong></td><td style="text-align:right"><strong>${currency(bill.total)}</strong></td></tr></table><p style="color:#777;font-size:12px">Bản xem trước nội bộ · Chưa gửi email · Thanh toán được đối trừ theo từng cặp thành viên.</p></td></tr></table></td></tr></table></body></html>`;
 }

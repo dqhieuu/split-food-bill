@@ -55,7 +55,7 @@
 				await run(
 					'settleDebts',
 					{ id: crypto.randomUUID(), version: plan.version },
-					'Đã điều phối công nợ; số dư ròng được giữ nguyên.'
+					'Đã điều phối nợ; số dư ròng được giữ nguyên.'
 				);
 				confirmOpen = false;
 			} catch {}
@@ -64,27 +64,26 @@
 
 <div class="page-heading">
 	<div>
-		<div class="eyebrow">BỨC TRANH CHUNG CỦA CẢ ĐỘI</div>
-		<h1>Ma trận công nợ</h1>
+		<h1>Ma trận nợ nần</h1>
 		<p>Đọc theo hàng: người ở hàng đang nợ người ở cột.</p>
 	</div>
-	{#if isAdmin}<Button onclick={preview} disabled={busy}><Network size={17} /> Điều phối công nợ</Button>{/if}
+	{#if isAdmin}<Button onclick={preview} disabled={busy}><Network size={17} /> Điều phối nợ</Button>{/if}
 </div>
 <div class="stat-grid">
 	<div class="stat-card">
-		<div class="stat-label">Tổng công nợ giữa các cặp <Network size={18} /></div>
+		<div class="stat-label">Tổng nợ giữa các cặp <Network size={18} /></div>
 		<strong>{currency(outstanding)}</strong><span class="stat-foot"
 			>{scope === 'all' ? 'Bao gồm toàn bộ thành viên' : 'Chỉ các quan hệ trong nhóm đang hoạt động'}</span
 		>
 	</div>
 	<div class="stat-card">
-		<div class="stat-label">Quan hệ đang có công nợ <ArrowRight size={18} /></div>
+		<div class="stat-label">Quan hệ đang có nợ <ArrowRight size={18} /></div>
 		<strong>{relationships.length}<span class="stat-unit"> cặp</span></strong><span class="stat-foot"
 			>Sau khi đối trừ hai chiều</span
 		>
 	</div>
 	<div class="stat-card">
-		<div class="stat-label">Tổng số dư ròng <ShieldCheck size={18} /></div>
+		<div class="stat-label">Tổng lỗ/lãi <ShieldCheck size={18} /></div>
 		<strong class="positive"
 			>{currency(appState.members.reduce((s, m) => s + netBalance(appState.ledger, m.id), 0))}</strong
 		><span class="stat-foot">Phải luôn bằng 0 trên toàn bộ lịch sử</span>
@@ -94,7 +93,7 @@
 <section class="panel matrix-panel">
 	<div class="panel-heading">
 		<div>
-			<h2>Ai đang nợ ai?</h2>
+			<h2>Nợ theo thành viên</h2>
 			<p>Số dương là khoản người ở hàng cần trả · Đơn vị: đồng</p>
 		</div>
 		<select aria-label="Phạm vi ma trận" bind:value={scope}
@@ -109,7 +108,7 @@
 				><tr
 					><th>Người nợ ↓ / Người nhận →</th>{#each members as member}<th
 							><Avatar {member} size="small" /><span>{member.name.split(' ').slice(-1)[0]}</span></th
-						>{/each}<th>Số dư ròng*</th></tr
+						>{/each}<th>Lỗ/lãi*</th></tr
 				></thead
 			><tbody
 				>{#each members as row}<tr
@@ -125,8 +124,8 @@
 										? new Intl.NumberFormat('vi-VN').format(balance)
 										: '·'}</td
 							>{/each}<td
-							class:positive={netBalance(appState.ledger, row.id) >= 0}
-							class:negative={netBalance(appState.ledger, row.id) < 0}
+							class:loss-amount={netBalance(appState.ledger, row.id) >= 0}
+							class:gain-amount={netBalance(appState.ledger, row.id) < 0}
 							class="matrix-net">{currency(netBalance(appState.ledger, row.id))}</td
 						></tr
 					>{/each}</tbody
@@ -134,13 +133,13 @@
 		</table>
 	</div>
 	<div class="table-footer">
-		<span>* Số dư ròng luôn tính từ toàn bộ lịch sử. Dương: được nhận. Âm: cần trả.</span>
+		<span>* Số dư ròng luôn tính từ toàn bộ lịch sử. Dương: lỗ. Âm: lãi.</span>
 	</div>
 </section>
 <div class="two-panels">
 	<section class="panel info-panel">
 		<span class="feature-icon"><Network size={22} /></span>
-		<h2>Ít mối nợ hơn, dễ theo dõi hơn</h2>
+		<h2>Quy tắc điều phối</h2>
 		<p>
 			Điều phối sẽ bù trừ các mối nợ hiện tại rồi chuyển chúng qua một đầu mối: người có số dư âm lớn nhất. Số
 			dư ròng của từng người giữ nguyên.
@@ -198,9 +197,7 @@
 					><strong>{currency(Math.abs(position.net))}</strong>
 				</div>{/each}
 		</div>
-		<p class="fine-print">
-			Nếu có giao dịch mới hoặc yêu cầu QR đang hiệu lực, phương án sẽ bị từ chối để bạn kiểm tra lại.
-		</p>
+		<p class="fine-print">Nếu có giao dịch mới, phương án sẽ bị từ chối để bạn kiểm tra lại.</p>
 		<label class="checkbox-label"
 			><input type="checkbox" bind:checked={acknowledged} />Tôi hiểu đây là điều phối sổ nợ, không phải thanh
 			toán thực tế.</label

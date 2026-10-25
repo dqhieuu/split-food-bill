@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
 	import { Plus, ArrowLeft, ArrowRight, Check, Mail, ReceiptText, Users, Save, Info } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -48,7 +47,6 @@
 	const payer = $derived(appState.members.find((m) => m.id === actor)!);
 	onMount(() => {
 		selected = [actor];
-		description = page.url.searchParams.get('meal') || '';
 		try {
 			const saved = localStorage.getItem(`lunchroom-draft-${actor}`);
 			if (saved) {
@@ -120,7 +118,7 @@
 					lines,
 					emailReceipt
 				},
-				'Đã ghi hóa đơn và cập nhật công nợ.'
+				'Đã ghi hóa đơn và cập nhật nợ.'
 			);
 			localStorage.removeItem(`lunchroom-draft-${actor}`);
 			draftReady = false;
@@ -135,9 +133,8 @@
 <a href="/" class="back-link"><ArrowLeft size={16} /> Về tổng quan</a>
 <div class="page-heading">
 	<div>
-		<div class="eyebrow">MỘT BỮA NGON MỚI</div>
 		<h1>Tạo hóa đơn</h1>
-		<p>Bạn đã trả tiền? Thêm mọi người, để Bếp Chung chia giúp.</p>
+		<p>Ghi khoản chi và phân bổ nợ.</p>
 	</div>
 	<span class="draft-status"><Save size={15} />{lastSaved}</span>
 </div>
@@ -146,7 +143,7 @@
 		<section class="panel form-panel">
 			<div class="section-step">
 				<span>1</span>
-				<h2>Thông tin bữa ăn</h2>
+				<h2>Thông tin hóa đơn</h2>
 			</div>
 			<label class="field"
 				>Tên hóa đơn<Input
@@ -168,7 +165,7 @@
 		<section class="panel form-panel">
 			<div class="section-step">
 				<span>2</span>
-				<h2>Ai cùng tham gia?</h2>
+				<h2>Thành viên tham gia</h2>
 				<button
 					class="text-link"
 					onclick={() => (selected = selected.length === people.length ? [] : people.map((m) => m.id))}
@@ -250,7 +247,7 @@
 		<section class="panel bill-summary">
 			<span class="summary-icon"><ReceiptText size={27} /></span>
 			<h2>Tóm tắt hóa đơn</h2>
-			<p>{description || 'Bữa ngon chưa có tên'}</p>
+			<p>{description || 'Chưa có mô tả'}</p>
 			<div class="summary-pair"><span>Người tham gia</span><strong>{selected.length} người</strong></div>
 			<div class="summary-pair">
 				<span>Phương thức</span><strong>{mode === 'equal' ? 'Chia đều' : 'Theo từng người'}</strong>
@@ -269,19 +266,19 @@
 				disabled={busy}>Xem lại hóa đơn <ArrowRight size={16} /></Button
 			>
 			<div class="summary-hint">
-				<Info size={15} /><span>Chưa phát sinh công nợ cho đến khi bạn xác nhận.</span>
+				<Info size={15} /><span>Chưa phát sinh nợ cho đến khi bạn xác nhận.</span>
 			</div>
 		</section>
 		<div class="quiet-tip">
 			<Info size={19} />
-			<p>Phần ăn của bạn được tính vào tổng hóa đơn, không tạo công nợ với chính mình.</p>
+			<p>Phần ăn của bạn được tính vào tổng hóa đơn, không tạo nợ với chính mình.</p>
 		</div>
 	</div>
 </div>
 <Modal
 	bind:open={confirmOpen}
 	title="Kiểm tra trước khi ghi hóa đơn"
-	description="Công nợ sẽ được cập nhật cho các thành viên dưới đây."
+	description="Nợ sẽ được cập nhật cho các thành viên dưới đây."
 	wide
 	><div class="confirm-bill-title">
 		<ReceiptText size={23} />

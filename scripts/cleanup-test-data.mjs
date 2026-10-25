@@ -10,9 +10,9 @@ export async function cleanupTestData() {
 	const db = getFirestore(app);
 	const root = db.doc('groups/local');
 	await db.runTransaction(async (transaction) => {
-		const [metadata, bills, ledger, receipts, intents, audit, members] = await Promise.all([
+		const [metadata, bills, ledger, receipts, audit, members] = await Promise.all([
 			transaction.get(root),
-			...['bills', 'ledger', 'receipts', 'intents', 'audit', 'members'].map((key) =>
+			...['bills', 'ledger', 'receipts', 'audit', 'members'].map((key) =>
 				transaction.get(root.collection(key))
 			)
 		]);
@@ -43,15 +43,6 @@ export async function cleanupTestData() {
 		}
 		for (const document of [...bills.docs, ...receipts.docs])
 			if (billIds.has(document.id)) transaction.delete(document.ref);
-		for (const document of intents.docs)
-			if (
-				document.id.startsWith('e2e-') ||
-				document.data().from.startsWith('e2e-') ||
-				document.data().to.startsWith('e2e-')
-			) {
-				references.add(document.id);
-				transaction.delete(document.ref);
-			}
 		for (const document of members.docs) if (document.id.startsWith('e2e-')) transaction.delete(document.ref);
 		for (const document of audit.docs)
 			if (references.has(document.data().reference) || document.data().reference?.startsWith('e2e-'))

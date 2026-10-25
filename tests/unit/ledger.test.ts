@@ -9,7 +9,7 @@ import {
 } from '../../src/lib/domain/ledger';
 import { createDemoState } from '../../src/lib/domain/seed';
 import { parseLedgerImport } from '../../src/lib/domain/import';
-import { crc16, vietQrPayload } from '../../src/lib/domain/qr';
+import { crc16, vietQrPayload, resolveBank } from '../../src/lib/domain/qr';
 
 const now = '2026-10-25T12:00:00.000Z';
 const fresh = () => createDemoState(new Date(now));
@@ -44,7 +44,7 @@ describe('ledger accounting', () => {
 			for (let i = 0; i < state.ledger.length; i++)
 				state.ledger[i].amount = ((i * sample * 7919) % 200001) - 40000;
 			const before = state.members.map((m) => netBalance(state.ledger, m.id));
-			const plan = settlementPlan(state, now);
+			const plan = settlementPlan(state);
 			applyCommand(state, 'an', 'settleDebts', { id: `settle-${sample}`, version: state.version }, now);
 			expect(state.members.map((m) => netBalance(state.ledger, m.id))).toEqual(before);
 			expect(before.reduce((s, n) => s + n, 0)).toBe(0);
@@ -90,7 +90,7 @@ describe('ledger accounting', () => {
 				expect(splitAmount(amount, Array(count).fill(1)).reduce((s, n) => s + n, 0)).toBe(amount);
 	});
 });
-describe('payment intents', () => {
+describe('payments', () => {
 	it('records multiple repayments together and is idempotent', () => {
 		const state = fresh();
 		const before = state.ledger.length;
@@ -147,36 +147,42 @@ describe('payment intents', () => {
 		];
 		return state;
 	}
-	it('confirms once and blocks reassignment while a QR request is active', () => {
+	it('records a QR confirmation directly, with no pending request or expiry, exactly once', () => {
 		const state = prepare();
-		applyCommand(state, 'an', 'createIntent', { id: 'intent', to: 'linh' }, now);
-		expect(() => settlementPlan(state, now)).toThrow();
-		applyCommand(state, 'an', 'confirmIntent', { id: 'intent' }, now);
-		applyCommand(state, 'an', 'confirmIntent', { id: 'intent' }, now);
+		const input = { id: 'qr-payment', to: 'linh', amount: 65000 };
+		applyCommand(state, 'an', 'confirmQrPayment', input, '2026-10-26T12:00:00.000Z');
+		const version = state.version;
+		applyCommand(state, 'an', 'confirmQrPayment', input, '2026-10-27T12:00:00.000Z');
 		expect(pairBalance(state.ledger, 'an', 'linh')).toBe(0);
-		expect(state.ledger.filter((e) => e.source === 'qr')).toHaveLength(1);
+		expect(state.ledger.filter((entry) => entry.source === 'qr')).toHaveLength(1);
+		expect(state.version).toBe(version);
 	});
-	it('rejects expired, cancelled, foreign and changed-balance confirmation', () => {
-		const expired = prepare();
-		applyCommand(expired, 'an', 'createIntent', { id: 'i', to: 'linh' }, now);
-		expect(() =>
-			applyCommand(expired, 'an', 'confirmIntent', { id: 'i' }, '2026-10-25T12:03:00.000Z')
-		).toThrow();
-		expect(() => applyCommand(expired, 'linh', 'confirmIntent', { id: 'i' }, now)).toThrow();
-		const changed = prepare();
-		applyCommand(changed, 'an', 'createIntent', { id: 'i', to: 'linh' }, now);
+	it('records the scanned amount after intervening ledger changes and settlement', () => {
+		const state = prepare();
 		applyCommand(
-			changed,
+			state,
 			'an',
 			'recordPayment',
-			{ id: 'p', to: 'linh', amount: 1000, description: 'Part', note: '' },
+			{ id: 'partial', to: 'linh', amount: 1000, description: 'Part', note: '' },
 			now
 		);
-		expect(() => applyCommand(changed, 'an', 'confirmIntent', { id: 'i' }, now)).toThrow();
-		applyCommand(changed, 'an', 'cancelIntent', { id: 'i' }, now);
-		expect(() => applyCommand(changed, 'an', 'confirmIntent', { id: 'i' }, now)).toThrow();
+		applyCommand(state, 'an', 'settleDebts', { id: 'settlement', version: state.version }, now);
+		const before = netBalance(state.ledger, 'an');
+		applyCommand(state, 'an', 'confirmQrPayment', { id: 'qr-payment', to: 'linh', amount: 65000 }, now);
+		expect(netBalance(state.ledger, 'an')).toBe(before + 65000);
+	});
+	it('rejects self payments and conflicting retries without adding extra ledger entries', () => {
+		const state = prepare();
+		const input = { id: 'qr-payment', to: 'linh', amount: 65000 };
+		expect(() => applyCommand(state, 'an', 'confirmQrPayment', { ...input, to: 'an' }, now)).toThrow();
+		expect(() => applyCommand(state, 'an', 'confirmQrPayment', { ...input, to: 'missing' }, now)).toThrow();
+		applyCommand(state, 'an', 'confirmQrPayment', input, now);
+		expect(() => applyCommand(state, 'an', 'confirmQrPayment', { ...input, amount: 64000 }, now)).toThrow();
+		expect(() => applyCommand(state, 'huy', 'confirmQrPayment', input, now)).toThrow();
+		expect(state.ledger.filter((entry) => entry.source === 'qr')).toHaveLength(1);
 	});
 });
+
 describe('migration and receipts', () => {
 	it('preserves former members, zero and self rows, with repeatable imports', () => {
 		const rows = parseLedgerImport(
@@ -235,5 +241,16 @@ describe('migration and receipts', () => {
 		expect(payload).toContain('00000123');
 		expect(payload).toContain('A000000727');
 		expect(payload.slice(-4)).toBe(crc16(payload.slice(0, -4)));
+	});
+	it('resolves suggested banks to QR codes and preserves arbitrary bank text without a fabricated code', () => {
+		expect(resolveBank('  vIet com bank ')).toEqual({ code: '970436', label: 'Vietcombank' });
+		expect(resolveBank('970422')).toEqual({ code: '970422', label: 'MB Bank' });
+		const state = fresh();
+		const member = state.members.find((member) => member.id === 'linh')!;
+		applyCommand(state, 'an', 'saveMember', { ...member, bankLabel: 'Ngân hàng nội bộ' }, now);
+		expect(state.members.find((member) => member.id === 'linh')).toMatchObject({
+			bankLabel: 'Ngân hàng nội bộ',
+			bankCode: ''
+		});
 	});
 });

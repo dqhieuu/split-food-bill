@@ -2,10 +2,10 @@ export type Member = {
 	id: string;
 	name: string;
 	email: string;
-	team: string;
 	active: boolean;
 	role: 'admin' | 'member';
 	bankCode: string;
+	bankLabel?: string;
 	bankAccount: string;
 	bankName: string;
 	color: string;
@@ -35,16 +35,6 @@ export type Bill = {
 	emailReceipt: boolean;
 	memberNames?: Record<string, string>;
 };
-export type PaymentIntent = {
-	id: string;
-	from: string;
-	to: string;
-	amount: number;
-	balance: number;
-	expiresAt: string;
-	status: 'pending' | 'confirmed' | 'cancelled';
-	createdAt: string;
-};
 export type Receipt = {
 	id: string;
 	billId: string;
@@ -62,7 +52,6 @@ export type Settlement = {
 	version: number;
 	entryCount: number;
 };
-export type Meal = { id: string; day: string; dish: string; note: string; date: string };
 export type Archive = { id: string; name: string; url: string; date: string };
 export type AuditEvent = { id: string; actor: string; action: string; date: string; reference: string };
 export type UserPreference = { id: string; lastSeenRelease: string };
@@ -71,10 +60,8 @@ export type AppState = {
 	members: Member[];
 	ledger: LedgerEntry[];
 	bills: Bill[];
-	intents: PaymentIntent[];
 	receipts: Receipt[];
 	settlements: Settlement[];
-	meals: Meal[];
 	archives: Archive[];
 	audit: AuditEvent[];
 	preferences: UserPreference[];
@@ -84,10 +71,8 @@ export const collectionKeys: CollectionKey[] = [
 	'members',
 	'ledger',
 	'bills',
-	'intents',
 	'receipts',
 	'settlements',
-	'meals',
 	'archives',
 	'audit',
 	'preferences'

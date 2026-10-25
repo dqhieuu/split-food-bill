@@ -37,3 +37,18 @@ export const bankNames: Record<string, string> = {
 	'970403': 'Sacombank',
 	'970405': 'Agribank'
 };
+
+export function resolveBank(value: string): { code: string; label: string } {
+	const label = value.trim();
+	const normalize = (text: string) =>
+		text
+			.normalize('NFD')
+			.replace(/\p{Diacritic}/gu, '')
+			.toLowerCase()
+			.replace(/[^a-z0-9]/g, '');
+	const match = Object.entries(bankNames).find(
+		([code, name]) => code === label || normalize(name) === normalize(label)
+	);
+	if (match) return { code: match[0], label: match[1] };
+	return { code: /^\d{6}$/.test(label) ? label : '', label };
+}

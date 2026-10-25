@@ -1,23 +1,21 @@
 import type { AppState, Member } from './types';
-import { localDate } from './ledger';
 
 export function createDemoState(now = new Date()): AppState {
 	const profiles = [
-		['an', 'Minh An', '#44735a', 'Sản phẩm'],
-		['linh', 'Thảo Linh', '#c58a60', 'Thiết kế'],
-		['huy', 'Quang Huy', '#7b8eaf', 'Kỹ thuật'],
-		['mai', 'Ngọc Mai', '#b0788e', 'Sản phẩm'],
-		['nam', 'Hoàng Nam', '#8e8e5d', 'Kỹ thuật'],
-		['vy', 'Tường Vy', '#8d7cac', 'Thiết kế'],
-		['khoa', 'Đăng Khoa', '#5e999c', 'Kỹ thuật'],
-		['chi', 'Bảo Chi', '#b78c50', 'Vận hành'],
-		['former', 'Thành viên cũ', '#a8a29e', 'Lịch sử']
+		['an', 'Minh An', '#44735a'],
+		['linh', 'Thảo Linh', '#c58a60'],
+		['huy', 'Quang Huy', '#7b8eaf'],
+		['mai', 'Ngọc Mai', '#b0788e'],
+		['nam', 'Hoàng Nam', '#8e8e5d'],
+		['vy', 'Tường Vy', '#8d7cac'],
+		['khoa', 'Đăng Khoa', '#5e999c'],
+		['chi', 'Bảo Chi', '#b78c50'],
+		['former', 'Thành viên cũ', '#a8a29e']
 	];
-	const members: Member[] = profiles.map(([id, name, color, team], i) => ({
+	const members: Member[] = profiles.map(([id, name, color], i) => ({
 		id,
 		name,
 		color,
-		team,
 		email: `${id}@example.test`,
 		active: id !== 'former',
 		role: i === 0 ? 'admin' : 'member',
@@ -30,10 +28,8 @@ export function createDemoState(now = new Date()): AppState {
 		members,
 		ledger: [],
 		bills: [],
-		intents: [],
 		receipts: [],
 		settlements: [],
-		meals: [],
 		archives: [],
 		audit: [],
 		preferences: []
@@ -107,7 +103,7 @@ export function createDemoState(now = new Date()): AppState {
 		amount: 85000,
 		date: new Date(now.getTime() - 30 * 86400000).toISOString(),
 		description: 'Bữa trưa trước khi chuyển nhóm',
-		note: 'Giữ nguyên công nợ thành viên cũ',
+		note: 'Giữ nguyên nợ thành viên cũ',
 		creator: 'an',
 		source: 'import',
 		reference: 'demo',
@@ -125,26 +121,6 @@ export function createDemoState(now = new Date()): AppState {
 		creator: 'an',
 		source: 'manual',
 		reference: 'demo-payment'
-	});
-	const monday = new Date(now);
-	const weekday = (monday.getDay() + 6) % 7;
-	monday.setDate(monday.getDate() - weekday);
-	state.meals = ['Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu'].map((day, i) => {
-		const date = new Date(monday);
-		date.setDate(date.getDate() + i);
-		return {
-			id: `weekday-${i}`,
-			day,
-			dish: ['Bún bò Huế', 'Cơm gà Hội An', 'Bún chả Hà Nội', 'Mì Quảng', 'Cơm tấm sườn bì'][i],
-			note: [
-				'Khởi đầu tuần thật ấm bụng',
-				'Thêm rau, bớt ngán',
-				'Đổi vị giữa tuần',
-				'Một chút hương vị miền Trung',
-				'Bữa ngon khép lại tuần'
-			][i],
-			date: localDate(date)
-		};
 	});
 	return state;
 }

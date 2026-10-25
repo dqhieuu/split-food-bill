@@ -23,7 +23,7 @@
 	import type { AppState, Member } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, dateLabel, localDate, netBalance } from '$lib/domain/ledger';
-	import { bankNames } from '$lib/domain/qr';
+	import { bankNames, resolveBank } from '$lib/domain/qr';
 	import { parseLedgerImport, summarizeImport, type ImportedEntry } from '$lib/domain/import';
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
 		$props();
@@ -31,11 +31,11 @@
 	let search = $state('');
 	let memberOpen = $state(false);
 	let isNew = $state(false);
+	let bankInput = $state('');
 	let memberDraft = $state<Member>({
 		id: '',
 		name: '',
 		email: '',
-		team: '',
 		active: true,
 		role: 'member',
 		bankCode: '970436',
@@ -56,7 +56,7 @@
 	const isAdmin = $derived(appState.members.find((m) => m.id === actor)?.role === 'admin');
 	const members = $derived(
 		appState.members.filter((m) =>
-			`${m.name} ${m.email} ${m.team}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))
+			`${m.id} ${m.name} ${m.email}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))
 		)
 	);
 	const summary = $derived(summarizeImport(importEntries, appState));
@@ -64,12 +64,9 @@
 		recordPayments: 'Ghi hoàn tiền nhiều người',
 		createBill: 'Ghi hóa đơn',
 		recordPayment: 'Ghi hoàn tiền',
-		createIntent: 'Tạo yêu cầu QR',
-		confirmIntent: 'Xác nhận QR',
-		cancelIntent: 'Hủy yêu cầu QR',
-		settleDebts: 'Điều phối công nợ',
+		confirmQrPayment: 'Ghi thanh toán QR',
+		settleDebts: 'Điều phối nợ',
 		saveMember: 'Cập nhật thành viên',
-		saveMeals: 'Lưu thực đơn',
 		simulateReceipt: 'Mô phỏng biên nhận',
 		saveArchive: 'Thêm lưu trữ',
 		markReleaseSeen: 'Đã xem cập nhật',
@@ -83,7 +80,6 @@
 					id: '',
 					name: '',
 					email: '',
-					team: 'Hội ăn trưa',
 					active: true,
 					role: 'member',
 					bankCode: '970436',
@@ -91,17 +87,23 @@
 					bankName: '',
 					color: '#6c8b70'
 				};
+		bankInput = memberDraft.bankLabel ?? bankNames[memberDraft.bankCode] ?? memberDraft.bankCode;
 		validation = '';
 		memberOpen = true;
 	}
 	async function saveMember() {
 		validation = '';
-		if (!memberDraft.id || !memberDraft.name || !memberDraft.email || !memberDraft.team) {
-			validation = 'Điền đầy đủ mã, họ tên, email và nhóm.';
+		if (!memberDraft.id || !memberDraft.name || !memberDraft.email) {
+			validation = 'Điền đầy đủ ID, tên và email.';
 			return;
 		}
 		try {
-			await run('saveMember', memberDraft, 'Đã lưu hồ sơ thành viên.');
+			const bank = resolveBank(bankInput);
+			await run(
+				'saveMember',
+				{ ...memberDraft, bankCode: bank.code, bankLabel: bank.label },
+				'Đã lưu hồ sơ thành viên.'
+			);
 			memberOpen = false;
 		} catch {}
 	}
@@ -167,7 +169,6 @@
 
 <div class="page-heading">
 	<div>
-		<div class="eyebrow">MỘT KHÔNG GIAN, CẢ ĐỘI CÙNG DÙNG</div>
 		<h1>Thành viên & quản lý</h1>
 		<p>Hồ sơ, ngân hàng, lịch sử lưu trữ và dữ liệu của nhóm.</p>
 	</div>
@@ -187,7 +188,7 @@
 			<div class="search-field">
 				<Search size={17} /><Input
 					aria-label="Tìm thành viên"
-					placeholder="Tìm tên, email hoặc nhóm…"
+					placeholder="Tìm ID, tên hoặc email…"
 					bind:value={search}
 				/>
 			</div>
@@ -201,8 +202,8 @@
 			<table class="data-table">
 				<thead
 					><tr
-						><th>Thành viên</th><th>Nhóm</th><th>Ngân hàng</th><th>Trạng thái</th><th class="align-right"
-							>Số dư ròng</th
+						><th>Thành viên</th><th>Vai trò</th><th>Ngân hàng</th><th>Trạng thái</th><th class="align-right"
+							>Lỗ/lãi</th
 						><th></th></tr
 					></thead
 				><tbody
@@ -211,10 +212,8 @@
 								><div class="table-person">
 									<Avatar {member} /><span><strong>{member.name}</strong><small>{member.email}</small></span>
 								</div></td
-							><td
-								>{member.team}{#if member.role === 'admin'}<small>Quản trị viên</small>{/if}</td
-							><td
-								>{bankNames[member.bankCode] || 'Chưa thiết lập'}<small
+							><td>{member.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}</td><td
+								>{member.bankLabel || bankNames[member.bankCode] || member.bankCode || 'Chưa thiết lập'}<small
 									>{member.bankAccount
 										? `•••• ${member.bankAccount.slice(-4)}`
 										: 'Chưa có số tài khoản'}</small
@@ -249,7 +248,7 @@
 				<div class="data-action-card">
 					<FileJson size={25} />
 					<h2>Sao lưu dữ liệu</h2>
-					<p>Tải bản JSON gồm thành viên, hóa đơn, sổ giao dịch, biên nhận, thực đơn và nhật ký.</p>
+					<p>Tải bản JSON gồm thành viên, hóa đơn, sổ giao dịch, biên nhận và nhật ký.</p>
 					{#if isAdmin}<Button variant="outline" onclick={downloadBackup}
 							><Download size={16} /> Tải bản sao JSON</Button
 						>{:else}<p class="fine-print">Chỉ quản trị viên được xuất bản sao đầy đủ.</p>{/if}
@@ -330,31 +329,30 @@
 <Modal
 	bind:open={memberOpen}
 	title={isNew ? 'Thêm thành viên' : 'Chỉnh sửa hồ sơ'}
-	description="Mã thành viên là định danh cố định. Thông tin ngân hàng dùng để tạo QR."
+	description="ID là định danh cố định. Thông tin ngân hàng dùng để tạo QR."
 	wide
 	><div class="form-two-columns">
 		<label class="field"
-			>Mã thành viên<Input
-				bind:value={memberDraft.id}
-				disabled={!isNew}
-				placeholder="minh.an"
-				maxlength={100}
-			/></label
-		><label class="field">Họ và tên<Input bind:value={memberDraft.name} maxlength={100} /></label><label
-			class="field">Email<Input type="email" bind:value={memberDraft.email} /></label
-		><label class="field">Nhóm<Input bind:value={memberDraft.team} /></label><label class="field"
-			>Ngân hàng<select bind:value={memberDraft.bankCode}
-				><option value="">Chưa thiết lập</option>{#each Object.entries(bankNames) as [code, name]}<option
-						value={code}>{name}</option
-					>{/each}</select
-			></label
+			>ID<Input bind:value={memberDraft.id} disabled={!isNew} placeholder="minh.an" maxlength={100} /></label
 		><label class="field"
-			>Số tài khoản<Input bind:value={memberDraft.bankAccount} inputmode="numeric" maxlength={40} /></label
-		><label class="field">Tên chủ tài khoản<Input bind:value={memberDraft.bankName} /></label><label
-			class="field"
 			>Vai trò<select bind:value={memberDraft.role} disabled={memberDraft.id === actor}
 				><option value="member">Thành viên</option><option value="admin">Quản trị viên</option></select
 			></label
+		><label class="field">Tên<Input bind:value={memberDraft.name} maxlength={100} /></label><label
+			class="field">Email<Input type="email" bind:value={memberDraft.email} /></label
+		><label class="field"
+			>Ngân hàng<Input
+				bind:value={bankInput}
+				list="member-bank-options"
+				placeholder="Nhập tên ngân hàng"
+				autocomplete="off"
+				maxlength={100}
+			/>
+			<datalist id="member-bank-options"
+				>{#each Object.values(bankNames) as name}<option value={name}></option>{/each}</datalist
+			></label
+		><label class="field"
+			>Số tài khoản<Input bind:value={memberDraft.bankAccount} inputmode="numeric" maxlength={40} /></label
 		>
 	</div>
 	<div class="button-row">
@@ -364,7 +362,7 @@
 				disabled={memberDraft.id === actor}
 				aria-label="Thành viên đang hoạt động"
 			/>Đang hoạt động</label
-		><label class="color-field">Màu đại diện<input type="color" bind:value={memberDraft.color} /></label>
+		>
 	</div>
 	{#if validation}<p class="validation-error">{validation}</p>{/if}<Button
 		onclick={saveMember}
@@ -388,7 +386,7 @@
 	description="Nhập theo lô 150 dòng; mã giao dịch giúp tránh nhập trùng khi thử lại."
 	wide
 	><p class="fine-print">
-		JSON: danh sách giao dịch hoặc bản sao của Bếp Chung. CSV dùng cột <code
+		JSON: danh sách giao dịch hoặc bản sao của Chia tiền ăn. CSV dùng cột <code
 			>id,from,to,type,amount,date,description,note,legacySequence</code
 		>. Loại là <code>debt/payment</code> hoặc Nợ/Trả; tiền là số nguyên đồng; ngày ISO 8601 có múi giờ.
 	</p>

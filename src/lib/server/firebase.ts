@@ -1,6 +1,6 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, type Transaction } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore, type Transaction } from 'firebase-admin/firestore';
 import type { AppState } from '$lib/domain/types';
 import { collectionKeys } from '$lib/domain/types';
 import { createDemoState } from '$lib/domain/seed';
@@ -33,11 +33,21 @@ async function readState(transaction?: Transaction): Promise<AppState> {
 }
 export async function ensureDemoState() {
 	const { db } = getLocalFirebase();
-	const exists = await db.doc('groups/local').get();
-	if (exists.exists) return;
 	await db.runTransaction(async (tx) => {
 		const root = db.doc('groups/local');
-		if ((await tx.get(root)).exists) return;
+		const metadata = await tx.get(root);
+		if (metadata.exists) {
+			// Remove obsolete department metadata and saved QR requests from older snapshots.
+			const members = await tx.get(root.collection('members'));
+			const legacyQrRequests = await tx.get(root.collection('intents'));
+			const legacyMembers = members.docs.filter((member) => Object.hasOwn(member.data(), 'team'));
+			if (legacyMembers.length || legacyQrRequests.size) {
+				for (const member of legacyMembers) tx.update(member.ref, { team: FieldValue.delete() });
+				for (const request of legacyQrRequests.docs) tx.delete(request.ref);
+				tx.update(root, { version: (metadata.data()?.version || 0) + 1 });
+			}
+			return;
+		}
 		const state = createDemoState();
 		tx.set(root, { version: state.version });
 		for (const key of collectionKeys)

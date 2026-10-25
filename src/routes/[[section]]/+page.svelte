@@ -10,7 +10,6 @@
 		Users,
 		ArrowUpRight,
 		Plus,
-		Sprout,
 		Bell,
 		RefreshCw,
 		ChevronDown,
@@ -29,7 +28,6 @@
 	import BillComposer from '$lib/components/views/BillComposer.svelte';
 	import Balances from '$lib/components/views/Balances.svelte';
 	import Activity from '$lib/components/views/Activity.svelte';
-	import Meals from '$lib/components/views/Meals.svelte';
 	import Management from '$lib/components/views/Management.svelte';
 	import DebtMatrix from '$lib/components/views/DebtMatrix.svelte';
 	import PaymentIndex from '$lib/components/views/PaymentIndex.svelte';
@@ -50,10 +48,9 @@
 		{ path: '/', label: 'Tổng quan', icon: LayoutDashboard },
 		{ path: '/new-bill', label: 'Ghi thanh toán', icon: Plus },
 		{ path: '/balances', label: 'Số dư cá nhân', icon: Wallet },
-		{ path: '/matrix', label: 'Ma trận công nợ', icon: Users },
-		{ path: '/index', label: 'Chỉ số thanh toán', icon: ArrowUpRight },
-		{ path: '/activity', label: 'Sổ giao dịch', icon: ReceiptText },
-		{ path: '/meals', label: 'Tuần này ăn gì?', icon: Utensils },
+		{ path: '/matrix', label: 'Ma trận nợ nần', icon: Users },
+		{ path: '/index', label: 'Tiền ăn index', icon: ArrowUpRight },
+		{ path: '/activity', label: 'Ledger', icon: ReceiptText },
 		{ path: '/members', label: 'Thành viên & quản lý', icon: Users }
 	];
 	const section = $derived(page.url.pathname);
@@ -146,9 +143,9 @@
 </script>
 
 <svelte:head
-	><title>Bếp Chung · Chia bữa ngon, nhẹ công nợ</title><meta
+	><title>Chia tiền ăn</title><meta
 		name="description"
-		content="Không gian chung cho hóa đơn, công nợ và những bữa trưa cùng đội."
+		content="Quản lý hóa đơn, thanh toán và nợ nội bộ."
 	/></svelte:head
 >
 <svelte:window
@@ -165,15 +162,13 @@
 		></button>{/if}
 	<aside class:mobile-open={mobileMenu}>
 		<a class="brand" href="/"
-			><span class="brand-mark"><Utensils size={23} /></span><span
-				>Bếp Chung<span class="brand-caption">BỮA NGON CÙNG ĐỘI</span></span
-			></a
+			><span class="brand-mark"><Utensils size={23} /></span><span>Chia tiền ăn</span></a
 		>
 		<button class="mobile-close icon-button" aria-label="Đóng trình đơn" onclick={() => (mobileMenu = false)}
 			><X size={20} /></button
 		>
 		<div class="workspace">
-			<span class="workspace-symbol">BC</span>
+			<span class="workspace-symbol">CTA</span>
 			<div>
 				<strong>Hội ăn trưa</strong><small
 					>{appState?.members.filter((m) => m.active).length || '—'} thành viên · VND</small
@@ -181,7 +176,6 @@
 			</div>
 			<ChevronDown size={14} />
 		</div>
-		<div class="nav-label">KHÔNG GIAN CHUNG</div>
 		<nav aria-label="Điều hướng chính">
 			{#each navigation as item}
 				<a
@@ -196,12 +190,8 @@
 			{/each}
 		</nav>
 		<div class="sidebar-bottom">
-			<div class="sidebar-note">
-				<Sprout size={24} /><strong>Bữa trưa vui hơn<br />khi cùng chia sẻ.</strong>
-				<p>Một nơi gọn gàng cho chuyện ăn uống và tiền nong của cả đội.</p>
-			</div>
 			<button class="help-link" onclick={() => (releaseOpen = true)}
-				><CircleHelp size={17} /> Có gì mới ở Bếp Chung? <ArrowUpRight size={15} /></button
+				><CircleHelp size={17} /> Nhật ký cập nhật <ArrowUpRight size={15} /></button
 			>
 			<div class="local-status"><span></span> Môi trường thử nghiệm cục bộ</div>
 		</div>
@@ -242,9 +232,7 @@
 		<main id="main-content">
 			{#if loading}
 				<div class="loading-panel">
-					<span class="brand-mark"><Utensils size={25} /></span>
-					<h1>Đang dọn bàn…</h1>
-					<p>Kết nối không gian ăn trưa của cả đội.</p>
+					<h1>Đang tải dữ liệu…</h1>
 					<LoaderCircle class="spin" size={22} />
 				</div>
 			{:else if error}
@@ -259,7 +247,6 @@
 				{:else if section === '/new-bill'}{#key actor}<BillComposer {appState} {actor} {run} {busy} />{/key}
 				{:else if section === '/balances'}{#key actor}<Balances {appState} {actor} {run} {busy} />{/key}
 				{:else if section === '/activity'}<Activity {appState} {actor} {run} {busy} />
-				{:else if section === '/meals'}<Meals {appState} {run} {busy} />
 				{:else if section === '/members'}<Management {appState} {actor} {run} {busy} />
 				{:else if section === '/matrix'}<DebtMatrix {appState} {actor} {run} {busy} />
 				{:else if section === '/index'}<PaymentIndex {appState} {actor} />
@@ -270,9 +257,7 @@
 			{/if}
 		</main>
 		<footer>
-			<span>Bếp Chung <span class="footer-dot">·</span> Chia bữa ngon, nhẹ công nợ.</span><span
-				>VND <span class="footer-dot">·</span> Giờ Việt Nam</span
-			>
+			<span>Chia tiền ăn</span><span>VND <span class="footer-dot">·</span> Giờ Việt Nam</span>
 		</footer>
 	</div>
 </div>
@@ -301,15 +286,8 @@
 	</div>
 	<p class="fine-print">Tài khoản mẫu chỉ dùng trên bộ giả lập. Không cần mật khẩu thật.</p>
 </Modal>
-<Modal
-	bind:open={releaseOpen}
-	title="Một chiếc bếp mới cho cả đội"
-	description="Bếp Chung · Phiên bản dùng thử 0.1.0"
->
+<Modal bind:open={releaseOpen} title="Nhật ký cập nhật" description="Chia tiền ăn · Phiên bản dùng thử 0.1.0">
 	<div class="release-note">
-		<span class="feature-icon"><Sprout size={25} /></span>
-		<h3>Bữa ngon vẫn vậy. Chia tiền nhẹ hơn.</h3>
-		<p>Tạo hóa đơn riêng, theo dõi công nợ, xác nhận trả tiền và lên thực đơn trong một không gian chung.</p>
 		<ul>
 			<li>Số tiền nhập rõ ràng theo đồng hoặc nghìn đồng.</li>
 			<li>Giữ lại lịch sử của thành viên đã rời nhóm.</li>
@@ -317,5 +295,5 @@
 			<li>QR dùng tài khoản mẫu; không chuyển tiền khi thử nghiệm.</li>
 		</ul>
 	</div>
-	<Button onclick={closeRelease} disabled={busy}>Đã hiểu, vào bếp thôi <ArrowUpRight size={16} /></Button>
+	<Button onclick={closeRelease} disabled={busy}>Đóng</Button>
 </Modal>

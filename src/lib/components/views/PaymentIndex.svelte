@@ -81,8 +81,7 @@
 
 <div class="page-heading">
 	<div>
-		<div class="eyebrow">THEO DÕI DÒNG TIỀN CHUNG</div>
-		<h1>Chỉ số thanh toán</h1>
+		<h1>Tiền ăn index</h1>
 		<p>Số dư theo ngày và các khoản hoàn tiền đã được ghi nhận.</p>
 	</div>
 	<select aria-label="Phạm vi chỉ số" bind:value={metricScope}
@@ -92,8 +91,8 @@
 <section class="panel index-chart-panel">
 	<div class="panel-heading">
 		<div>
-			<h2>Diễn biến số dư ròng</h2>
-			<p>Số dương: được nhận · Số âm: cần trả · Số dư cuối ngày theo giờ Việt Nam</p>
+			<h2>Diễn biến lỗ/lãi</h2>
+			<p>Số dương: lỗ · Số âm: lãi · Số dư cuối ngày theo giờ Việt Nam</p>
 		</div>
 		<select aria-label="Khoảng thời gian biểu đồ" bind:value={range}
 			><option value={7}>7 ngày gần nhất</option><option value={15}>15 ngày gần nhất</option><option
@@ -110,7 +109,7 @@
 			>{/each}
 	</div>
 	<div class="line-chart-container">
-		<svg viewBox="0 0 810 270" role="img" aria-label="Biểu đồ số dư ròng của các thành viên được chọn"
+		<svg viewBox="0 0 810 270" role="img" aria-label="Biểu đồ lỗ/lãi của các thành viên được chọn"
 			>{#each [max, (max + min) / 2, min] as value}<line
 					x1="70"
 					x2="780"
@@ -140,7 +139,7 @@
 	<section class="panel">
 		<div class="panel-heading">
 			<div>
-				<h2>Tỷ trọng được nhận</h2>
+				<h2>Tỷ trọng lỗ</h2>
 				<p>Các thành viên có số dư ròng dương</p>
 			</div>
 		</div>
@@ -149,9 +148,9 @@
 				class="donut-chart"
 				style:background={receivableTotal ? `conic-gradient(${segments})` : '#eeeee7'}
 				role="img"
-				aria-label="Tỷ trọng công nợ được nhận"
+				aria-label="Tỷ trọng lỗ"
 			>
-				<div><small>Tổng được nhận</small><strong>{shortCurrency(receivableTotal)}</strong></div>
+				<div><small>Tổng lỗ</small><strong>{shortCurrency(receivableTotal)}</strong></div>
 			</div>
 			<div class="donut-legend">
 				{#each receivables as position}<div>
@@ -164,7 +163,7 @@
 	<section class="panel info-panel">
 		<span class="feature-icon"><TrendingUp size={23} /></span>
 		<h2>Hiểu đúng số dư</h2>
-		<p>Số dư ròng bằng tổng được nhận trừ tổng cần trả. Đây là công nợ, không phải lãi/lỗ.</p>
+		<p>Lỗ là số tiền người khác nợ bạn; lãi là số tiền bạn còn nợ người khác.</p>
 		<p>Các bút toán điều phối giữ nguyên số dư ròng và được loại khỏi thống kê hoàn tiền thực tế.</p>
 		<div class="notice">
 			<Info size={17} />
@@ -187,7 +186,7 @@
 				><tr
 					><th>Thành viên</th><th class="align-right">Đã trả</th><th class="align-right">Đã nhận</th><th
 						class="align-right">Trả hôm nay</th
-					><th class="align-right">Nhận hôm nay</th><th class="align-right">Số dư ròng</th></tr
+					><th class="align-right">Nhận hôm nay</th><th class="align-right">Lỗ/lãi</th></tr
 				></thead
 			><tbody
 				>{#each stats as row}<tr
@@ -201,8 +200,10 @@
 							>{currency(row.received)}</td
 						><td class="align-right">{currency(row.paidToday)}</td><td class="align-right"
 							>{currency(row.receivedToday)}</td
-						><td class="align-right amount-cell" class:positive={row.net >= 0} class:negative={row.net < 0}
-							>{currency(row.net)}</td
+						><td
+							class="align-right amount-cell"
+							class:loss-amount={row.net >= 0}
+							class:gain-amount={row.net < 0}>{currency(row.net)}</td
 						></tr
 					>{/each}</tbody
 			>

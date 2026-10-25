@@ -1,4 +1,4 @@
-# Lunchroom / Bếp Chung
+# Lunchroom / Chia tiền ăn
 
 A Vietnamese single-page group expense app built with **SvelteKit 3, Svelte 5, TypeScript, shadcn-svelte (Nova), Tailwind 4, Firebase Authentication and Cloud Firestore**. Code, method names and documentation are English; UI and receipts are Vietnamese.
 
@@ -31,13 +31,12 @@ Run `npm run backup:local` while the emulator is running to explicitly save a lo
 
 | Route       | Vietnamese navigation | Purpose                                                                           |
 | ----------- | --------------------- | --------------------------------------------------------------------------------- |
-| `/`         | Tổng quan             | Group spending, personal summary, recent bills, meal suggestion                   |
+| `/`         | Tổng quan             | Group spending, personal summary, recent bills                                    |
 | `/new-bill` | Ghi thanh toán        | Independent draft, participants, individual/equal splits, review, receipt option  |
-| `/balances` | Số dư cá nhân         | Pairwise balances, charge history, manual repayments and QR confirmation          |
-| `/matrix`   | Ma trận công nợ       | All/current-member matrix and admin hub reassignment                              |
-| `/index`    | Chỉ số thanh toán     | Daily net history, receivable distribution, cumulative/today repayments           |
-| `/activity` | Sổ giao dịch          | Filtered bills/ledger, CSV export, receipt preview and simulated retries          |
-| `/meals`    | Tuần này ăn gì?       | Editable weekday plan and local suggestions using recent meal history             |
+| `/balances` | Số dư cá nhân         | Pairwise balances, charge history and QR payment confirmation                     |
+| `/matrix`   | Ma trận nợ nần        | All/current-member matrix and admin hub reassignment                              |
+| `/index`    | Tiền ăn index         | Daily net history, receivable distribution, cumulative/today repayments           |
+| `/activity` | Ledger                | Filtered bills/ledger, CSV export, receipt preview and simulated retries          |
 | `/members`  | Thành viên & quản lý  | Profiles/banks, inactive members, ledger import, JSON backup, archives, audit log |
 
 ## Financial rules
@@ -49,17 +48,17 @@ amount A owes B = debt(A,B) - payment(A,B) - debt(B,A) + payment(B,A)
 net position A = receivables A - payables A
 ```
 
-The organizer's own meal stays in the bill total without creating self debt. Repayments support one or multiple recipients in a single confirmed batch. Payments offset a member pair, not a particular invoice. Overpayments can reverse the debt direction and are called out during review. Recent charges are explicitly not labeled as unpaid invoices.
+The UI labels receivables as “Bạn đang lỗ” and payables as “Bạn đang lãi”; ledger calculations remain unchanged. The organizer's own meal stays in the bill total without creating self debt. Payments are recorded through QR confirmation. Payments offset a member pair, not a particular invoice. Recent charges are explicitly not labeled as unpaid invoices.
 
 Inactive members remain in full-history balances by default. Matrix filters limit displayed pairs; index positions always use full history. Hub reassignment includes inactive members, preserves every member's net position, uses the most indebted member as the hub and skips self entries. Synthetic accounting entries are excluded from repayment metrics. This preserves the old hub strategy, not a claim of globally minimal bank transfers.
 
-QR intents expire after two minutes and block reassignment while active. Confirmation transactionally checks owner, status, expiry and current pair balance; repeated confirmation does not duplicate a payment. VietQR payloads and images are generated locally with an EMV CRC, without sending bank details to an image service. Bank-app scanning has not been certified against real accounts. Self-confirmation is not bank verification.
+The QR dialog is stateless: generating, opening or closing it makes no database writes, starts no expiry timer and does not block reassignment. The recipient, bank details and amount shown are held only in the current dialog. Confirmation records that amount using the authenticated payer and an idempotency ID; retries cannot duplicate the payment, even if the ledger changed after scanning. VietQR payloads and images are generated locally with an EMV CRC, without sending bank details to an image service. Bank-app scanning has not been certified against real accounts. Self-confirmation is not bank verification.
 
 ## Backend
 
 Authenticated SvelteKit endpoints verify Firebase emulator ID tokens, resolve the actor server-side, validate commands with Zod and enforce roles. Firestore transactions read a consistent snapshot, write only changed documents and update a group version. Direct browser Firestore access is denied by `firestore.rules`.
 
-`groups/local` holds the version. Subcollections contain `members`, `ledger`, `bills`, `intents`, `receipts`, `settlements`, `meals`, `archives`, `audit` and `preferences`. Bill/payment IDs provide idempotency. Settlement previews require the current version. New bills freeze receipt content and participant names. No API edits or deletes committed ledger entries.
+`groups/local` holds the version. Subcollections contain `members`, `ledger`, `bills`, `receipts`, `settlements`, `archives`, `audit` and `preferences`. Bill/payment IDs provide idempotency. Settlement previews require the current version. New bills freeze receipt content and participant names. No API edits or deletes committed ledger entries.
 
 This is a local review implementation. Group snapshot reads scan collections for simplicity; production scale needs pagination and maintained balance projections. Shared state polls every 15 seconds and refreshes after own mutations. It is not a realtime listener.
 
@@ -69,7 +68,7 @@ The backend fails closed unless both Firebase emulator hosts point to `127.0.0.1
 
 Email outbox records are committed with bills. Receipt previews escape user content and include the complete shared bill. Success, failure and retries are simulated and visibly labeled; they never repost debt. **No real email is sent.** No original Resend key was copied.
 
-Meal suggestions are a local fallback, favoring dishes absent from recent charges and avoiding duplicates within the weekday plan. Every suggestion is editable and persisted. No AI provider is called. Archive links are stored as references and never automatically fetched/imported.
+Archive links are stored as references and never automatically fetched/imported.
 
 ## Historical import
 
@@ -98,7 +97,7 @@ npm run test:e2e
 npm run build
 ```
 
-Browser tests use installed Google Chrome headlessly. Unit tests cover bidirectional accounting, exact rounding, randomized settlement conservation, idempotency, permissions, expired/stale/foreign QR intents, imports, HTML escaping, frozen receipt names and QR CRCs. Browser/API tests exercise the real emulators, concurrent duplicate requests, drafts, receipts, repayments, routing and mobile layout.
+Browser tests use installed Google Chrome headlessly. Unit tests cover bidirectional accounting, exact rounding, randomized settlement conservation, idempotency, permissions, stateless QR confirmation, intervening ledger changes and conflicting retries, imports, HTML escaping, frozen receipt names and QR CRCs. Browser/API tests exercise the real emulators, concurrent duplicate requests, drafts, receipts, repayments, routing and mobile layout.
 
 Local builds use `adapter-node` because Windows can disallow directory symlinks required by `adapter-vercel`. When `VERCEL` is set by Vercel, the config selects the Vercel adapter (Node 22). The Vercel deployment bundle has not been validated on the target platform. No deployment or production Firebase configuration is active.
 
