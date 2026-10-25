@@ -19,20 +19,22 @@ test('Vietnamese navigation, bill posting, receipt retry and mobile layout', asy
 	await page.getByRole('link', { name: 'Ghi thanh toán', exact: true }).click();
 	const title = `Bữa trưa kiểm thử ${Date.now()}`;
 	await page.getByRole('textbox', { name: 'Tên hóa đơn', exact: true }).fill(title);
-	await page.getByRole('button', { name: 'Chọn cả nhóm', exact: true }).click();
+	await page.getByRole('button', { name: 'Chọn tất cả', exact: true }).click();
 	await page.getByRole('button', { name: 'Chia đều', exact: true }).click();
 	await page.getByRole('spinbutton', { name: /Tổng tiền cần chia/ }).fill('440.001');
 	await page.reload();
 	await expect(page.getByRole('textbox', { name: 'Tên hóa đơn', exact: true })).toHaveValue(title);
 	await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
-	await expect(page.getByRole('dialog')).toContainText('440.001');
-	await page.getByRole('button', { name: 'Xác nhận ghi hóa đơn', exact: true }).click();
+	// Equal shares round up to 100 ₫ by default: 440.001 ₫ / 8 → 55.100 ₫ each.
+	await expect(page.getByRole('dialog')).toContainText('55.100');
+	await expect(page.getByRole('dialog')).toContainText('440.800');
+	await page.getByRole('button', { name: 'Xác nhận', exact: true }).click();
 	await expect(page).toHaveURL(/\/activity/);
 	await page
 		.getByRole('button', { name: new RegExp(title) })
 		.first()
 		.click();
-	await expect(page.getByRole('dialog').first()).toContainText('440.001');
+	await expect(page.getByRole('dialog').first()).toContainText('440.800');
 	await page.getByRole('button', { name: 'Mô phỏng lỗi', exact: true }).click();
 	await expect(page.getByRole('dialog').first()).toContainText('Mô phỏng thất bại');
 	await page.getByRole('button', { name: 'Thử lại mô phỏng', exact: true }).click();
@@ -43,10 +45,10 @@ test('Vietnamese navigation, bill posting, receipt retry and mobile layout', asy
 	await page.keyboard.press('Escape');
 	await page.getByRole('link', { name: 'Số dư cá nhân', exact: true }).click();
 	await page.getByRole('link', { name: 'Tiền ăn index', exact: true }).click();
-	await expect(page.getByRole('heading', { name: 'Diễn biến lỗ/lãi' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Chỉ số các mã ĂT trong vòng 15 ngày' })).toBeVisible();
 	await page.getByRole('link', { name: 'Ma trận nợ nần', exact: true }).click();
-	await page.getByRole('button', { name: 'Điều phối nợ', exact: true }).click();
-	await expect(page.getByRole('dialog')).toContainText('không tạo khoản nợ cho chính mình');
+	await page.getByRole('button', { name: 'Tối giản nợ', exact: true }).click();
+	await expect(page.getByRole('dialog')).toContainText('bản ghi trong Ledger');
 	await page.keyboard.press('Escape');
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
@@ -175,7 +177,10 @@ test('QR confirmation, import preview, member editing work against the emulators
 	await expect(page.getByRole('dialog')).toHaveCount(0);
 	expect(qrCommands).toHaveLength(1);
 	expect(qrCommands[0]).toMatch(/\/confirmQrPayment$/);
-	await expect(counterpart).toHaveCount(0);
+	// Settled counterparts stay listed under "Tất cả" as "Bạn đang lãi 0 ₫".
+	await expect(counterpart).toContainText('Bạn đang lãi');
+	await expect(counterpart).toContainText('0 ₫');
+	await expect(counterpart.getByRole('button', { name: 'Mã QR', exact: true })).toHaveCount(0);
 	await page.getByRole('link', { name: 'Thành viên & quản lý', exact: true }).click();
 	await page.getByRole('button', { name: 'Sửa hồ sơ Thành viên kiểm thử QR', exact: true }).click();
 	await page.getByRole('textbox', { name: 'Tên', exact: true }).fill('Thành viên kiểm thử QR đã sửa');

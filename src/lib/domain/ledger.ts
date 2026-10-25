@@ -15,8 +15,9 @@ const identifier = z.string().regex(/^[\w.-]{1,100}$/);
 const text = z.string().trim().min(1).max(300);
 const amount = z.number().int().positive().max(1_000_000_000);
 export const currency = (value: number) => new Intl.NumberFormat('vi-VN').format(value) + ' ₫';
+// Vietnamese currency has no decimals: compact labels are whole thousands of đồng.
 export const shortCurrency = (value: number) =>
-	new Intl.NumberFormat('vi-VN', { notation: 'compact', maximumFractionDigits: 1 }).format(value) + ' ₫';
+	value === 0 ? '0 ₫' : new Intl.NumberFormat('vi-VN').format(Math.round(value / 1000)) + 'k ₫';
 export const dateLabel = (date: string) =>
 	new Intl.DateTimeFormat('vi-VN', {
 		day: '2-digit',
@@ -67,6 +68,27 @@ export function splitAmount(total: number, weights: number[]): number[] {
 	for (let i = 0; i < remainder; i++) result[order[i].i]++;
 	return result;
 }
+/** Rounds up to a multiple of 10^digits so the payer never receives less than they paid. */
+export function roundUpTo(value: number, digits: number): number {
+	const step = 10 ** Math.max(0, Math.floor(digits));
+	return Math.ceil(value / step) * step;
+}
+export function equalShares(total: number, count: number, digits: number): number[] {
+	if (!Number.isSafeInteger(total) || total <= 0 || count <= 0) return Array(Math.max(0, count)).fill(0);
+	return Array(count).fill(roundUpTo(total / count, digits));
+}
+/**
+ * Scales listed prices to the discounted bill total. Every share but the last is rounded to the
+ * nearest đồng; the last absorbs the difference so the sum always equals the discounted total.
+ */
+export function discountShares(amounts: number[], discountedTotal: number): number[] {
+	const sum = amounts.reduce((a, b) => a + b, 0);
+	if (!amounts.length || sum <= 0 || !Number.isSafeInteger(discountedTotal) || discountedTotal <= 0)
+		return amounts;
+	const shares = amounts.map((amount) => Math.round((amount * discountedTotal) / sum));
+	shares[shares.length - 1] = discountedTotal - shares.slice(0, -1).reduce((a, b) => a + b, 0);
+	return shares;
+}
 function requireMember(state: AppState, id: string, active = false): Member {
 	const member = state.members.find((m) => m.id === id);
 	if (!member || (active && !member.active))
@@ -82,8 +104,14 @@ export function requireAdmin(state: AppState, actor: string) {
 	if (requireMember(state, actor, true).role !== 'admin')
 		throw new DomainError('Chỉ quản trị viên được thực hiện thao tác này.', 403);
 }
+/**
+ * Port of `minimizeTransactions` in lunchsheet.gs (Proof-of-Anti-Stake):
+ * 1. every pairwise balance is zeroed with a payment from the debtor to the creditor;
+ * 2. each net debtor owes the hub (the member with the lowest net position);
+ * 3. the hub owes each net creditor.
+ * Every member's net position is preserved. Inactive members are included so no position disappears.
+ */
 export function settlementPlan(state: AppState): SettlementPlan {
-	// Include inactive historical members so no position silently disappears.
 	const positions = state.members.map((m) => ({ id: m.id, net: netBalance(state.ledger, m.id) }));
 	const hub = [...positions].sort((a, b) => a.net - b.net)[0]?.id ?? '';
 	const entries: SettlementPlan['entries'] = [];
@@ -98,8 +126,8 @@ export function settlementPlan(state: AppState): SettlementPlan {
 					to: balance > 0 ? b : a,
 					amount: Math.abs(balance),
 					type: 'payment',
-					description: 'Bù trừ quan hệ nợ cũ',
-					note: 'Bút toán điều phối, không phải chuyển khoản',
+					description: 'Tối giản nợ · Bước 1: cân bằng nợ về 0',
+					note: '',
 					source: 'settlement'
 				});
 		}
@@ -110,8 +138,11 @@ export function settlementPlan(state: AppState): SettlementPlan {
 			to: position.net < 0 ? hub : position.id,
 			amount: Math.abs(position.net),
 			type: 'debt',
-			description: 'Điều phối nợ qua đầu mối',
-			note: 'Giữ nguyên số dư ròng của từng người',
+			description:
+				position.net < 0
+					? 'Tối giản nợ · Bước 2: nợ người phân phối tiền'
+					: 'Tối giản nợ · Bước 3: người phân phối tiền nợ lại',
+			note: '',
 			source: 'settlement'
 		});
 	}
@@ -298,7 +329,7 @@ export function applyCommand(
 		if (data.version !== state.version)
 			throw new DomainError('Ledger đã thay đổi. Vui lòng xem lại phương án mới.', 409);
 		const plan = settlementPlan(state);
-		if (!plan.entries.length) throw new DomainError('Không có khoản nợ cần điều phối.');
+		if (!plan.entries.length) throw new DomainError('Không có khoản nợ cần tối giản.');
 		requireAvailableEntryIds(
 			state,
 			plan.entries.map((_, index) => `${data.id}-${index}`)

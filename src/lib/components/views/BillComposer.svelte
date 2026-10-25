@@ -1,16 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Plus, ArrowLeft, ArrowRight, Check, Mail, ReceiptText, Users, Save, Info } from '@lucide/svelte';
+	import { Plus, ArrowLeft, ArrowRight, Check, Mail, ReceiptText } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
-	import { Checkbox } from '$lib/components/ui/checkbox';
 	import Modal from '../Modal.svelte';
 	import Avatar from '../Avatar.svelte';
+	import MoneyInput from '../MoneyInput.svelte';
 	import type { AppState, BillLine } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, splitAmount, localDate } from '$lib/domain/ledger';
+	import { currency, discountShares, equalShares, localDate } from '$lib/domain/ledger';
+	const ROUNDING_OPTIONS = [0, 1, 2, 3, 4];
+	const DEFAULT_ROUNDING = 2;
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
 		$props();
 	let description = $state('');
@@ -18,49 +20,70 @@
 	let selected = $state<string[]>([]);
 	let amounts = $state<Record<string, number>>({});
 	let descriptions = $state<Record<string, string>>({});
-	let notes = $state<Record<string, string>>({});
 	let mode = $state('manual');
-	let totalInput = $state(0);
+	let totalInput = $state<number | null>(null);
+	let discountInput = $state<number | null>(null);
+	let rounding = $state(DEFAULT_ROUNDING);
 	let unit = $state(1000);
 	let emailReceipt = $state(true);
 	let confirmOpen = $state(false);
+	let attempted = $state(false);
 	let validation = $state('');
 	let draftReady = $state(false);
 	let submissionId = $state(crypto.randomUUID());
-	let lastSaved = $state('');
 	const people = $derived(appState.members.filter((m) => m.active));
-	const split = $derived(
-		splitAmount(
-			Math.round((totalInput || 0) * unit),
-			selected.map(() => 1)
-		)
+	const toDong = (value: number | null | undefined) => Math.round((Number(value) || 0) * unit);
+	const listed = $derived(selected.map((id) => toDong(amounts[id])));
+	const listedTotal = $derived(listed.reduce((s, v) => s + v, 0));
+	const discounted = $derived(toDong(discountInput));
+	const hasDiscount = $derived(mode === 'manual' && discounted > 0);
+	const shares = $derived(
+		mode === 'equal'
+			? equalShares(toDong(totalInput), selected.length, rounding)
+			: hasDiscount
+				? discountShares(listed, discounted)
+				: listed
 	);
 	const lines = $derived<BillLine[]>(
 		selected.map((memberId, i) => ({
 			memberId,
-			amount: mode === 'equal' ? split[i] : Math.round((amounts[memberId] || 0) * unit),
+			amount: shares[i] ?? 0,
 			description: descriptions[memberId] || description,
-			note: notes[memberId] || ''
+			note: ''
 		}))
 	);
 	const total = $derived(lines.reduce((s, l) => s + l.amount, 0));
+	const roundingExtra = $derived(mode === 'equal' ? Math.max(0, total - toDong(totalInput)) : 0);
 	const payer = $derived(appState.members.find((m) => m.id === actor)!);
+	const nameInvalid = $derived(attempted && !description.trim());
+	const dateInvalid = $derived(!date || Number.isNaN(new Date(date).getTime()));
+	const totalInvalid = $derived(
+		mode === 'equal' && (Number(totalInput) < 0 || (attempted && toDong(totalInput) <= 0))
+	);
+	const discountInvalid = $derived(
+		mode === 'manual' && (Number(discountInput) < 0 || (hasDiscount && shares.some((s) => s <= 0)))
+	);
+	const amountInvalid = (id: string, index: number) =>
+		mode === 'manual' &&
+		(Number(amounts[id]) < 0 || (attempted && (listed[index] <= 0 || shares[index] <= 0)));
+	const formatStep = (digits: number) => currency(10 ** digits);
 	onMount(() => {
 		selected = [actor];
 		try {
 			const saved = localStorage.getItem(`lunchroom-draft-${actor}`);
 			if (saved) {
 				const draft = JSON.parse(saved);
-				description = draft.description;
-				date = draft.date;
-				selected = draft.selected.filter((id: string) => people.some((m) => m.id === id));
-				amounts = draft.amounts;
-				descriptions = draft.descriptions;
-				notes = draft.notes;
-				mode = draft.mode;
-				totalInput = draft.totalInput;
-				unit = draft.unit;
-				emailReceipt = draft.emailReceipt;
+				description = draft.description ?? '';
+				date = draft.date ?? date;
+				selected = (draft.selected ?? [actor]).filter((id: string) => people.some((m) => m.id === id));
+				amounts = draft.amounts ?? {};
+				descriptions = draft.descriptions ?? {};
+				mode = draft.mode ?? 'manual';
+				totalInput = draft.totalInput ?? null;
+				discountInput = draft.discountInput ?? null;
+				rounding = draft.rounding ?? DEFAULT_ROUNDING;
+				unit = draft.unit ?? 1000;
+				emailReceipt = draft.emailReceipt ?? true;
 				submissionId = draft.submissionId || crypto.randomUUID();
 			}
 		} catch {
@@ -69,7 +92,7 @@
 		draftReady = true;
 	});
 	$effect(() => {
-		if (draftReady) {
+		if (draftReady)
 			localStorage.setItem(
 				`lunchroom-draft-${actor}`,
 				JSON.stringify({
@@ -78,16 +101,15 @@
 					selected,
 					amounts,
 					descriptions,
-					notes,
 					mode,
 					totalInput,
+					discountInput,
+					rounding,
 					unit,
 					emailReceipt,
 					submissionId
 				})
 			);
-			lastSaved = 'Bản nháp đã lưu trên thiết bị';
-		}
 	});
 	function toggleMember(id: string) {
 		selected = selected.includes(id) ? selected.filter((v) => v !== id) : [...selected, id];
@@ -95,14 +117,19 @@
 	function changeUnit(next: number) {
 		const factor = unit / next;
 		amounts = Object.fromEntries(Object.entries(amounts).map(([id, value]) => [id, value * factor]));
-		totalInput *= factor;
+		if (totalInput) totalInput *= factor;
+		if (discountInput) discountInput *= factor;
 		unit = next;
 	}
 	function review() {
+		attempted = true;
 		validation = '';
 		if (!description.trim()) validation = 'Hãy đặt tên cho hóa đơn.';
-		else if (!date || Number.isNaN(new Date(date).getTime())) validation = 'Hãy chọn ngày hợp lệ.';
-		else if (!lines.length || lines.some((l) => !Number.isSafeInteger(l.amount) || l.amount <= 0))
+		else if (dateInvalid) validation = 'Hãy chọn ngày hợp lệ.';
+		else if (!lines.length) validation = 'Chọn ít nhất một thành viên.';
+		else if (totalInvalid) validation = 'Hãy nhập tổng tiền cần chia.';
+		else if (discountInvalid) validation = 'Giá sau khi giảm giá không hợp lệ.';
+		else if (lines.some((l) => !Number.isSafeInteger(l.amount) || l.amount <= 0))
 			validation = 'Mỗi người được chọn cần có số tiền lớn hơn 0.';
 		else if (total > 1_000_000_000) validation = 'Tổng hóa đơn tối đa là 1 tỷ đồng.';
 		else confirmOpen = true;
@@ -136,7 +163,6 @@
 		<h1>Tạo hóa đơn</h1>
 		<p>Ghi khoản chi và phân bổ nợ.</p>
 	</div>
-	<span class="draft-status"><Save size={15} />{lastSaved}</span>
 </div>
 <div class="composer-layout">
 	<div class="composer-main">
@@ -149,11 +175,14 @@
 				>Tên hóa đơn<Input
 					placeholder="Ví dụ: Cơm trưa thứ hai, cà phê chiều…"
 					bind:value={description}
+					aria-invalid={nameInvalid}
 					maxlength={300}
 				/></label
 			>
 			<div class="form-two-columns">
-				<label class="field">Ngày thanh toán<Input type="date" bind:value={date} /></label>
+				<label class="field"
+					>Ngày thanh toán<Input type="date" bind:value={date} aria-invalid={dateInvalid} /></label
+				>
 				<div class="field">
 					Người đã thanh toán
 					<div class="payer-field">
@@ -169,10 +198,10 @@
 				<button
 					class="text-link"
 					onclick={() => (selected = selected.length === people.length ? [] : people.map((m) => m.id))}
-					>{selected.length === people.length ? 'Bỏ chọn tất cả' : 'Chọn cả nhóm'}</button
+					>{selected.length === people.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</button
 				>
 			</div>
-			<div class="member-picker">
+			<div class="member-picker" class:invalid-group={attempted && !selected.length}>
 				{#each people as member}<button
 						class:selected={selected.includes(member.id)}
 						onclick={() => toggleMember(member.id)}
@@ -194,17 +223,38 @@
 				</div>
 				<label class="unit-control"
 					>Đơn vị <select value={unit} onchange={(event) => changeUnit(Number(event.currentTarget.value))}
-						><option value={1000}>Nghìn đồng (k₫)</option><option value={1}>Đồng (₫)</option></select
+						><option value={1000}>Nghìn đồng</option><option value={1}>Đồng</option></select
 					></label
 				>
 			</div>
-			{#if mode === 'equal'}<label class="field total-entry"
-					>Tổng tiền cần chia ({unit === 1000 ? 'nghìn đồng' : 'đồng'})<Input
-						type="number"
-						min="0"
-						step={unit === 1000 ? '0.001' : '1'}
-						bind:value={totalInput}
-					/><small>Phần dư được chia theo từng đồng, tổng tiền luôn khớp.</small></label
+			{#if mode === 'equal'}<div class="form-two-columns split-totals">
+					<label class="field total-entry"
+						>Tổng tiền cần chia<MoneyInput
+							label="Tổng tiền cần chia"
+							{unit}
+							invalid={totalInvalid}
+							bind:value={totalInput}
+						/></label
+					>
+					<label class="field"
+						>Làm tròn lên mỗi phần<select bind:value={rounding}
+							>{#each ROUNDING_OPTIONS as digits}<option value={digits}
+									>{digits === 0 ? 'Không làm tròn' : formatStep(digits)}</option
+								>{/each}</select
+						></label
+					>
+				</div>{:else}<label class="field total-entry"
+					><span>Giá sau khi giảm giá <span class="optional-label">(không bắt buộc)</span></span><MoneyInput
+						label="Giá sau khi giảm giá"
+						{unit}
+						invalid={discountInvalid}
+						placeholder={listedTotal ? String(listedTotal / unit) : '0'}
+						bind:value={discountInput}
+					/>{#if hasDiscount}<small
+							>Chia theo tỉ lệ giá từng người. Người cuối nhận phần chênh lệch để tổng luôn bằng {currency(
+								discounted
+							)}.</small
+						>{/if}</label
 				>{/if}
 			<div class="participant-lines">
 				{#each selected as id, i}{@const person = people.find((m) => m.id === id)!}
@@ -214,27 +264,21 @@
 									class="mini-pill">Phần của bạn</span
 								>{/if}
 							<div class="amount-input">
-								{#if mode === 'manual'}<Input
-										type="number"
-										aria-label={`Số tiền của ${person.name}`}
-										min="0"
-										step={unit === 1000 ? '0.001' : '1'}
-										placeholder="0"
+								{#if mode === 'manual'}<MoneyInput
+										label={`Số tiền của ${person.name}`}
+										{unit}
+										invalid={amountInvalid(id, i)}
 										bind:value={amounts[id]}
-									/><span>{unit === 1000 ? 'k₫' : '₫'}</span>{:else}<strong>{currency(split[i])}</strong>{/if}
+									/>{#if hasDiscount}<span class="discounted-share">→ {currency(shares[i] ?? 0)}</span
+										>{/if}{:else}<strong>{currency(shares[i] ?? 0)}</strong>{/if}
 							</div>
 						</div>
 						<div class="participant-details">
 							<Input
-								aria-label={`Món riêng của ${person.name}`}
-								placeholder="Món riêng (không bắt buộc)"
+								aria-label={`Món ăn của ${person.name}`}
+								placeholder="Món ăn (không bắt buộc)"
 								bind:value={descriptions[id]}
 								maxlength={300}
-							/><Input
-								aria-label={`Ghi chú của ${person.name}`}
-								placeholder="Ghi chú, ví dụ: ít cay"
-								bind:value={notes[id]}
-								maxlength={500}
 							/>
 						</div>
 					</div>{/each}{#if !selected.length}<p class="inline-empty">
@@ -252,27 +296,25 @@
 			<div class="summary-pair">
 				<span>Phương thức</span><strong>{mode === 'equal' ? 'Chia đều' : 'Theo từng người'}</strong>
 			</div>
+			{#if hasDiscount}<div class="summary-pair">
+					<span>Giá gốc</span><strong>{currency(listedTotal)}</strong>
+				</div>{/if}
+			{#if roundingExtra}<div class="summary-pair">
+					<span>Làm tròn</span><strong>+{currency(roundingExtra)}</strong>
+				</div>{/if}
 			<div class="summary-total"><span>Tổng hóa đơn</span><strong>{currency(total)}</strong></div>
 			<div class="receipt-toggle">
-				<div><Mail size={17} /><strong>Tạo biên nhận email</strong></div>
-				<Switch aria-label="Tạo biên nhận email" bind:checked={emailReceipt} />
+				<button type="button" tabindex="-1" onclick={() => (emailReceipt = !emailReceipt)}
+					><Mail size={17} /><strong>Gửi email hoá đơn</strong></button
+				>
+				<Switch aria-label="Gửi email hoá đơn" bind:checked={emailReceipt} />
 			</div>
-			<p class="fine-print">
-				Biên nhận chung gồm đầy đủ thành viên và món ăn. Chỉ mô phỏng trong bản dùng thử.
-			</p>
 			{#if validation}<p class="validation-error" role="alert">{validation}</p>{/if}<Button
 				class="full-width"
 				onclick={review}
 				disabled={busy}>Xem lại hóa đơn <ArrowRight size={16} /></Button
 			>
-			<div class="summary-hint">
-				<Info size={15} /><span>Chưa phát sinh nợ cho đến khi bạn xác nhận.</span>
-			</div>
 		</section>
-		<div class="quiet-tip">
-			<Info size={19} />
-			<p>Phần ăn của bạn được tính vào tổng hóa đơn, không tạo nợ với chính mình.</p>
-		</div>
 	</div>
 </div>
 <Modal
@@ -288,21 +330,16 @@
 		{#each lines as line}<div>
 				<span
 					><strong>{appState.members.find((m) => m.id === line.memberId)?.name}</strong><small
-						>{line.description}{line.note ? ` · ${line.note}` : ''}</small
+						>{line.description}</small
 					></span
 				><strong>{currency(line.amount)}</strong>
 			</div>{/each}
 	</div>
 	<div class="summary-total"><span>Tổng cộng</span><strong>{currency(total)}</strong></div>
 	<p class="fine-print">
-		Người thanh toán: {payer.name}. {emailReceipt
-			? 'Tạo một biên nhận chung cho tất cả người tham gia.'
-			: 'Không tạo biên nhận email.'}
+		Người thanh toán: {payer.name}.{emailReceipt ? '' : ' Không gửi email hoá đơn.'}
 	</p>
 	<div class="modal-actions">
-		<Button variant="outline" onclick={() => (confirmOpen = false)} disabled={busy}>Chỉnh sửa</Button><Button
-			onclick={submit}
-			disabled={busy}><Check size={16} />{busy ? 'Đang ghi…' : 'Xác nhận ghi hóa đơn'}</Button
-		>
+		<Button onclick={submit} disabled={busy}><Check size={16} />{busy ? 'Đang ghi…' : 'Xác nhận'}</Button>
 	</div></Modal
 >

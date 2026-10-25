@@ -1,8 +1,6 @@
 <script lang="ts">
 	import {
 		Plus,
-		ArrowUpRight,
-		ArrowDownLeft,
 		ArrowRight,
 		Wallet,
 		ReceiptText,
@@ -13,8 +11,10 @@
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Avatar from '../Avatar.svelte';
+	import SpendingCalendar from './SpendingCalendar.svelte';
 	import type { AppState } from '$lib/domain/types';
-	import { currency, shortCurrency, pairBalance, netBalance, dateLabel, localDate } from '$lib/domain/ledger';
+	import { currency, shortCurrency, pairBalance, dateLabel, localDate } from '$lib/domain/ledger';
+	const MONTHS_SHOWN = 6;
 	let { appState, actor }: { appState: AppState; actor: string } = $props();
 	const pairs = $derived(
 		appState.members
@@ -22,27 +22,25 @@
 			.map((m) => ({ member: m, balance: pairBalance(appState.ledger, actor, m.id) }))
 			.filter((p) => p.balance !== 0)
 	);
-	const owed = $derived(pairs.reduce((s, p) => s + Math.max(0, -p.balance), 0));
-	const owing = $derived(pairs.reduce((s, p) => s + Math.max(0, p.balance), 0));
 	const currentMonth = localDate(new Date()).slice(0, 7);
 	const monthBills = $derived(appState.bills.filter((b) => localDate(b.date).startsWith(currentMonth)));
 	const monthSpend = $derived(monthBills.reduce((s, b) => s + b.total, 0));
 	const recentBills = $derived([...appState.bills].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4));
-	const days = $derived(
-		Array.from({ length: 7 }, (_, i) => {
-			const date = new Date();
-			date.setDate(date.getDate() - 6 + i);
-			const key = localDate(date);
+	const months = $derived(
+		Array.from({ length: MONTHS_SHOWN }, (_, i) => {
+			const [year, month] = currentMonth.split('-').map(Number);
+			const index = year * 12 + month - 1 - (MONTHS_SHOWN - 1) + i;
+			const key = `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
 			return {
 				key,
-				label: new Intl.DateTimeFormat('vi-VN', { weekday: 'short', timeZone: 'Asia/Ho_Chi_Minh' }).format(
-					date
-				),
-				value: appState.bills.filter((b) => localDate(b.date) === key).reduce((s, b) => s + b.total, 0)
+				label: `T${(index % 12) + 1}/${String(Math.floor(index / 12)).slice(2)}`,
+				value: appState.bills
+					.filter((b) => localDate(b.date).startsWith(key))
+					.reduce((s, b) => s + b.total, 0)
 			};
 		})
 	);
-	const max = $derived(Math.max(1, ...days.map((d) => d.value)));
+	const max = $derived(Math.max(1, ...months.map((m) => m.value)));
 </script>
 
 <div class="page-heading">
@@ -60,58 +58,41 @@
 			><span class="mini-pill">{monthBills.length} hóa đơn</span></span
 		>
 	</div>
-	<div class="stat-card">
-		<div class="stat-label">
-			Bạn đang lỗ <span class="stat-icon orange"><ArrowDownLeft size={17} /></span>
-		</div>
-		<strong class="loss-amount">{currency(owed)}</strong><span class="stat-foot"
-			>Từ {pairs.filter((p) => p.balance < 0).length} thành viên
-			<a href="/balances" aria-label="Xem khoản lỗ"><ArrowUpRight size={16} /></a></span
-		>
-	</div>
-	<div class="stat-card">
-		<div class="stat-label">
-			Bạn đang lãi <span class="stat-icon green"><ArrowUpRight size={17} /></span>
-		</div>
-		<strong class="gain-amount">{currency(owing)}</strong><span class="stat-foot"
-			>Cho {pairs.filter((p) => p.balance > 0).length} thành viên
-			<a href="/balances" aria-label="Xem khoản lãi"><ArrowUpRight size={16} /></a></span
-		>
-	</div>
 </div>
 <div class="overview-grid">
 	<section class="panel spending-panel">
 		<div class="panel-heading">
 			<div>
-				<h2>Chi tiêu 7 ngày</h2>
+				<h2>Chi tiêu theo tháng</h2>
 			</div>
-			<span class="subtle-label"><CalendarDays size={14} /> 7 ngày qua</span>
+			<span class="subtle-label"><CalendarDays size={14} /> {MONTHS_SHOWN} tháng gần nhất</span>
 		</div>
 		<div class="spending-summary">
-			<strong>{currency(days.reduce((s, d) => s + d.value, 0))}</strong>
+			<strong>{currency(months.reduce((s, m) => s + m.value, 0))}</strong>
 		</div>
 		<div class="bar-chart">
 			<div class="chart-grid-lines">
 				<span>{shortCurrency(max)}</span><span>{shortCurrency(max / 2)}</span><span>0 ₫</span>
 			</div>
 			<div class="chart-columns">
-				{#each days as day, i}<div class="chart-column">
+				{#each months as month, i}<div class="chart-column">
 						<div class="bar-track">
 							<div
-								class:today={i === 6}
+								class:today={i === MONTHS_SHOWN - 1}
 								class="bar"
-								style:height={`${Math.max(day.value ? 3 : 0, (day.value / max) * 100)}%`}
+								style:height={`${Math.max(month.value ? 3 : 0, (month.value / max) * 100)}%`}
 							>
-								<span class="bar-tooltip"
-									>{dateLabel(day.key + 'T12:00:00+07:00')}<br />{currency(day.value)}</span
-								>
+								<span class="bar-tooltip">{month.label}<br />{currency(month.value)}</span>
 							</div>
 						</div>
-						<span class:today-label={i === 6}>{i === 6 ? 'Hôm nay' : day.label}</span>
+						<span class:today-label={i === MONTHS_SHOWN - 1}
+							>{i === MONTHS_SHOWN - 1 ? 'Tháng này' : month.label}</span
+						>
 					</div>{/each}
 			</div>
 		</div>
 	</section>
+	<SpendingCalendar bills={appState.bills} />
 	<section class="panel recent-panel">
 		<div class="panel-heading">
 			<div>
@@ -159,9 +140,7 @@
 					class="balance-peek-row"
 					><Avatar member={pair.member} />
 					<div>
-						<strong>{pair.member.name}</strong><small
-							>{pair.balance > 0 ? 'Bạn đang lãi' : 'Bạn đang lỗ'}</small
-						>
+						<strong>{pair.member.name}</strong>
 					</div>
 					<strong class:loss-amount={pair.balance < 0} class:gain-amount={pair.balance > 0}
 						>{currency(Math.abs(pair.balance))}</strong

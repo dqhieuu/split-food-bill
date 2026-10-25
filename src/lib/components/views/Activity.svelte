@@ -20,12 +20,14 @@
 	import type { AppState, Bill } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, dateLabel, localDate, receiptHtml } from '$lib/domain/ledger';
+	import { preferences } from '$lib/client/preferences.svelte';
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
 		$props();
 	let tab = $state('bills');
 	let search = $state('');
 	let typeFilter = $state('all');
-	let memberFilter = $state('all');
+	// svelte-ignore state_referenced_locally
+	let memberFilter = $state(actor);
 	let fromDate = $state('');
 	let toDate = $state('');
 	let rowLimit = $state(30);
@@ -110,7 +112,7 @@
 				e.description,
 				e.note,
 				e.source === 'settlement'
-					? 'Điều phối'
+					? 'Tối giản nợ'
 					: e.source === 'import'
 						? 'Nhập lịch sử'
 						: e.source === 'qr'
@@ -171,12 +173,12 @@
 		</div>
 		<select aria-label="Lọc thành viên" bind:value={memberFilter}
 			><option value="all">Tất cả thành viên</option>{#each appState.members as member}<option
-					value={member.id}>{member.name}</option
+					value={member.id}>{member.name}{member.id === actor ? ' (Bạn)' : ''}</option
 				>{/each}</select
 		>{#if tab === 'ledger'}<select aria-label="Lọc loại giao dịch" bind:value={typeFilter}
 				><option value="all">Tất cả giao dịch</option><option value="debt">Khoản nợ</option><option
 					value="payment">Hoàn tiền thực tế</option
-				><option value="settlement">Bút toán điều phối</option></select
+				><option value="settlement">Tối giản nợ</option></select
 			>{/if}
 		<div class="date-filter">
 			<Input type="date" aria-label="Từ ngày" bind:value={fromDate} /><span>—</span><Input
@@ -190,14 +192,11 @@
 			<table class="data-table">
 				<thead
 					><tr
-						><th>Hóa đơn</th><th>Người đã trả</th><th>Thành viên</th><th>Biên nhận</th><th class="align-right"
-							>Tổng tiền</th
-						><th></th></tr
+						><th>Hóa đơn</th><th>Người đã trả</th><th>Thành viên</th><th class="align-right">Tổng tiền</th><th
+						></th></tr
 					></thead
 				><tbody
-					>{#each bills.slice(0, rowLimit) as bill}{@const mail = appState.receipts.find(
-							(r) => r.billId === bill.id
-						)}<tr
+					>{#each bills.slice(0, rowLimit) as bill}<tr
 							><td
 								><button class="table-title-button" onclick={() => openBill(bill)}
 									><span class="bill-symbol tone-0"><ReceiptText size={18} /></span><span
@@ -210,13 +209,9 @@
 										bill.organizer
 									)}
 								</div></td
-							><td>{bill.lines.length} người</td><td
-								><span
-									class:success={mail?.status === 'simulated'}
-									class:danger={mail?.status === 'failed'}
-									class="status-pill">{mail ? receiptLabels[mail.status] : 'Không tạo'}</span
-								></td
-							><td class="align-right amount-cell">{currency(bill.total)}</td><td
+							><td>{bill.lines.length} người</td><td class="align-right amount-cell"
+								>{currency(bill.total)}</td
+							><td
 								><Button
 									variant="ghost"
 									size="icon"
@@ -251,7 +246,7 @@
 									class="status-pill"
 									class:success={entry.type === 'payment' && entry.source !== 'settlement'}
 									>{entry.source === 'settlement'
-										? 'Điều phối'
+										? 'Tối giản nợ'
 										: entry.type === 'debt'
 											? 'Khoản nợ'
 											: entry.source === 'qr'
@@ -302,11 +297,13 @@
 					>
 				</div>
 				<p>{receipt.recipients.join(', ')}</p>
-				<p class="fine-print">Đã thử {receipt.attempts} lần. Không gửi thư thật trong môi trường cục bộ.</p>
+				{#if preferences.testView}<p class="fine-print">
+						Đã thử {receipt.attempts} lần. Không gửi thư thật trong môi trường cục bộ.
+					</p>{/if}
 				{#if receipt.error}<p class="validation-error">{receipt.error}</p>{/if}
 				<div class="button-row">
 					<Button variant="outline" onclick={() => (mailOpen = true)}><Eye size={15} /> Xem email</Button
-					>{#if canProcess}<Button disabled={busy} onclick={() => simulate(false)}
+					>{#if canProcess && preferences.testView}<Button disabled={busy} onclick={() => simulate(false)}
 							><RotateCcw size={15} />{receipt.status === 'failed'
 								? 'Thử lại mô phỏng'
 								: 'Mô phỏng gửi'}</Button

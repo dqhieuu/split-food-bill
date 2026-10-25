@@ -10,8 +10,9 @@
 		Users,
 		ArrowUpRight,
 		Plus,
-		Bell,
 		RefreshCw,
+		Sun,
+		Moon,
 		ChevronDown,
 		CircleHelp,
 		LoaderCircle,
@@ -31,7 +32,15 @@
 	import Management from '$lib/components/views/Management.svelte';
 	import DebtMatrix from '$lib/components/views/DebtMatrix.svelte';
 	import PaymentIndex from '$lib/components/views/PaymentIndex.svelte';
+	import { Switch } from '$lib/components/ui/switch';
 	import { ApiError, fetchState, login, requestJson, sendCommand } from '$lib/client/api';
+	import {
+		initPreferences,
+		isTestEnv,
+		preferences,
+		setTestView,
+		setTheme
+	} from '$lib/client/preferences.svelte';
 	import type { AppState, Member } from '$lib/domain/types';
 	let appState = $state<AppState | null>(null);
 	let actor = $state('an');
@@ -131,6 +140,7 @@
 		}
 	}
 	onMount(() => {
+		initPreferences();
 		void initialize();
 		const interval = setInterval(() => {
 			if (appState && !busy) void refresh().catch(() => {});
@@ -191,9 +201,22 @@
 		</nav>
 		<div class="sidebar-bottom">
 			<button class="help-link" onclick={() => (releaseOpen = true)}
-				><CircleHelp size={17} /> Nhật ký cập nhật <ArrowUpRight size={15} /></button
+				><CircleHelp size={17} /> Changelog <ArrowUpRight size={15} /></button
 			>
-			<div class="local-status"><span></span> Môi trường thử nghiệm cục bộ</div>
+			{#if isTestEnv}<div class="env-toggle">
+					<button type="button" tabindex="-1" onclick={() => setTestView(!preferences.testView)}
+						><strong>Giao diện thử nghiệm</strong><small
+							>{preferences.testView ? 'Đang xem bản thử nghiệm' : 'Đang xem như bản chính thức'}</small
+						></button
+					><Switch
+						aria-label="Giao diện thử nghiệm"
+						checked={preferences.testView}
+						onCheckedChange={setTestView}
+					/>
+				</div>{/if}
+			{#if preferences.testView}<div class="local-status">
+					<span></span> Môi trường thử nghiệm cục bộ
+				</div>{/if}
 		</div>
 	</aside>
 	<div class="main-shell">
@@ -210,20 +233,19 @@
 				>
 			</div>
 			<div class="topbar-actions">
-				<span class="demo-badge"><span></span> Dữ liệu mẫu</span><button
-					class="icon-button notification-button"
-					aria-label="Xem cập nhật"
-					onclick={() => (releaseOpen = true)}
-					><Bell
-						size={19}
-					/>{#if appState && !appState.preferences.some((p) => p.id === actor && p.lastSeenRelease === '0.1.0')}<i
-						></i>{/if}</button
+				{#if preferences.testView}<span class="demo-badge"><span></span> Dữ liệu mẫu</span>{/if}<button
+					class="icon-button theme-button"
+					aria-label={preferences.theme === 'dark'
+						? 'Chuyển sang giao diện sáng'
+						: 'Chuyển sang giao diện tối'}
+					onclick={() => setTheme(preferences.theme === 'dark' ? 'light' : 'dark')}
+					>{#if preferences.theme === 'dark'}<Sun size={19} />{:else}<Moon size={19} />{/if}</button
 				>
 				<div class="topbar-divider"></div>
 				<button
 					class="account-button"
 					onclick={() => (accountOpen = true)}
-					aria-label="Chuyển tài khoản thử nghiệm"
+					aria-label={preferences.testView ? 'Chuyển tài khoản thử nghiệm' : 'Tài khoản'}
 					><Avatar member={currentMember} size="small" /><span>{currentMember?.name || 'Đang kết nối'}</span
 					><ChevronDown size={14} /></button
 				>
@@ -269,30 +291,40 @@
 	</div>{/if}
 <Modal
 	bind:open={accountOpen}
-	title="Chọn tài khoản thử nghiệm"
-	description="Mỗi người có bản nháp riêng và quyền thao tác theo vai trò."
+	title={preferences.testView ? 'Chọn tài khoản thử nghiệm' : 'Tài khoản'}
+	description={preferences.testView ? 'Mỗi người có bản nháp riêng và quyền thao tác theo vai trò.' : ''}
 >
-	<div class="account-list">
-		{#each demoMembers as member}<button
-				class:chosen={actor === member.id}
-				disabled={busy}
-				onclick={() => switchAccount(member.id)}
-				><Avatar {member} /><span
-					><strong>{member.name}</strong><small
-						>{member.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}</small
+	{#if preferences.testView}<div class="account-list">
+			{#each demoMembers as member}<button
+					class:chosen={actor === member.id}
+					disabled={busy}
+					onclick={() => switchAccount(member.id)}
+					><Avatar {member} /><span
+						><strong>{member.name}</strong><small
+							>{member.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}</small
+						></span
+					>{#if actor === member.id}<Check size={17} />{/if}</button
+				>{/each}
+		</div>
+		<p class="fine-print">Tài khoản mẫu chỉ dùng trên bộ giả lập. Không cần mật khẩu thật.</p>
+	{:else if currentMember}<div class="account-list">
+			<div class="account-current">
+				<Avatar member={currentMember} /><span
+					><strong>{currentMember.name}</strong><small
+						>{currentMember.email} · {currentMember.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}</small
 					></span
-				>{#if actor === member.id}<Check size={17} />{/if}</button
-			>{/each}
-	</div>
-	<p class="fine-print">Tài khoản mẫu chỉ dùng trên bộ giả lập. Không cần mật khẩu thật.</p>
+				>
+			</div>
+		</div>{/if}
 </Modal>
-<Modal bind:open={releaseOpen} title="Nhật ký cập nhật" description="Chia tiền ăn · Phiên bản dùng thử 0.1.0">
+<Modal bind:open={releaseOpen} title="Changelog" description="Chia tiền ăn · Phiên bản 0.2.0">
 	<div class="release-note">
 		<ul>
-			<li>Số tiền nhập rõ ràng theo đồng hoặc nghìn đồng.</li>
-			<li>Giữ lại lịch sử của thành viên đã rời nhóm.</li>
-			<li>Biên nhận email được mô phỏng, không gửi thư thật.</li>
-			<li>QR dùng tài khoản mẫu; không chuyển tiền khi thử nghiệm.</li>
+			<li>Giao diện tối và lịch chi tiêu theo ngày kèm âm lịch.</li>
+			<li>Chia đều có làm tròn lên; nhập từng người hỗ trợ giá sau khi giảm giá.</li>
+			<li>Tối giản nợ theo đúng thuật toán của bảng tính cũ.</li>
+			<li>Tiền ăn index hiển thị mã 3 chữ cái như bảng giá chứng khoán.</li>
+			{#if preferences.testView}<li>Email hoá đơn và QR chỉ mô phỏng trong môi trường thử nghiệm.</li>{/if}
 		</ul>
 	</div>
 	<Button onclick={closeRelease} disabled={busy}>Đóng</Button>

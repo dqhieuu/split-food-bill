@@ -65,7 +65,7 @@
 		createBill: 'Ghi hóa đơn',
 		recordPayment: 'Ghi hoàn tiền',
 		confirmQrPayment: 'Ghi thanh toán QR',
-		settleDebts: 'Điều phối nợ',
+		settleDebts: 'Tối giản nợ',
 		saveMember: 'Cập nhật thành viên',
 		simulateReceipt: 'Mô phỏng biên nhận',
 		saveArchive: 'Thêm lưu trữ',

@@ -10,11 +10,10 @@
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, dateLabel, pairBalance } from '$lib/domain/ledger';
 	import { vietQrPayload, bankNames } from '$lib/domain/qr';
+	import { preferences } from '$lib/client/preferences.svelte';
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
 		$props();
 	let filter = $state('all');
-	let scope = $state('all');
-	let historyLimit = $state(3);
 	let expanded = $state('');
 	let qrOpen = $state(false);
 	let qrPayment = $state<{ id: string; amount: number; recipient: Member } | null>(null);
@@ -24,13 +23,13 @@
 	let copied = $state(false);
 	const pairs = $derived(
 		appState.members
-			.filter((m) => m.id !== actor && (scope === 'all' || m.active))
+			.filter((m) => m.id !== actor && m.active)
 			.map((member) => ({ member, balance: pairBalance(appState.ledger, actor, member.id) }))
-			.filter((p) => p.balance !== 0)
 	);
+	// A zero balance is shown as "Bạn đang lãi 0 ₫".
 	const visible = $derived(
 		pairs
-			.filter((p) => filter === 'all' || (filter === 'owe' ? p.balance > 0 : p.balance < 0))
+			.filter((p) => filter === 'all' || (filter === 'owe' ? p.balance >= 0 : p.balance < 0))
 			.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
 	);
 	const owed = $derived(pairs.reduce((s, p) => s + Math.max(0, -p.balance), 0));
@@ -81,7 +80,7 @@
 <div class="page-heading">
 	<div>
 		<h1>Số dư cá nhân</h1>
-		<p>Nợ được đối trừ theo từng cặp, gồm cả lịch sử thành viên cũ.</p>
+		<p>Nợ được đối trừ theo từng cặp với các thành viên đang hoạt động.</p>
 	</div>
 </div>
 <div class="stat-grid">
@@ -98,10 +97,8 @@
 		>
 	</div>
 	<div class="stat-card net-card">
-		<div class="stat-label">Số dư ròng <Wallet size={19} /></div>
-		<strong>{currency(owed - owing)}</strong><span class="stat-foot"
-			>{scope === 'all' ? 'Toàn bộ lịch sử' : 'Chỉ quan hệ giữa thành viên đang hoạt động'}</span
-		>
+		<div class="stat-label">Lỗ - Lãi <Wallet size={19} /></div>
+		<strong>{currency(owed - owing)}</strong><span class="stat-foot">Thành viên đang hoạt động</span>
 	</div>
 </div>
 <section class="panel">
@@ -113,29 +110,15 @@
 				onclick={() => (filter = 'owed')}>Lỗ</button
 			>
 		</div>
-		<div class="filter-selects">
-			<label class="sr-only" for="balance-scope">Phạm vi thành viên</label><select
-				id="balance-scope"
-				bind:value={scope}
-				><option value="all">Gồm thành viên cũ</option><option value="active">Đang hoạt động</option></select
-			><label class="sr-only" for="recent-count">Số khoản nợ gần đây</label><select
-				id="recent-count"
-				bind:value={historyLimit}
-				><option value={1}>1 khoản gần đây</option><option value={3}>3 khoản gần đây</option><option value={5}
-					>5 khoản gần đây</option
-				><option value={10}>10 khoản gần đây</option><option value={9999}>Toàn bộ khoản nợ</option></select
-			>
-		</div>
 	</div>
 	{#each visible as pair}<div class="counterpart">
 			<div class="counterpart-main">
 				<Avatar member={pair.member} />
 				<div class="counterpart-name">
-					<strong>{pair.member.name}</strong>{#if !pair.member.active}<small>Thành viên cũ · Vẫn giữ nợ</small
-						>{/if}
+					<strong>{pair.member.name}</strong>
 				</div>
 				<div class="counterpart-amount">
-					<small>{pair.balance > 0 ? 'Bạn đang lãi' : 'Bạn đang lỗ'}</small><strong
+					<small>{pair.balance >= 0 ? 'Bạn đang lãi' : 'Bạn đang lỗ'}</small><strong
 						class:gain-amount={pair.balance > 0}
 						class:loss-amount={pair.balance < 0}>{currency(Math.abs(pair.balance))}</strong
 					>
@@ -160,16 +143,15 @@
 							e.source !== 'settlement' &&
 							((e.from === actor && e.to === pair.member.id) || (e.to === actor && e.from === pair.member.id))
 					)
-					.sort((a, b) => b.date.localeCompare(a.date))
-					.slice(0, historyLimit)}
+					.sort((a, b) => b.date.localeCompare(a.date))}
 				<div class="counterpart-history">
-					<p>Các khoản nợ gần đây · Không phải danh sách hóa đơn chưa trả</p>
+					<p>Các khoản nợ gần đây</p>
 					{#each entries as entry}<div>
 							<span>{dateLabel(entry.date)} · {entry.description}</span><strong
 								>{currency(entry.amount)}</strong
 							>
 						</div>{/each}{#if !entries.length}<p>
-							Chưa có khoản nợ trực tiếp; số dư có thể đến từ điều phối.
+							Chưa có khoản nợ trực tiếp; số dư có thể đến từ tối giản nợ.
 						</p>{/if}
 				</div>{/if}
 		</div>{/each}{#if !visible.length}<EmptyState
@@ -180,7 +162,7 @@
 <Modal
 	bind:open={qrOpen}
 	title="Thanh toán bằng VietQR"
-	description="Tài khoản ngân hàng mẫu · Không chuyển tiền khi thử nghiệm."
+	description={preferences.testView ? 'Tài khoản ngân hàng mẫu · Không chuyển tiền khi thử nghiệm.' : ''}
 >
 	{#if qrPayment && recipient}<div class="qr-content">
 			{#if qrImage}<img

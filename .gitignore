@@ -18,3 +18,4 @@ artifacts/
 audit-output.json
 lunchroom-overview.png
 .DS_Store
+.vitest
