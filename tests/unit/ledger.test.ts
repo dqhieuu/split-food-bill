@@ -1,0 +1,239 @@
+import { describe, expect, it } from 'vitest';
+import {
+	applyCommand,
+	pairBalance,
+	netBalance,
+	settlementPlan,
+	splitAmount,
+	receiptHtml
+} from '../../src/lib/domain/ledger';
+import { createDemoState } from '../../src/lib/domain/seed';
+import { parseLedgerImport } from '../../src/lib/domain/import';
+import { crc16, vietQrPayload } from '../../src/lib/domain/qr';
+
+const now = '2026-10-25T12:00:00.000Z';
+const fresh = () => createDemoState(new Date(now));
+describe('ledger accounting', () => {
+	it('nets debt and repayment in both directions, including self and zero legacy rows', () => {
+		const state = fresh();
+		state.ledger = [];
+		const base = {
+			date: now,
+			description: 'Sample',
+			note: '',
+			creator: 'an',
+			source: 'import' as const,
+			reference: 'legacy'
+		};
+		state.ledger = [
+			{ ...base, id: 'a', from: 'an', to: 'linh', type: 'debt', amount: 100000 },
+			{ ...base, id: 'b', from: 'an', to: 'linh', type: 'payment', amount: 25000 },
+			{ ...base, id: 'c', from: 'linh', to: 'an', type: 'debt', amount: 40000 },
+			{ ...base, id: 'd', from: 'linh', to: 'an', type: 'payment', amount: 10000 },
+			{ ...base, id: 'e', from: 'an', to: 'an', type: 'debt', amount: 99999 },
+			{ ...base, id: 'f', from: 'an', to: 'linh', type: 'debt', amount: 0 }
+		];
+		expect(pairBalance(state.ledger, 'an', 'linh')).toBe(45000);
+		expect(pairBalance(state.ledger, 'linh', 'an')).toBe(-45000);
+		expect(netBalance(state.ledger, 'an')).toBe(-45000);
+		expect(netBalance(state.ledger, 'linh')).toBe(45000);
+	});
+	it('preserves every net position across hub reassignment and never adds self debt', () => {
+		for (let sample = 1; sample <= 40; sample++) {
+			const state = fresh();
+			for (let i = 0; i < state.ledger.length; i++)
+				state.ledger[i].amount = ((i * sample * 7919) % 200001) - 40000;
+			const before = state.members.map((m) => netBalance(state.ledger, m.id));
+			const plan = settlementPlan(state, now);
+			applyCommand(state, 'an', 'settleDebts', { id: `settle-${sample}`, version: state.version }, now);
+			expect(state.members.map((m) => netBalance(state.ledger, m.id))).toEqual(before);
+			expect(before.reduce((s, n) => s + n, 0)).toBe(0);
+			expect(state.ledger.filter((e) => e.source === 'settlement').every((e) => e.from !== e.to)).toBe(true);
+			expect(plan.hub).toBe(state.members[before.indexOf(Math.min(...before))].id);
+		}
+	});
+	it('posts a bill once, includes the payer meal only in the bill, and queues a receipt', () => {
+		const state = fresh();
+		const before = state.ledger.length;
+		const version = state.version;
+		const input = {
+			id: 'test-bill',
+			description: 'Lunch',
+			date: now,
+			emailReceipt: true,
+			lines: [
+				{ memberId: 'an', amount: 55000, description: '', note: '' },
+				{ memberId: 'linh', amount: 60000, description: 'Noodles', note: 'No chili' }
+			]
+		};
+		applyCommand(state, 'an', 'createBill', input, now);
+		applyCommand(state, 'an', 'createBill', input, now);
+		expect(state.ledger.length).toBe(before + 1);
+		expect(state.version).toBe(version + 1);
+		expect(state.bills.find((b) => b.id === input.id)?.total).toBe(115000);
+		expect(state.receipts.filter((r) => r.billId === input.id)).toHaveLength(1);
+		const balance = netBalance(state.ledger, 'an');
+		applyCommand(state, 'an', 'simulateReceipt', { id: input.id, fail: true }, now);
+		applyCommand(state, 'an', 'simulateReceipt', { id: input.id, fail: false }, now);
+		expect(netBalance(state.ledger, 'an')).toBe(balance);
+		expect(state.ledger.length).toBe(before + 1);
+	});
+	it('rejects non-admin settlement and stale preview versions', () => {
+		expect(() => applyCommand(fresh(), 'linh', 'settleDebts', { id: 'bad', version: 1 }, now)).toThrow();
+		expect(() => applyCommand(fresh(), 'an', 'settleDebts', { id: 'bad', version: 0 }, now)).toThrow();
+	});
+	it('splits every whole VND exactly, with stable remainder allocation', () => {
+		expect(splitAmount(5, [1, 1, 1])).toEqual([2, 2, 1]);
+		expect(splitAmount(100, [1, 2, 3])).toEqual([17, 33, 50]);
+		for (let amount = 1; amount < 1000; amount += 7)
+			for (let count = 1; count < 15; count++)
+				expect(splitAmount(amount, Array(count).fill(1)).reduce((s, n) => s + n, 0)).toBe(amount);
+	});
+});
+describe('payment intents', () => {
+	it('records multiple repayments together and is idempotent', () => {
+		const state = fresh();
+		const before = state.ledger.length;
+		const input = {
+			id: 'repayment-batch',
+			description: 'Repayment batch',
+			note: '',
+			payments: [
+				{ to: 'linh', amount: 55000 },
+				{ to: 'huy', amount: 35000 }
+			]
+		};
+		applyCommand(state, 'an', 'recordPayments', input, now);
+		applyCommand(state, 'an', 'recordPayments', input, now);
+		expect(state.ledger.length).toBe(before + 2);
+		expect(
+			state.ledger
+				.filter((entry) => entry.reference === input.id)
+				.reduce((sum, entry) => sum + entry.amount, 0)
+		).toBe(90000);
+		expect(() =>
+			applyCommand(
+				state,
+				'an',
+				'recordPayments',
+				{
+					...input,
+					id: 'invalid',
+					payments: [
+						{ to: 'linh', amount: 1 },
+						{ to: 'linh', amount: 2 }
+					]
+				},
+				now
+			)
+		).toThrow();
+	});
+	function prepare() {
+		const state = fresh();
+		state.ledger = [
+			{
+				id: 'debt',
+				from: 'an',
+				to: 'linh',
+				type: 'debt',
+				amount: 65000,
+				date: now,
+				description: 'Lunch',
+				note: '',
+				creator: 'linh',
+				source: 'manual',
+				reference: 'test'
+			}
+		];
+		return state;
+	}
+	it('confirms once and blocks reassignment while a QR request is active', () => {
+		const state = prepare();
+		applyCommand(state, 'an', 'createIntent', { id: 'intent', to: 'linh' }, now);
+		expect(() => settlementPlan(state, now)).toThrow();
+		applyCommand(state, 'an', 'confirmIntent', { id: 'intent' }, now);
+		applyCommand(state, 'an', 'confirmIntent', { id: 'intent' }, now);
+		expect(pairBalance(state.ledger, 'an', 'linh')).toBe(0);
+		expect(state.ledger.filter((e) => e.source === 'qr')).toHaveLength(1);
+	});
+	it('rejects expired, cancelled, foreign and changed-balance confirmation', () => {
+		const expired = prepare();
+		applyCommand(expired, 'an', 'createIntent', { id: 'i', to: 'linh' }, now);
+		expect(() =>
+			applyCommand(expired, 'an', 'confirmIntent', { id: 'i' }, '2026-10-25T12:03:00.000Z')
+		).toThrow();
+		expect(() => applyCommand(expired, 'linh', 'confirmIntent', { id: 'i' }, now)).toThrow();
+		const changed = prepare();
+		applyCommand(changed, 'an', 'createIntent', { id: 'i', to: 'linh' }, now);
+		applyCommand(
+			changed,
+			'an',
+			'recordPayment',
+			{ id: 'p', to: 'linh', amount: 1000, description: 'Part', note: '' },
+			now
+		);
+		expect(() => applyCommand(changed, 'an', 'confirmIntent', { id: 'i' }, now)).toThrow();
+		applyCommand(changed, 'an', 'cancelIntent', { id: 'i' }, now);
+		expect(() => applyCommand(changed, 'an', 'confirmIntent', { id: 'i' }, now)).toThrow();
+	});
+});
+describe('migration and receipts', () => {
+	it('preserves former members, zero and self rows, with repeatable imports', () => {
+		const rows = parseLedgerImport(
+			'sequence,from,to,type,amount,date,description,note\r\n24,former.person,an,Nợ,0,2026-01-01T12:00:00+07:00,"Lunch, team","Quoted ""note"""\r\n25,former.person,former.person,Trả,55000,2026-01-01T12:00:00+07:00,Self,'
+		);
+		const state = fresh();
+		const before = state.ledger.length;
+		applyCommand(state, 'an', 'importLedger', { entries: rows }, now);
+		applyCommand(state, 'an', 'importLedger', { entries: rows }, now);
+		expect(state.ledger.length).toBe(before + 2);
+		expect(state.members.find((m) => m.id === 'former.person')?.active).toBe(false);
+		expect(rows[0].note).toBe('Quoted "note"');
+		expect(rows[0].description).toBe('Lunch, team');
+	});
+	it('rejects ambiguous dates, duplicate IDs, missing amounts and conflicting existing records', () => {
+		const entry = { id: 'one', from: 'an', to: 'linh', type: 'debt', amount: 1, date: now };
+		expect(() => parseLedgerImport(JSON.stringify([entry, entry]))).toThrow();
+		expect(() => parseLedgerImport(JSON.stringify([{ ...entry, date: '2026-01-01' }]))).toThrow();
+		expect(() => parseLedgerImport(JSON.stringify([{ ...entry, date: '2026-01-01T12:00:00' }]))).toThrow();
+		expect(() => parseLedgerImport(JSON.stringify([{ ...entry, amount: '' }]))).toThrow();
+		expect(() => parseLedgerImport(JSON.stringify([{ ...entry, id: '' }]))).toThrow();
+		const state = fresh();
+		const rows = parseLedgerImport(JSON.stringify([entry]));
+		applyCommand(state, 'an', 'importLedger', { entries: rows }, now);
+		expect(() =>
+			applyCommand(state, 'an', 'importLedger', { entries: [{ ...rows[0], amount: 2 }] }, now)
+		).toThrow();
+	});
+	it('escapes receipt content and freezes participant names at posting time', () => {
+		const state = fresh();
+		applyCommand(
+			state,
+			'an',
+			'createBill',
+			{
+				id: 'escape',
+				description: '<img src=x onerror=alert(1)>',
+				date: now,
+				emailReceipt: true,
+				lines: [{ memberId: 'an', amount: 1, description: '<script>bad</script>', note: '& " >' }]
+			},
+			now
+		);
+		const bill = state.bills.find((b) => b.id === 'escape')!;
+		state.members.find((m) => m.id === 'an')!.name = 'Changed';
+		const html = receiptHtml(bill, state.members);
+		expect(html).not.toContain('<script>');
+		expect(html).not.toContain('<img src=x');
+		expect(html).toContain('&lt;script&gt;');
+		expect(html).toContain('Minh An');
+		expect(html).not.toContain('Changed');
+	});
+	it('generates an offline VietQR payload with a verified checksum', () => {
+		expect(crc16('123456789')).toBe('29B1');
+		const payload = vietQrPayload('970436', '00000123', 55000, 'LUNCH TEST');
+		expect(payload).toContain('00000123');
+		expect(payload).toContain('A000000727');
+		expect(payload.slice(-4)).toBe(crc16(payload.slice(0, -4)));
+	});
+});

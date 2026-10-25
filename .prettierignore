@@ -1,0 +1,13 @@
+node_modules
+.svelte-kit
+.vercel
+build
+.emulator-data
+package-lock.json
+artifacts
+test-results
+.playwright-mcp
+*-debug.log
+*-output.txt
+audit-output.json
+lunchroom-overview.png
