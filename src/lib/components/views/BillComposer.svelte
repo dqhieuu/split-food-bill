@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { Plus, ArrowLeft, ArrowRight, Check, Mail, ReceiptText } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -89,6 +90,9 @@
 		} catch {
 			/* Ignore an invalid local draft. */
 		}
+		// The spending calendar links here with the day the user picked.
+		const requestedDate = page.url.searchParams.get('date');
+		if (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) date = requestedDate;
 		draftReady = true;
 	});
 	$effect(() => {

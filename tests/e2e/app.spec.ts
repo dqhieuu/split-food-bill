@@ -12,6 +12,24 @@ test('Vietnamese navigation, bill posting, receipt retry and mobile layout', asy
 	await page.setViewportSize({ width: 1440, height: 1000 });
 	await page.goto('/');
 	await expect(page.getByRole('heading', { name: 'Tổng quan', exact: true })).toBeVisible();
+	// Calendar indicator: one solid colour per bar, fixed 158px cells.
+	await expect(page.locator('.cal-day').first()).toBeVisible();
+	const calendar = await page.evaluate(() => ({
+		bars: [...document.querySelectorAll<HTMLElement>('.cal-track > span')].map((bar) => ({
+			image: getComputedStyle(bar).backgroundImage,
+			color: getComputedStyle(bar).backgroundColor,
+			width: bar.style.width
+		})),
+		heights: [
+			...new Set([...document.querySelectorAll('.cal-day')].map((c) => c.getBoundingClientRect().height))
+		]
+	}));
+	expect(calendar.heights).toEqual([158]);
+	for (const bar of calendar.bars) {
+		expect(bar.image).toBe('none');
+		expect(bar.color).toMatch(/^rgb\(\d+, \d+, \d+\)$/);
+		expect(bar.width).toMatch(/^\d+%$/);
+	}
 	await mkdir('artifacts', { recursive: true });
 	await page.screenshot({ path: 'artifacts/overview-desktop.png', fullPage: true });
 	for (const name of ['Ghi thanh toán', 'Số dư cá nhân', 'Ma trận nợ nần', 'Tiền ăn index'])

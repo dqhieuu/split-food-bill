@@ -11,7 +11,8 @@ import {
 import { createDemoState } from '../../src/lib/domain/seed';
 import { tickerCodes } from '../../src/lib/domain/ticker';
 import { toLunar } from '../../src/lib/domain/lunar';
-import type { LedgerEntry } from '../../src/lib/domain/types';
+import { calendarMonth, severityHue } from '../../src/lib/domain/calendar';
+import type { Bill, LedgerEntry } from '../../src/lib/domain/types';
 
 describe('bill splitting', () => {
 	it('rounds equal shares up so the payer never receives less', () => {
@@ -88,5 +89,51 @@ describe('lunar calendar', () => {
 	});
 	it('flags the 2025 leap sixth month', () => {
 		expect(toLunar(25, 7, 2025)).toMatchObject({ day: 1, month: 6, leap: true });
+	});
+});
+
+describe('spending calendar month', () => {
+	const bill = (id: string, date: string, total: number, organizer = 'an'): Bill => ({
+		id,
+		organizer,
+		description: `Bữa ${id}`,
+		date,
+		lines: [],
+		total,
+		emailReceipt: false,
+		memberNames: { an: 'Minh An', linh: 'Thảo Linh' }
+	});
+	const name = (b: Bill) => b.memberNames?.[b.organizer] ?? b.organizer;
+	const bills = [
+		bill('a', '2026-10-05T05:00:00.000Z', 100000),
+		bill('b', '2026-10-05T06:00:00.000Z', 400000, 'linh'),
+		bill('c', '2026-10-20T05:00:00.000Z', 200000),
+		bill('d', '2026-09-30T05:00:00.000Z', 900000)
+	];
+
+	it('maps severity from green (cheap) through yellow to red (most expensive)', () => {
+		expect(severityHue(0)).toBe(142);
+		expect(severityHue(0.5)).toBe(71);
+		expect(severityHue(1)).toBe(0);
+		expect(severityHue(2)).toBe(0);
+	});
+
+	it('groups a month by local day, scaled to its largest bill and busiest day', () => {
+		const month = calendarMonth(bills, '2026-10', name);
+		expect(month.maxBill).toBe(400000);
+		expect(month.maxDayTotal).toBe(500000);
+		expect(month.monthTotal).toBe(700000);
+		expect(month.days.get('2026-10-05')!.map((b) => [b.id, b.payer, b.ratio])).toEqual([
+			['b', 'Thảo Linh', 1],
+			['a', 'Minh An', 0.25]
+		]);
+		expect(month.days.has('2026-09-30')).toBe(false);
+	});
+
+	it('rescales when filtered to one payer', () => {
+		const month = calendarMonth(bills, '2026-10', name, 'an');
+		expect(month.maxBill).toBe(200000);
+		expect(month.days.get('2026-10-05')!.map((b) => b.id)).toEqual(['a']);
+		expect(month.monthTotal).toBe(300000);
 	});
 });

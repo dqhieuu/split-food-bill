@@ -92,7 +92,7 @@
 			</div>
 		</div>
 	</section>
-	<SpendingCalendar bills={appState.bills} />
+	<SpendingCalendar bills={appState.bills} members={appState.members} />
 	<section class="panel recent-panel">
 		<div class="panel-heading">
 			<div>
