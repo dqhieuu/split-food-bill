@@ -3976,7 +3976,6 @@ select[aria-invalid='true'] {
 	height: 20px;
 	background: #fff;
 	box-shadow: 0 1px 3px #00000055;
-	translate: none;
 	transform: translateX(0);
 }
 [data-slot='switch'][data-state='checked'] [data-slot='switch-thumb'] {
