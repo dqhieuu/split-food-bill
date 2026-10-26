@@ -56,11 +56,12 @@
 	let importProgress = $state('');
 	let importing = $state(false);
 	let acknowledged = $state(false);
+	let activationChanges = $state<Record<string, boolean>>({});
 	const isAdmin = $derived(appState.members.find((m) => m.id === actor)?.role === 'admin');
 	const members = $derived(
-		appState.members.filter((m) =>
-			`${m.id} ${m.name}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))
-		)
+		appState.members
+			.filter((m) => `${m.id} ${m.name}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi')))
+			.sort((a, b) => Number(b.id === actor) - Number(a.id === actor) || Number(b.active) - Number(a.active))
 	);
 	const summary = $derived(summarizeImport(importEntries, appState));
 	const actionLabels: Record<string, string> = {
@@ -81,6 +82,21 @@
 		bankInput = memberDraft.bankLabel ?? bankNames[memberDraft.bankCode] ?? memberDraft.bankCode;
 		validation = '';
 		memberOpen = true;
+	}
+	async function setMemberActive(member: Member, active: boolean) {
+		if (!isAdmin || busy || member.id === actor || member.active === active) return;
+		activationChanges[member.id] = active;
+		try {
+			await run(
+				'saveMember',
+				{ ...member, active },
+				active ? `Đã kích hoạt ${member.name}.` : `Đã ngừng hoạt động ${member.name}.`
+			);
+		} catch {
+			// The shared command handler displays errors; restore the saved switch state below.
+		} finally {
+			delete activationChanges[member.id];
+		}
 	}
 	async function saveMember() {
 		validation = '';
@@ -200,7 +216,7 @@
 						></th></tr
 					></thead
 				><tbody
-					>{#each members as member}<tr class:inactive-member={!member.active}
+					>{#each members as member (member.id)}<tr class:inactive-member={!member.active}
 							><td
 								><div class="table-person">
 									<Avatar {member} /><span><strong>{member.name}</strong></span>
@@ -217,12 +233,20 @@
 								class:negative={netBalance(appState.ledger, member.id) < 0}
 								>{currency(netBalance(appState.ledger, member.id))}</td
 							><td
-								>{#if isAdmin || member.id === actor}<Button
-										variant="ghost"
-										size="icon"
-										aria-label={`Sửa hồ sơ ${member.name}`}
-										onclick={() => editMember(member)}><Pencil size={16} /></Button
-									>{/if}</td
+								><div class="member-row-actions">
+									{#if isAdmin}<Switch
+											aria-label={`Kích hoạt ${member.name}`}
+											checked={activationChanges[member.id] ?? member.active}
+											disabled={busy || member.id === actor}
+											onCheckedChange={(active) => setMemberActive(member, active)}
+										/>{/if}
+									{#if isAdmin || member.id === actor}<Button
+											variant="ghost"
+											size="icon"
+											aria-label={`Sửa hồ sơ ${member.name}`}
+											onclick={() => editMember(member)}><Pencil size={16} /></Button
+										>{/if}
+								</div></td
 							></tr
 						>{/each}</tbody
 				>

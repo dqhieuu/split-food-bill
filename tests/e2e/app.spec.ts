@@ -244,6 +244,13 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		await page.getByRole('link', { name: 'Thành viên & quản lý', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Làm mới thành viên Discord', exact: true })).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Thêm thành viên', exact: true })).toHaveCount(0);
+		await expect(page.locator('.data-table tbody tr').first()).toContainText('Minh An');
+		await expect(page.getByRole('switch', { name: 'Kích hoạt Minh An', exact: true })).toBeDisabled();
+		const activation = page.getByRole('switch', { name: 'Kích hoạt Thảo Linh', exact: true });
+		await activation.uncheck();
+		await expect(page.getByRole('row').filter({ hasText: 'Thảo Linh' })).toHaveClass(/inactive-member/);
+		await activation.check();
+		await expect(page.getByRole('row').filter({ hasText: 'Thảo Linh' })).not.toHaveClass(/inactive-member/);
 		await page.getByRole('button', { name: 'Sửa hồ sơ Thảo Linh', exact: true }).click();
 		await expect(page.getByLabel('ID', { exact: true })).toBeDisabled();
 		await expect(page.getByLabel('Email', { exact: true })).toHaveCount(0);

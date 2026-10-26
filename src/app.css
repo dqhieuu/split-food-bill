@@ -4210,6 +4210,12 @@ button.payment-history-row {
 .system-reset-action {
 	margin-top: 24px;
 }
+.member-row-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 12px;
+}
 .reset-progress {
 	display: flex;
 	align-items: center;
