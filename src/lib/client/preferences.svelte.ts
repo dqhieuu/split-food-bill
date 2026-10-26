@@ -1,7 +1,7 @@
 export type Theme = 'light' | 'dark';
 
-// Every deployment currently runs against the local Firebase emulators; set VITE_APP_ENV=production to opt out.
-export const isTestEnv = (import.meta.env.VITE_APP_ENV ?? 'test') !== 'production';
+// Test-only controls are visible locally or in an explicitly marked test build.
+export const isTestEnv = import.meta.env.DEV || import.meta.env.VITE_APP_ENV === 'test';
 
 export const preferences = $state({ theme: 'light' as Theme, testView: isTestEnv });
 

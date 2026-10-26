@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // All access goes through the authenticated server API.
+    // All access goes through the Cloudflare Worker, which enforces group membership.
     match /{document=**} { allow read, write: if false; }
   }
 }

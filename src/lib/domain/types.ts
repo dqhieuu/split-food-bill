@@ -7,9 +7,32 @@ export type Member = {
 	bankCode: string;
 	bankLabel?: string;
 	bankAccount: string;
-	bankName: string;
 	color: string;
+	avatarUrl?: string;
 };
+export type GlobalUser = {
+	id: string;
+	discordId: string;
+	role: 'admin' | 'member';
+	name: string;
+	username: string;
+	avatarUrl: string;
+	email: string;
+	lastActiveGroupId?: string;
+	createdAt: string;
+	updatedAt: string;
+};
+export type Group = {
+	id: string;
+	name: string;
+	discordChannelId: string;
+	discordGuildId: string;
+	createdBy: string;
+	createdAt: string;
+	version: number;
+};
+export type GroupSummary = Group & { role: 'admin' | 'member' };
+export type Session = { user: GlobalUser; groups: GroupSummary[]; selectedGroupId: string | null };
 export type LedgerEntry = {
 	id: string;
 	from: string;
@@ -17,6 +40,8 @@ export type LedgerEntry = {
 	type: 'debt' | 'payment';
 	amount: number;
 	date: string;
+	/** Server creation time; older imported history may omit it. */
+	createdAt?: string;
 	description: string;
 	note: string;
 	creator: string;
@@ -30,6 +55,7 @@ export type Bill = {
 	organizer: string;
 	description: string;
 	date: string;
+	createdAt?: string;
 	lines: BillLine[];
 	total: number;
 	emailReceipt: boolean;
@@ -54,7 +80,6 @@ export type Settlement = {
 };
 export type Archive = { id: string; name: string; url: string; date: string };
 export type AuditEvent = { id: string; actor: string; action: string; date: string; reference: string };
-export type UserPreference = { id: string; lastSeenRelease: string };
 export type AppState = {
 	version: number;
 	members: Member[];
@@ -64,7 +89,6 @@ export type AppState = {
 	settlements: Settlement[];
 	archives: Archive[];
 	audit: AuditEvent[];
-	preferences: UserPreference[];
 };
 export type CollectionKey = Exclude<keyof AppState, 'version'>;
 export const collectionKeys: CollectionKey[] = [
@@ -74,8 +98,7 @@ export const collectionKeys: CollectionKey[] = [
 	'receipts',
 	'settlements',
 	'archives',
-	'audit',
-	'preferences'
+	'audit'
 ];
 export type SettlementPlan = {
 	version: number;

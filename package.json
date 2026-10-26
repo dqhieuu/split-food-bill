@@ -14,7 +14,12 @@
 		"test": "vitest run",
 		"test:e2e": "playwright test",
 		"format": "prettier --write .",
-		"backup:local": "node scripts/backup.mjs"
+		"backup:local": "node scripts/backup.mjs",
+		"dev:worker": "wrangler dev --env local --ip 127.0.0.1 --port 8787",
+		"check:worker": "tsc -p worker/tsconfig.json",
+		"build:worker": "wrangler deploy --dry-run --outdir artifacts/worker-build",
+		"deploy:worker": "wrangler deploy",
+		"seed:local": "node --import tsx scripts/seed-local.mjs"
 	},
 	"dependencies": {
 		"@lucide/svelte": "^1.61.0",
@@ -22,12 +27,14 @@
 		"clsx": "latest",
 		"firebase": "latest",
 		"firebase-admin": "latest",
+		"jose": "^6.2.13",
 		"qrcode": "^1.5.4",
 		"tailwind-merge": "latest",
 		"tailwind-variants": "^3.3.1",
 		"zod": "latest"
 	},
 	"devDependencies": {
+		"@cloudflare/workers-types": "^5.20261026.1",
 		"@internationalized/date": "^3.12.4",
 		"@playwright/test": "latest",
 		"@sveltejs/adapter-node": "^6.0.0",
@@ -43,10 +50,12 @@
 		"svelte": "^5.57.2",
 		"svelte-check": "latest",
 		"tailwindcss": "latest",
+		"tsx": "^4.23.15",
 		"tw-animate-css": "latest",
 		"typescript": "latest",
 		"vite": "^8.3.5",
-		"vitest": "latest"
+		"vitest": "latest",
+		"wrangler": "^4.153.0"
 	},
 	"overrides": {
 		"@grpc/grpc-js": "^1.14.6",

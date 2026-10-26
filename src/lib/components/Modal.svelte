@@ -6,15 +6,24 @@
 		title,
 		description = '',
 		children,
-		wide = false
-	}: { open: boolean; title: string; description?: string; children: Snippet; wide?: boolean } = $props();
+		wide = false,
+		compact = false
+	}: {
+		open: boolean;
+		title: string;
+		description?: string;
+		children: Snippet;
+		wide?: boolean;
+		compact?: boolean;
+	} = $props();
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class={wide ? 'app-modal wide-modal' : 'app-modal'}>
+	<Dialog.Content class={`${wide ? 'app-modal wide-modal' : 'app-modal'}${compact ? ' compact-modal' : ''}`}>
 		<Dialog.Header
-			><Dialog.Title>{title}</Dialog.Title><Dialog.Description>{description}</Dialog.Description
-			></Dialog.Header
+			><Dialog.Title>{title}</Dialog.Title>{#if description}<Dialog.Description
+					>{description}</Dialog.Description
+				>{/if}</Dialog.Header
 		>
 		{@render children()}
 	</Dialog.Content>

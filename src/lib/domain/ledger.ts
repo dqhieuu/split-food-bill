@@ -25,6 +25,30 @@ export const dateLabel = (date: string) =>
 		year: 'numeric',
 		timeZone: 'Asia/Ho_Chi_Minh'
 	}).format(new Date(date));
+export const billDateLabel = (date: string) =>
+	new Intl.DateTimeFormat('vi-VN', {
+		weekday: 'long',
+		day: '2-digit',
+		month: '2-digit',
+		year: 'numeric',
+		timeZone: 'Asia/Ho_Chi_Minh'
+	})
+		.format(new Date(date))
+		.toLocaleLowerCase('vi')
+		.replace(/\p{L}+/gu, (word) => word[0].toLocaleUpperCase('vi') + word.slice(1));
+export const dateTimeLabel = (date?: string) =>
+	date
+		? new Intl.DateTimeFormat('vi-VN', {
+				day: '2-digit',
+				month: '2-digit',
+				year: 'numeric',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				hourCycle: 'h23',
+				timeZone: 'Asia/Ho_Chi_Minh'
+			}).format(new Date(date))
+		: 'Không rõ';
 export const localDate = (date: string | Date) =>
 	new Intl.DateTimeFormat('en-CA', {
 		timeZone: 'Asia/Ho_Chi_Minh',
@@ -140,8 +164,8 @@ export function settlementPlan(state: AppState): SettlementPlan {
 			type: 'debt',
 			description:
 				position.net < 0
-					? 'Tối giản nợ · Bước 2: nợ người phân phối tiền'
-					: 'Tối giản nợ · Bước 3: người phân phối tiền nợ lại',
+					? 'Tối giản nợ · Bước 2: nợ người phân phát tiền'
+					: 'Tối giản nợ · Bước 3: người phân phát tiền nợ lại',
 			note: '',
 			source: 'settlement'
 		});
@@ -188,6 +212,7 @@ export function applyCommand(
 		for (const line of data.lines) requireMember(state, line.memberId, true);
 		const bill: Bill = {
 			...data,
+			createdAt: now,
 			organizer: actor,
 			memberNames: Object.fromEntries(state.members.map((m) => [m.id, m.name])),
 			total: data.lines.reduce((s, l) => s + l.amount, 0),
@@ -209,6 +234,7 @@ export function applyCommand(
 					type: 'debt',
 					amount: line.amount,
 					date: bill.date,
+					createdAt: now,
 					description: line.description,
 					note: line.note,
 					creator: actor,
@@ -221,7 +247,7 @@ export function applyCommand(
 				id: bill.id,
 				billId: bill.id,
 				status: 'queued',
-				recipients: bill.lines.map((l) => requireMember(state, l.memberId).email),
+				recipients: bill.lines.map((l) => requireMember(state, l.memberId).email).filter(Boolean),
 				attempts: 0,
 				error: '',
 				createdAt: now
@@ -262,6 +288,7 @@ export function applyCommand(
 				type: 'payment',
 				amount: payment.amount,
 				date: now,
+				createdAt: now,
 				description: data.description,
 				note: data.note,
 				creator: actor,
@@ -286,6 +313,7 @@ export function applyCommand(
 			from: actor,
 			type: 'payment',
 			date: now,
+			createdAt: now,
 			creator: actor,
 			source: 'manual',
 			reference: data.id
@@ -315,6 +343,7 @@ export function applyCommand(
 			type: 'payment',
 			amount: data.amount,
 			date: now,
+			createdAt: now,
 			description: 'Xác nhận chuyển khoản bằng QR',
 			note: 'Người trả tự xác nhận',
 			creator: actor,
@@ -335,7 +364,14 @@ export function applyCommand(
 			plan.entries.map((_, index) => `${data.id}-${index}`)
 		);
 		plan.entries.forEach((entry, i) =>
-			state.ledger.push({ ...entry, id: `${data.id}-${i}`, date: now, creator: actor, reference: data.id })
+			state.ledger.push({
+				...entry,
+				id: `${data.id}-${i}`,
+				date: now,
+				createdAt: now,
+				creator: actor,
+				reference: data.id
+			})
 		);
 		state.settlements.push({
 			id: data.id,
@@ -347,12 +383,12 @@ export function applyCommand(
 		});
 		reference = data.id;
 	} else if (command === 'saveMember') {
-		requireAdmin(state, actor);
+		const editor = requireMember(state, actor, true);
 		const data = z
 			.object({
 				id: identifier,
 				name: text,
-				email: z.email(),
+				email: z.union([z.email(), z.literal('')]),
 				active: z.boolean(),
 				role: z.enum(['admin', 'member']),
 				bankCode: z
@@ -364,20 +400,30 @@ export function applyCommand(
 					.string()
 					.max(40)
 					.regex(/^[0-9]*$/),
-				bankName: z.string().trim().max(100),
 				color: z.string().regex(/^#[0-9a-fA-F]{6}$/)
 			})
 			.parse(input);
+		const existing = state.members.find((member) => member.id === data.id);
+		if (editor.role !== 'admin') {
+			if (data.id !== actor || !existing)
+				throw new DomainError('Bạn chỉ được chỉnh sửa hồ sơ của mình.', 403);
+			if (data.role !== existing.role || data.active !== existing.active)
+				throw new DomainError('Bạn không được thay đổi vai trò hoặc trạng thái tài khoản.', 403);
+		}
 		const bank = resolveBank(data.bankLabel ?? data.bankCode);
 		data.bankCode = bank.code;
 		data.bankLabel = bank.label;
-		if (data.id === actor && (!data.active || data.role !== 'admin'))
+		if (data.id === actor && (!data.active || data.role !== editor.role))
 			throw new DomainError('Bạn không thể tự gỡ quyền quản trị hoặc khóa tài khoản đang dùng.');
-		if (state.members.some((m) => m.id !== data.id && m.email.toLowerCase() === data.email.toLowerCase()))
+		if (
+			data.email &&
+			state.members.some((m) => m.id !== data.id && m.email.toLowerCase() === data.email.toLowerCase())
+		)
 			throw new DomainError('Email đã được sử dụng.');
 		const index = state.members.findIndex((m) => m.id === data.id);
 		if (index < 0) state.members.push(data);
-		else state.members[index] = data;
+		else
+			state.members[index] = { ...data, ...(existing?.avatarUrl ? { avatarUrl: existing.avatarUrl } : {}) };
 		reference = data.id;
 	} else if (command === 'simulateReceipt') {
 		const data = z.object({ id: identifier, fail: z.boolean() }).parse(input);
@@ -401,11 +447,6 @@ export function applyCommand(
 			.parse(input);
 		state.archives.push(data);
 		reference = data.id;
-	} else if (command === 'markReleaseSeen') {
-		const existing = state.preferences.find((p) => p.id === actor);
-		if (existing) existing.lastSeenRelease = '0.1.0';
-		else state.preferences.push({ id: actor, lastSeenRelease: '0.1.0' });
-		reference = actor;
 	} else if (command === 'importLedger') {
 		requireAdmin(state, actor);
 		const data = z.object({ entries: z.array(importEntrySchema).min(1).max(150) }).parse(input);
@@ -430,10 +471,15 @@ export function applyCommand(
 						role: 'member',
 						bankCode: '',
 						bankAccount: '',
-						bankName: '',
 						color: '#a8a29e'
 					});
-			state.ledger.push({ ...entry, creator: actor, source: 'import', reference: 'legacy' });
+			state.ledger.push({
+				...entry,
+				createdAt: entry.createdAt ?? now,
+				creator: actor,
+				source: 'import',
+				reference: 'legacy'
+			});
 		}
 		reference = 'legacy';
 	} else throw new DomainError('Thao tác không được hỗ trợ.');
@@ -451,5 +497,5 @@ export function escapeHtml(value: string) {
 export function receiptHtml(bill: Bill, members: Member[]) {
 	const name = (id: string) =>
 		escapeHtml(bill.memberNames?.[id] || members.find((m) => m.id === id)?.name || id);
-	return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f6f3ec;font-family:Arial,sans-serif;color:#272c27"><table role="presentation" width="100%"><tr><td style="padding:32px 12px"><table role="presentation" style="max-width:600px;margin:auto;background:white;border-radius:16px;width:100%;border-collapse:collapse"><tr><td style="padding:32px"><p style="color:#315e47;font-size:13px;letter-spacing:3px">CHIA TIỀN ĂN</p><h1 style="font-size:26px">Biên nhận hóa đơn</h1><p>${escapeHtml(bill.description)}</p><p>Người thanh toán: <strong>${name(bill.organizer)}</strong> · ${dateLabel(bill.date)}</p><table style="width:100%;text-align:left;border-collapse:collapse"><tr style="border-bottom:1px solid #ddd"><th style="padding:14px 0">Thành viên</th><th>Món ăn</th><th style="text-align:right">Số tiền</th></tr>${bill.lines.map((l) => `<tr><td style="padding:14px 0">${name(l.memberId)}</td><td>${escapeHtml(l.description)}${l.note ? `<br><small>${escapeHtml(l.note)}</small>` : ''}</td><td style="text-align:right">${currency(l.amount)}</td></tr>`).join('')}<tr style="border-top:1px dashed #aaa"><td colspan="2" style="padding:20px 0"><strong>Tổng cộng</strong></td><td style="text-align:right"><strong>${currency(bill.total)}</strong></td></tr></table><p style="color:#777;font-size:12px">Bản xem trước nội bộ · Chưa gửi email · Thanh toán được đối trừ theo từng cặp thành viên.</p></td></tr></table></td></tr></table></body></html>`;
+	return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f6f3ec;font-family:Arial,sans-serif;color:#272c27"><table role="presentation" width="100%"><tr><td style="padding:32px 12px"><table role="presentation" style="max-width:600px;margin:auto;background:white;border-radius:16px;width:100%;border-collapse:collapse"><tr><td style="padding:32px"><p style="color:#315e47;font-size:13px;letter-spacing:3px">CHIA TIỀN ĂN</p><h1 style="font-size:26px">Biên nhận hóa đơn</h1><p>${escapeHtml(bill.description)}</p><p>Người thanh toán: <strong>${name(bill.organizer)}</strong> · ${billDateLabel(bill.date)}</p><p>Tạo: ${dateTimeLabel(bill.createdAt)}</p><table style="width:100%;text-align:left;border-collapse:collapse"><tr style="border-bottom:1px solid #ddd"><th style="padding:14px 0">Thành viên</th><th>Món ăn</th><th style="text-align:right">Số tiền</th></tr>${bill.lines.map((l) => `<tr><td style="padding:14px 0">${name(l.memberId)}</td><td>${escapeHtml(l.description)}${l.note ? `<br><small>${escapeHtml(l.note)}</small>` : ''}</td><td style="text-align:right">${currency(l.amount)}</td></tr>`).join('')}<tr style="border-top:1px dashed #aaa"><td colspan="2" style="padding:20px 0"><strong>Tổng cộng</strong></td><td style="text-align:right"><strong>${currency(bill.total)}</strong></td></tr></table><p style="color:#777;font-size:12px">Bản xem trước nội bộ · Chưa gửi email · Thanh toán được đối trừ theo từng cặp thành viên.</p></td></tr></table></td></tr></table></body></html>`;
 }

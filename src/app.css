@@ -154,6 +154,7 @@ input[type='checkbox'] {
 	max-width: 480px !important;
 	max-height: 88dvh;
 	overflow-y: auto;
+	scrollbar-gutter: stable;
 	padding: 28px !important;
 	gap: 20px !important;
 	border: 1px solid light-dark(#e1e5da, #2b2d26) !important;
@@ -1313,6 +1314,8 @@ footer {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 .review-lines small {
 	font-size: 13px;
@@ -1320,7 +1323,10 @@ footer {
 }
 .review-lines {
 	max-height: 330px;
-	overflow: auto;
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-gutter: stable;
+	padding-right: 12px;
 }
 .review-lines > div:last-child {
 	border-bottom: 0;
@@ -1375,7 +1381,7 @@ footer {
 	display: flex;
 	align-items: center;
 	gap: 13px;
-	padding: 22px 0;
+	padding: 10px 0;
 	border-bottom: 1px solid light-dark(#eef0e6, #22241e);
 }
 .counterpart-name {
@@ -1632,11 +1638,11 @@ footer {
 }
 .status-pill.success {
 	background: light-dark(#edf4e6, #1f231b);
-	color: light-dark(#6e7865, #a3ab9c) !important;
+	color: light-dark(#217346, #7fd3a2) !important;
 }
 .status-pill.danger {
 	background: light-dark(#f9eee7, #26201c);
-	color: light-dark(#6e7865, #a3ab9c) !important;
+	color: light-dark(#b42318, #ff8b82) !important;
 }
 .table-footer {
 	display: flex;
@@ -2643,7 +2649,7 @@ footer {
 	.counterpart-main {
 		gap: 9px;
 		flex-wrap: wrap;
-		padding: 18px 0;
+		padding: 10px 0;
 	}
 	.counterpart-name strong {
 		font-size: 14px;
@@ -3145,7 +3151,7 @@ select[aria-invalid='true'] {
 	border: 1px dashed light-dark(#cdd6bf, #3a4232);
 	cursor: pointer;
 }
-.env-toggle > button {
+.env-toggle > button:not([data-slot='switch']) {
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
@@ -3728,7 +3734,7 @@ select[aria-invalid='true'] {
 	cursor: pointer;
 	margin-bottom: 20px;
 }
-.receipt-toggle > button {
+.receipt-toggle > button:not([data-slot='switch']) {
 	display: flex;
 	gap: 7px;
 	align-items: center;
@@ -3863,7 +3869,7 @@ select[aria-invalid='true'] {
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 8px;
-	padding: 12px 24px 0;
+	padding: 0 24px;
 	font-size: 13px;
 	color: var(--muted-foreground);
 }
@@ -3946,4 +3952,272 @@ select[aria-invalid='true'] {
 	.chart-columns {
 		gap: 8px;
 	}
+}
+
+.data-table tr.inactive-member {
+	filter: grayscale(1);
+	opacity: 0.55;
+	background: light-dark(#f2f2ef, #242424);
+}
+.simplification-steps {
+	list-style: decimal;
+	padding-left: 20px;
+	margin: 12px 0;
+	font-size: 14px;
+	line-height: 1.8;
+	color: var(--muted-foreground);
+}
+.simplification-steps li + li {
+	margin-top: 8px;
+}
+.review-lines > div > strong {
+	flex-shrink: 0;
+}
+.cal-created {
+	font-size: 11px;
+	color: var(--muted-foreground);
+}
+.entry-created {
+	display: block;
+	font-size: 12px;
+	color: var(--muted-foreground);
+	line-height: 1.6;
+	white-space: normal;
+	margin-top: 3px;
+}
+
+/* Keep switch states distinct from the surface and the thumb in both themes. */
+[data-slot='switch'] {
+	width: 44px;
+	height: 26px;
+	padding: 2px;
+	border: 1px solid light-dark(#45584d, #8da899);
+	background: light-dark(#66746c, #55665b);
+	box-shadow: inset 0 1px 2px #00000024;
+}
+[data-slot='switch'][data-state='checked'] {
+	background: light-dark(#236746, #71c594);
+	border-color: light-dark(#194f34, #9fe5bb);
+}
+[data-slot='switch-thumb'] {
+	width: 20px;
+	height: 20px;
+	background: #fff;
+	box-shadow: 0 1px 3px #00000055;
+	translate: none;
+	transform: translateX(0);
+}
+[data-slot='switch'][data-state='checked'] [data-slot='switch-thumb'] {
+	background: light-dark(#fff, #102e1d);
+	transform: translateX(18px);
+}
+[data-slot='switch'][data-size='sm'] {
+	width: 36px;
+	height: 22px;
+}
+[data-slot='switch'][data-size='sm'] [data-slot='switch-thumb'] {
+	width: 16px;
+	height: 16px;
+}
+[data-slot='switch'][data-size='sm'][data-state='checked'] [data-slot='switch-thumb'] {
+	transform: translateX(14px);
+}
+.recent-panel .bill-row {
+	width: 100%;
+	background: none;
+	border-right: 0;
+	border-left: 0;
+	border-bottom: 0;
+	border-radius: 0;
+	min-height: 0;
+	padding: 10px 0;
+}
+.recent-panel .bill-info > span {
+	white-space: normal;
+	max-width: none;
+}
+.bar-value {
+	position: absolute;
+	bottom: calc(100% + 5px);
+	left: 50%;
+	transform: translateX(-50%);
+	font-size: 12px;
+	font-weight: 600;
+	white-space: nowrap;
+	color: var(--foreground);
+	font-variant-numeric: tabular-nums;
+}
+.spending-panel .bar-chart {
+	margin-top: 38px;
+}
+.simplification-heading {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.simplification-heading h2 {
+	margin: 0;
+}
+.simplify-button svg {
+	width: 28px !important;
+	height: 28px !important;
+}
+@media (max-width: 760px) {
+	.bar-value {
+		font-size: 10px;
+	}
+}
+button.payment-history-row {
+	width: 100%;
+	background: none;
+	border-top: 0;
+	border-left: 0;
+	border-right: 0;
+	border-radius: 0;
+}
+
+.bill-date-control {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-width: 0;
+	height: 42px;
+	padding: 0 12px;
+	border: 1px solid light-dark(#dce3d2, #2c3124);
+	border-radius: 8px;
+	background: light-dark(#fffefa, #1c211d);
+	color: var(--foreground);
+	font-size: 14px;
+}
+.bill-date-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.bill-date-native {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	cursor: pointer;
+}
+.bill-date-control:focus-within {
+	outline: 2px solid light-dark(#6b9576, #628c6d);
+	outline-offset: 3px;
+}
+.bill-date-control[aria-invalid='true'] {
+	border-color: light-dark(#b42318, #ff8b82);
+}
+
+.app-modal.compact-modal {
+	padding: 20px !important;
+	gap: 12px !important;
+}
+.compact-modal .notice {
+	margin: 0;
+}
+.compact-modal .review-lines > div {
+	padding: 10px 0;
+}
+.clickable-bill-row {
+	cursor: pointer;
+}
+.clickable-bill-row:hover {
+	background: light-dark(#f2f5ed, #242b24);
+}
+
+.ledger-table th {
+	padding: 8px 12px;
+}
+.ledger-table td {
+	padding: 5px 12px;
+	line-height: 1.35;
+}
+.ledger-table small {
+	margin-top: 1px;
+	line-height: 1.3;
+}
+.ledger-table .status-pill {
+	padding: 2px 6px;
+}
+
+.auth-page {
+	min-height: 100dvh;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 24px;
+	padding: 32px;
+}
+.groups-layout {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 24px;
+}
+.groups-layout .field {
+	margin-top: 18px;
+}
+.groups-layout [data-slot='button'] {
+	margin-top: 20px;
+}
+.group-choice {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: 14px;
+	padding: 18px 0;
+	background: none;
+	border: 0;
+	border-bottom: 1px solid var(--border);
+}
+.group-choice span {
+	display: flex;
+	flex-direction: column;
+}
+.group-choice small {
+	font-size: 12px;
+	color: var(--muted-foreground);
+}
+.workspace select {
+	width: 100%;
+	height: 30px;
+	font-size: 12px;
+	margin-top: 6px;
+	padding: 2px 18px 2px 4px;
+}
+.account-current small {
+	display: block;
+	font-size: 12px;
+}
+.avatar img {
+	width: 100%;
+	height: 100%;
+	border-radius: inherit;
+	object-fit: cover;
+}
+@media (max-width: 760px) {
+	.groups-layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+.discord-message-panel {
+	margin-top: 22px;
+}
+.discord-message-panel .member-picker {
+	margin: 16px 0;
+}
+.discord-message-panel textarea {
+	min-height: 100px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 12px;
+	background: var(--background);
+	color: var(--foreground);
+}
+.discord-message-panel [data-slot='button'] {
+	margin-top: 16px;
 }

@@ -19,3 +19,7 @@ audit-output.json
 lunchroom-overview.png
 .DS_Store
 .vitest
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example

@@ -5,7 +5,9 @@ import {
 	netBalance,
 	settlementPlan,
 	splitAmount,
-	receiptHtml
+	receiptHtml,
+	dateTimeLabel,
+	billDateLabel
 } from '../../src/lib/domain/ledger';
 import { createDemoState } from '../../src/lib/domain/seed';
 import { parseLedgerImport } from '../../src/lib/domain/import';
@@ -13,6 +15,74 @@ import { crc16, vietQrPayload, resolveBank } from '../../src/lib/domain/qr';
 
 const now = '2026-10-25T12:00:00.000Z';
 const fresh = () => createDemoState(new Date(now));
+describe('creation timestamps', () => {
+	it('includes the Vietnam-local weekday in bill dates', () => {
+		expect(billDateLabel('2026-10-25T05:00:00Z')).toContain('Chủ Nhật');
+		expect(billDateLabel('2026-10-25T17:00:00Z')).toContain('Thứ Hai');
+		expect(billDateLabel('2026-10-25T17:00:00Z')).toContain('26/10/2026');
+	});
+	it('stores server creation separately from payment date and preserves it on retries', () => {
+		const state = fresh();
+		const input = {
+			id: 'backdated',
+			date: '2026-01-01T05:00:00.000Z',
+			description: 'Earlier meal',
+			emailReceipt: true,
+			createdAt: '2000-01-01T00:00:00.000Z',
+			lines: [{ memberId: 'linh', amount: 10000, description: '', note: '' }]
+		};
+		applyCommand(state, 'an', 'createBill', input, now);
+		applyCommand(state, 'an', 'createBill', input, '2026-10-26T13:04:05.000Z');
+		expect(state.bills.find((bill) => bill.id === input.id)).toMatchObject({
+			date: input.date,
+			createdAt: now
+		});
+		expect(state.ledger.find((entry) => entry.reference === input.id)).toMatchObject({
+			date: input.date,
+			createdAt: now
+		});
+		expect(dateTimeLabel('2026-10-26T13:04:05.000Z')).toContain('20:04:05');
+		expect(dateTimeLabel('2026-10-26T13:04:05.000Z')).toContain('26/10/2026');
+	});
+	it('timestamps all payment, import and settlement entry creation paths', () => {
+		const state = fresh();
+		const originalIds = new Set(state.ledger.map((entry) => entry.id));
+		applyCommand(
+			state,
+			'an',
+			'recordPayment',
+			{ id: 'single', to: 'linh', amount: 100, description: 'Repayment', note: '' },
+			now
+		);
+		applyCommand(
+			state,
+			'an',
+			'recordPayments',
+			{ id: 'batch', payments: [{ to: 'linh', amount: 100 }], description: 'Repayment', note: '' },
+			now
+		);
+		applyCommand(state, 'an', 'confirmQrPayment', { id: 'qr-time', to: 'linh', amount: 100 }, now);
+		const rows = parseLedgerImport(
+			JSON.stringify([
+				{ id: 'old', from: 'an', to: 'linh', type: 'debt', amount: 100, date: '2020-01-01T00:00:00Z' }
+			])
+		);
+		applyCommand(state, 'an', 'importLedger', { entries: rows }, now);
+		applyCommand(state, 'an', 'settleDebts', { id: 'settle-time', version: state.version }, now);
+		expect(
+			state.ledger.filter((entry) => !originalIds.has(entry.id)).every((entry) => entry.createdAt === now)
+		).toBe(true);
+		const originalCreatedAt = '2019-12-31T12:34:56.000Z';
+		applyCommand(
+			state,
+			'an',
+			'importLedger',
+			{ entries: [{ ...rows[0], id: 'old-known-time', createdAt: originalCreatedAt }] },
+			now
+		);
+		expect(state.ledger.find((entry) => entry.id === 'old-known-time')?.createdAt).toBe(originalCreatedAt);
+	});
+});
 describe('ledger accounting', () => {
 	it('nets debt and repayment in both directions, including self and zero legacy rows', () => {
 		const state = fresh();
@@ -88,6 +158,49 @@ describe('ledger accounting', () => {
 		for (let amount = 1; amount < 1000; amount += 7)
 			for (let count = 1; count < 15; count++)
 				expect(splitAmount(amount, Array(count).fill(1)).reduce((s, n) => s + n, 0)).toBe(amount);
+	});
+});
+describe('member profile permissions', () => {
+	it('allows an ordinary member to update their own name, email and bank details', () => {
+		const state = fresh();
+		const member = state.members.find((person) => person.id === 'linh')!;
+		applyCommand(
+			state,
+			'linh',
+			'saveMember',
+			{
+				...member,
+				name: 'Updated member',
+				bankName: 'Obsolete account holder',
+				email: 'updated@example.test',
+				bankLabel: 'MB Bank',
+				bankAccount: '00112233'
+			},
+			now
+		);
+		expect(state.members.find((person) => person.id === 'linh')).toMatchObject({
+			name: 'Updated member',
+			email: 'updated@example.test',
+			role: 'member',
+			active: true,
+			bankCode: '970422',
+			bankAccount: '00112233'
+		});
+		expect(state.members.find((person) => person.id === 'linh')).not.toHaveProperty('bankName');
+	});
+	it('rejects editing another profile, creating members, privilege changes and self deactivation', () => {
+		const state = fresh();
+		const member = state.members.find((person) => person.id === 'linh')!;
+		for (const changes of [{ id: 'huy' }, { id: 'new-member' }, { role: 'admin' }, { active: false }]) {
+			expect(() => applyCommand(state, 'linh', 'saveMember', { ...member, ...changes }, now)).toThrow();
+		}
+		expect(state.members.find((person) => person.id === 'linh')).toMatchObject({
+			role: 'member',
+			active: true
+		});
+		expect(state.members.some((person) => person.id === 'new-member')).toBe(false);
+		const admin = state.members.find((person) => person.id === 'an')!;
+		expect(() => applyCommand(state, 'an', 'saveMember', { ...admin, role: 'member' }, now)).toThrow();
 	});
 });
 describe('payments', () => {

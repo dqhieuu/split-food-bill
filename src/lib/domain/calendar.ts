@@ -7,6 +7,7 @@ export type CalendarBill = {
 	payerId: string;
 	payer: string;
 	amount: number;
+	createdAt?: string;
 	/** amount / most expensive bill of the month, in [0, 1]. */
 	ratio: number;
 	/** Color corresponding to the bill's percentage of the monthly maximum. */
@@ -186,6 +187,7 @@ export function calendarMonth(
 			payerId: bill.organizer,
 			payer: payerName(bill),
 			amount: bill.total,
+			...(bill.createdAt ? { createdAt: bill.createdAt } : {}),
 			ratio: bill.total / maxBill,
 			color: spendingPercentageColor(bill.total / maxBill)
 		};

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import QRCode from 'qrcode';
-	import { Wallet, ArrowUpRight, ArrowDownLeft, QrCode, Check, History, Copy } from '@lucide/svelte';
+	import { Wallet, ArrowUpRight, ArrowDownLeft, QrCode, History } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import Avatar from '../Avatar.svelte';
@@ -8,7 +8,7 @@
 	import EmptyState from '../EmptyState.svelte';
 	import type { AppState, Member } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, dateLabel, pairBalance } from '$lib/domain/ledger';
+	import { currency, billDateLabel, pairBalance } from '$lib/domain/ledger';
 	import { vietQrPayload, bankNames } from '$lib/domain/qr';
 	import { preferences } from '$lib/client/preferences.svelte';
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
@@ -20,7 +20,6 @@
 	let confirmed = $state(false);
 	let qrImage = $state('');
 	let qrError = $state('');
-	let copied = $state(false);
 	const pairs = $derived(
 		appState.members
 			.filter((m) => m.id !== actor && m.active)
@@ -42,7 +41,6 @@
 		const payment = { id: crypto.randomUUID(), amount, recipient: structuredClone($state.snapshot(person)) };
 		qrPayment = payment;
 		confirmed = false;
-		copied = false;
 		qrError = '';
 		qrImage = '';
 		qrOpen = true;
@@ -69,12 +67,6 @@
 			/* Keep the same payment ID for an idempotent retry. */
 		}
 	}
-	async function copyAccount() {
-		if (recipient) {
-			await navigator.clipboard.writeText(recipient.bankAccount);
-			copied = true;
-		}
-	}
 </script>
 
 <div class="page-heading">
@@ -96,8 +88,8 @@
 		>
 	</div>
 	<div class="stat-card net-card">
-		<div class="stat-label">Lỗ - Lãi <Wallet size={19} /></div>
-		<strong>{currency(owed - owing)}</strong><span class="stat-foot">Thành viên đang hoạt động</span>
+		<div class="stat-label">Lãi - lỗ <Wallet size={19} /></div>
+		<strong>{currency(owing - owed)}</strong>
 	</div>
 </div>
 <section class="panel">
@@ -146,7 +138,7 @@
 				<div class="counterpart-history">
 					<p>Các khoản nợ gần đây</p>
 					{#each entries as entry}<div>
-							<span>{dateLabel(entry.date)} · {entry.description}</span><strong
+							<span>{billDateLabel(entry.date)} · {entry.description}</span><strong
 								>{currency(entry.amount)}</strong
 							>
 						</div>{/each}{#if !entries.length}<p>
@@ -173,14 +165,8 @@
 			<h2>{currency(qrPayment.amount)}</h2>
 			<strong>{recipient.name}</strong>
 			<p>
-				{recipient.bankLabel || bankNames[recipient.bankCode] || recipient.bankCode} · {recipient.bankAccount}<button
-					class="icon-button"
-					aria-label="Sao chép số tài khoản"
-					onclick={copyAccount}
-					>{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}</button
-				>
+				{recipient.bankLabel || bankNames[recipient.bankCode] || recipient.bankCode} · {recipient.bankAccount}
 			</p>
-			<small>{recipient.bankName}</small>
 			{#if qrError}<p class="validation-error" role="alert">{qrError}</p>{/if}
 		</div>
 		<label class="checkbox-label"

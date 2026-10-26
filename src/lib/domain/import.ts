@@ -8,6 +8,7 @@ export const importEntrySchema = z.object({
 	type: z.enum(['debt', 'payment']),
 	amount: z.number().int().min(-1_000_000_000).max(1_000_000_000),
 	date: z.iso.datetime(),
+	createdAt: z.iso.datetime().optional(),
 	description: z.string().max(300),
 	note: z.string().max(500),
 	legacySequence: z.string().max(100)
@@ -72,6 +73,7 @@ export function parseLedgerImport(content: string): ImportedEntry[] {
 			type: entry.type === 'Nợ' ? 'debt' : entry.type === 'Trả' ? 'payment' : entry.type,
 			amount: typeof entry.amount === 'number' ? entry.amount : Number(entry.amount),
 			date: parsedDate.toISOString(),
+			...(entry.createdAt ? { createdAt: new Date(String(entry.createdAt)).toISOString() } : {}),
 			description: String(entry.description || ''),
 			note: String(entry.note || ''),
 			legacySequence: sequence

@@ -20,17 +20,22 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import Avatar from '../Avatar.svelte';
 	import Modal from '../Modal.svelte';
+	import { requestJson } from '$lib/client/api';
 	import type { AppState, Member } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, dateLabel, localDate, netBalance } from '$lib/domain/ledger';
+	import { currency, dateTimeLabel, localDate, netBalance } from '$lib/domain/ledger';
 	import { bankNames, resolveBank } from '$lib/domain/qr';
 	import { parseLedgerImport, summarizeImport, type ImportedEntry } from '$lib/domain/import';
-	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
-		$props();
+	let {
+		appState,
+		actor,
+		run,
+		busy,
+		groupId
+	}: { appState: AppState; actor: string; run: RunCommand; busy: boolean; groupId: string } = $props();
 	let tab = $state('members');
 	let search = $state('');
 	let memberOpen = $state(false);
-	let isNew = $state(false);
 	let bankInput = $state('');
 	let memberDraft = $state<Member>({
 		id: '',
@@ -40,7 +45,6 @@
 		role: 'member',
 		bankCode: '970436',
 		bankAccount: '',
-		bankName: '',
 		color: '#6c8b70'
 	});
 	let archiveOpen = $state(false);
@@ -53,6 +57,35 @@
 	let importProgress = $state('');
 	let importing = $state(false);
 	let acknowledged = $state(false);
+	let dmRecipients = $state<string[]>([]);
+	let dmMessage = $state('');
+	let dmResult = $state('');
+	let dmBusy = $state(false);
+	async function sendDirectMessages() {
+		dmBusy = true;
+		dmResult = '';
+		try {
+			const { results } = await requestJson('/api/discord/dm', {
+				method: 'POST',
+				body: JSON.stringify({
+					id: crypto.randomUUID(),
+					groupId,
+					recipients: dmRecipients,
+					message: dmMessage
+				})
+			});
+			dmResult = results
+				.map(
+					(result: { uid: string; status: string }) =>
+						`${appState.members.find((member) => member.id === result.uid)?.name}: ${result.status === 'simulated' ? 'Đã mô phỏng' : result.status === 'sent' ? 'Đã gửi' : 'Không gửi được'}`
+				)
+				.join(' · ');
+		} catch (cause) {
+			dmResult = (cause as Error).message;
+		} finally {
+			dmBusy = false;
+		}
+	}
 	const isAdmin = $derived(appState.members.find((m) => m.id === actor)?.role === 'admin');
 	const members = $derived(
 		appState.members.filter((m) =>
@@ -70,31 +103,20 @@
 		simulateReceipt: 'Mô phỏng biên nhận',
 		saveArchive: 'Thêm lưu trữ',
 		markReleaseSeen: 'Đã xem cập nhật',
-		importLedger: 'Nhập lịch sử'
+		importLedger: 'Nhập lịch sử',
+		syncDiscordMembers: 'Đồng bộ thành viên Discord',
+		sendDiscordDm: 'Gửi tin nhắn Discord'
 	};
-	function editMember(member?: Member) {
-		isNew = !member;
-		memberDraft = member
-			? structuredClone($state.snapshot(member))
-			: {
-					id: '',
-					name: '',
-					email: '',
-					active: true,
-					role: 'member',
-					bankCode: '970436',
-					bankAccount: '',
-					bankName: '',
-					color: '#6c8b70'
-				};
+	function editMember(member: Member) {
+		memberDraft = structuredClone($state.snapshot(member));
 		bankInput = memberDraft.bankLabel ?? bankNames[memberDraft.bankCode] ?? memberDraft.bankCode;
 		validation = '';
 		memberOpen = true;
 	}
 	async function saveMember() {
 		validation = '';
-		if (!memberDraft.id || !memberDraft.name || !memberDraft.email) {
-			validation = 'Điền đầy đủ ID, tên và email.';
+		if (!memberDraft.id || !memberDraft.name) {
+			validation = 'Điền đầy đủ ID và tên.';
 			return;
 		}
 		try {
@@ -150,6 +172,7 @@
 		}
 	}
 	async function commitImport() {
+		if (summary.inactiveIds.length) return;
 		importing = true;
 		try {
 			for (let offset = 0; offset < importEntries.length; offset += 150) {
@@ -171,7 +194,10 @@
 	<div>
 		<h1>Thành viên & quản lý</h1>
 	</div>
-	{#if isAdmin}<Button onclick={() => editMember()}><Plus size={17} /> Thêm thành viên</Button>{/if}
+	{#if isAdmin}<Button
+			onclick={() => run('syncDiscordMembers', {}, 'Đã đồng bộ thành viên Discord.').catch(() => {})}
+			disabled={busy}><Users size={17} /> Đồng bộ Discord</Button
+		>{/if}
 </div>
 <section class="panel">
 	<div class="filter-toolbar">
@@ -201,12 +227,11 @@
 			<table class="data-table">
 				<thead
 					><tr
-						><th>Thành viên</th><th>Vai trò</th><th>Ngân hàng</th><th>Trạng thái</th><th class="align-right"
-							>Lỗ/lãi</th
-						><th></th></tr
+						><th>Thành viên</th><th>Vai trò</th><th>Ngân hàng</th><th class="align-right">Lỗ/lãi</th><th
+						></th></tr
 					></thead
 				><tbody
-					>{#each members as member}<tr
+					>{#each members as member}<tr class:inactive-member={!member.active}
 							><td
 								><div class="table-person">
 									<Avatar {member} /><span><strong>{member.name}</strong><small>{member.email}</small></span>
@@ -218,16 +243,12 @@
 										: 'Chưa có số tài khoản'}</small
 								></td
 							><td
-								><span class="status-pill" class:success={member.active}
-									>{member.active ? 'Đang hoạt động' : 'Thành viên cũ'}</span
-								></td
-							><td
 								class="align-right"
 								class:positive={netBalance(appState.ledger, member.id) >= 0}
 								class:negative={netBalance(appState.ledger, member.id) < 0}
 								>{currency(netBalance(appState.ledger, member.id))}</td
 							><td
-								>{#if isAdmin}<Button
+								>{#if isAdmin || member.id === actor}<Button
 										variant="ghost"
 										size="icon"
 										aria-label={`Sửa hồ sơ ${member.name}`}
@@ -239,9 +260,6 @@
 			</table>
 		</div>
 		{#if !members.length}<div class="inline-empty">Không tìm thấy thành viên.</div>{/if}
-		<div class="table-footer">
-			<span>Thành viên ngừng hoạt động vẫn giữ toàn bộ giao dịch và số dư.</span>
-		</div>
 	{:else if tab === 'data'}<div class="management-data">
 			<div class="two-panels">
 				<div class="data-action-card">
@@ -307,7 +325,7 @@
 				<thead><tr><th>Thời gian</th><th>Thành viên</th><th>Thao tác</th></tr></thead><tbody
 					>{#each [...appState.audit].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 100) as event}<tr
 							><td
-								>{dateLabel(event.date)}<small
+								>{dateTimeLabel(event.date)}<small
 									>{new Intl.DateTimeFormat('vi-VN', {
 										hour: '2-digit',
 										minute: '2-digit',
@@ -325,16 +343,37 @@
 				Các thay đổi tiếp theo sẽ được ghi lại tại đây.
 			</div>{/if}{/if}
 </section>
+{#if isAdmin}<section class="panel form-panel discord-message-panel">
+		<h2>Tin nhắn Discord</h2>
+		<div class="member-picker">
+			{#each appState.members as member}<button
+					class:selected={dmRecipients.includes(member.id)}
+					aria-pressed={dmRecipients.includes(member.id)}
+					onclick={() =>
+						(dmRecipients = dmRecipients.includes(member.id)
+							? dmRecipients.filter((id) => id !== member.id)
+							: [...dmRecipients, member.id])}>{member.name}</button
+				>{/each}
+		</div>
+		<label class="field"
+			>Nội dung tin nhắn<textarea aria-label="Nội dung tin nhắn" maxlength={2000} bind:value={dmMessage}
+			></textarea></label
+		>
+		<Button
+			disabled={dmBusy || !dmRecipients.length || dmRecipients.length > 20 || !dmMessage.trim()}
+			onclick={sendDirectMessages}>Gửi tin nhắn riêng</Button
+		>
+		{#if dmResult}<p class="fine-print" role="status">{dmResult}</p>{/if}
+	</section>{/if}
 <Modal
 	bind:open={memberOpen}
-	title={isNew ? 'Thêm thành viên' : 'Chỉnh sửa hồ sơ'}
+	title="Chỉnh sửa hồ sơ"
 	description="ID là định danh cố định. Thông tin ngân hàng dùng để tạo QR."
 	wide
 	><div class="form-two-columns">
-		<label class="field"
-			>ID<Input bind:value={memberDraft.id} disabled={!isNew} placeholder="minh.an" maxlength={100} /></label
-		><label class="field"
-			>Vai trò<select bind:value={memberDraft.role} disabled={memberDraft.id === actor}
+		<label class="field">ID<Input bind:value={memberDraft.id} disabled={true} maxlength={100} /></label><label
+			class="field"
+			>Vai trò<select bind:value={memberDraft.role} disabled={!isAdmin || memberDraft.id === actor}
 				><option value="member">Thành viên</option><option value="admin">Quản trị viên</option></select
 			></label
 		><label class="field">Tên<Input bind:value={memberDraft.name} maxlength={100} /></label><label
@@ -358,7 +397,7 @@
 		<label class="checkbox-label"
 			><Switch
 				bind:checked={memberDraft.active}
-				disabled={memberDraft.id === actor}
+				disabled={!isAdmin || memberDraft.id === actor}
 				aria-label="Thành viên đang hoạt động"
 			/>Đang hoạt động</label
 		>
@@ -405,8 +444,10 @@
 		<div class="notice">
 			<ShieldCheck size={18} />
 			<p>
-				Giữ {summary.zeroCount} dòng 0 đồng và {summary.selfCount} dòng tự nợ. Tạo {summary.inactiveIds
-					.length} hồ sơ thành viên cũ: {summary.inactiveIds.join(', ') || 'không có'}.
+				Giữ {summary.zeroCount} dòng 0 đồng và {summary.selfCount} dòng tự nợ.
+				{#if summary.inactiveIds.length}
+					Cần đồng bộ từ Discord trước khi nhập: {summary.inactiveIds.join(', ')}.
+				{/if}
 			</p>
 		</div>
 		<div class="table-scroll">
@@ -423,8 +464,9 @@
 		</div>
 		<label class="checkbox-label"
 			><input type="checkbox" bind:checked={acknowledged} disabled={importing} />Tôi đã kiểm tra dữ liệu và
-			muốn nhập vào sổ cục bộ.</label
-		><Button disabled={!acknowledged || busy || importing} onclick={commitImport}
-			>{importing ? 'Đang nhập…' : 'Xác nhận nhập lịch sử'}</Button
+			muốn nhập vào nhóm này.</label
+		><Button
+			disabled={!acknowledged || busy || importing || !!summary.inactiveIds.length}
+			onclick={commitImport}>{importing ? 'Đang nhập…' : 'Xác nhận nhập lịch sử'}</Button
 		>{/if}{#if importProgress}<p class="positive" role="status">{importProgress}</p>{/if}</Modal
 >

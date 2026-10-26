@@ -13,22 +13,48 @@
 		placeholder?: string;
 		label: string;
 	} = $props();
-	const hasValue = $derived(value !== undefined && value !== null && String(value) !== '');
+	let inputText = $state('');
+	const amountPattern = /^\d*(?:[.,]\d*)?$/;
+	const parseAmount = (text: string) =>
+		text === '' || text === '.' || text === ',' ? null : Number(text.replace(',', '.'));
+	$effect(() => {
+		if ((value ?? null) !== parseAmount(inputText))
+			inputText = value == null ? '' : String(Math.max(0, value));
+	});
+	function updateAmount(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const next = input.value;
+		if (!amountPattern.test(next) || (parseAmount(next) !== null && !Number.isFinite(parseAmount(next)))) {
+			input.value = inputText;
+			return;
+		}
+		inputText = next;
+		value = parseAmount(next);
+	}
+	function preventInvalidInput(event: InputEvent) {
+		if (event.data && /[eE+\-]/.test(event.data)) event.preventDefault();
+	}
+	function validatePaste(event: ClipboardEvent) {
+		if (!amountPattern.test(event.clipboardData?.getData('text') ?? '')) event.preventDefault();
+	}
 </script>
 
 <div class="money-input">
 	<Input
-		type="number"
+		type="text"
 		inputmode="decimal"
-		min="0"
-		step={unit === 1000 ? '0.001' : '1'}
+		autocomplete="off"
+		pattern="[0-9]*[.,]?[0-9]*"
 		aria-label={label}
 		aria-invalid={invalid}
 		{placeholder}
-		bind:value
+		value={inputText}
+		oninput={updateAmount}
+		onbeforeinput={preventInvalidInput}
+		onpaste={validatePaste}
 	/>
 	<span class="money-suffix" aria-hidden="true"
-		><span class="money-mirror">{hasValue ? value : placeholder}</span><span
+		><span class="money-mirror">{inputText || placeholder}</span><span
 			>{' ' + (unit === 1000 ? 'nghìn đồng' : 'đồng')}</span
 		></span
 	>

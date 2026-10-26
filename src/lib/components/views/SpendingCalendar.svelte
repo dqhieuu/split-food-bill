@@ -2,7 +2,7 @@
 	import { ChevronLeft, ChevronRight, ChevronDown, Plus, X } from '@lucide/svelte';
 	import { Popover } from 'bits-ui';
 	import type { Bill, Member } from '$lib/domain/types';
-	import { currency, localDate } from '$lib/domain/ledger';
+	import { currency, localDate, billDateLabel, dateTimeLabel } from '$lib/domain/ledger';
 	import { toLunar } from '$lib/domain/lunar';
 	import {
 		calendarMonth,
@@ -17,8 +17,13 @@
 	const FALLBACK_COLOR = '#7f8a77';
 	let {
 		bills,
-		members = []
-	}: { bills: Bill[]; members?: Pick<Member, 'id' | 'name' | 'color' | 'active'>[] } = $props();
+		members = [],
+		onBillClick
+	}: {
+		bills: Bill[];
+		members?: Pick<Member, 'id' | 'name' | 'color' | 'active'>[];
+		onBillClick: (id: string) => void;
+	} = $props();
 	const today = localDate(new Date());
 	let cursor = $state({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) });
 	let selectedKey = $state(today);
@@ -65,7 +70,7 @@
 			})
 		];
 	});
-	const dateLabel = (key: string) => `${key.slice(8)}/${key.slice(5, 7)}/${key.slice(0, 4)}`;
+	const dateLabel = billDateLabel;
 	function shift(step: number) {
 		const index = cursor.year * 12 + cursor.month - 1 + step;
 		cursor = { year: Math.floor(index / 12), month: (index % 12) + 1 };
@@ -77,6 +82,10 @@
 		event.preventDefault();
 		selectedKey = key;
 	}
+	function openBill(id: string) {
+		openPopover = null;
+		onBillClick(id);
+	}
 </script>
 
 {#snippet payerBadge(bill: CalendarBill, short = false)}
@@ -86,29 +95,29 @@
 {/snippet}
 
 {#snippet billBar(bill: CalendarBill)}
-	<a
+	<button
 		class="cal-bill"
-		href={`/activity?bill=${bill.id}`}
+		onclick={() => openBill(bill.id)}
 		style:--spend-color={bill.color}
-		title={`${bill.description} · Người trả: ${bill.payer} · ${currency(bill.amount)}`}
+		title={`${bill.description} · Người trả: ${bill.payer} · ${currency(bill.amount)} · Tạo: ${dateTimeLabel(bill.createdAt)}`}
 	>
 		<span class="cal-bill-left"
 			><i class="cal-dot"></i><span class="cal-bill-name">{bill.description}</span></span
 		>
 		{@render payerBadge(bill, true)}
-	</a>
+	</button>
 {/snippet}
 
 {#snippet billRow(bill: CalendarBill, index: number)}
-	<a class="cal-row" href={`/activity?bill=${bill.id}`} style:--spend-color={bill.color}>
+	<button class="cal-row" onclick={() => openBill(bill.id)} style:--spend-color={bill.color}>
 		<i class="cal-dot"></i><span class="cal-row-index">{index + 1}.</span>
 		<span class="cal-row-text"
 			><strong title={bill.description}>{bill.description}</strong><small class="cal-amount"
 				>{currency(bill.amount)}</small
-			></span
+			><small class="cal-created">Tạo: {dateTimeLabel(bill.createdAt)}</small></span
 		>
 		{@render payerBadge(bill)}
-	</a>
+	</button>
 {/snippet}
 
 <section class="panel calendar-panel">

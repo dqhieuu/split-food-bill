@@ -1,113 +1,84 @@
-# Lunchroom / Chia tiền ăn
+# Chia tiền ăn
 
-A Vietnamese single-page group expense app built with **SvelteKit 3, Svelte 5, TypeScript, shadcn-svelte (Nova), Tailwind 4, Firebase Authentication and Cloud Firestore**. Code, method names and documentation are English; UI and receipts are Vietnamese.
+A Vietnamese group expense SPA using SvelteKit, Svelte 5, TypeScript, shadcn-svelte, Tailwind, Firebase Authentication/Firestore and a Cloudflare Worker. Code and documentation are English; UI is Vietnamese.
 
-Branch: `feat/lunch-ledger-spa`. No deployment has been created.
+Discord is the only login method. Firebase user IDs are `discord_<Discord ID>`. Global administrators create groups linked to Discord channels. Group administrators activate imported members and manage group data. Global and group roles are independent.
 
-## Local development
+No service has been deployed. No existing data migration is required or included.
 
-Install Node.js **22.17+** (22 or 24 LTS recommended), npm and Java **21+** on PATH.
+## Run locally
+
+Install Node.js 24 LTS, npm and Java 21+ on PATH, then:
 
 ```powershell
 npm ci
 npm run dev
 ```
 
-Open [the app](http://127.0.0.1:5173). This launches real Firebase Auth and Firestore **emulators**, waits for readiness, then starts Vite. The first run downloads Firestore. No Firebase account, real database or service account is required. If port 5173 is occupied, use the URL printed by Vite.
+Open [the app](http://127.0.0.1:5173). The launcher starts Firebase Auth/Firestore emulators, seeds fictional data, runs the Worker locally with Wrangler, and starts Vite. No service account or Discord credentials are needed. Use `127.0.0.1` consistently rather than mixing it with `localhost`.
 
-| Service        | Address               |
-| -------------- | --------------------- |
-| Emulator UI    | http://127.0.0.1:4000 |
-| Firestore      | 127.0.0.1:8080        |
-| Authentication | 127.0.0.1:9099        |
+| Service                | Address               |
+| ---------------------- | --------------------- |
+| Frontend               | http://127.0.0.1:5173 |
+| Worker API             | http://127.0.0.1:8787 |
+| Firebase emulator UI   | http://127.0.0.1:4000 |
+| Firestore emulator     | 127.0.0.1:8080        |
+| Firebase Auth emulator | 127.0.0.1:9099        |
 
-The avatar menu switches demo accounts. **Minh An** is the administrator; the other initial active members are ordinary members. Demo names, emails, bank accounts and transaction history are fictional. Do not make real transfers to sample accounts.
+Click the Discord login button to open the **local mock account picker**. Minh An is the seeded global/group admin. Other members start inactive; activate them in member management before signing in as them. All Discord data and DMs are simulated in local mode. Sample bank details and transactions are fictional.
 
-Stop with Ctrl+C and allow export to finish. Emulators export to ignored `.emulator-data/` and import that snapshot on the next launch. Abrupt termination can lose changes since the last export. Each organizer's draft is stored separately in browser local storage and survives reload. The emulator is seeded only when `groups/local` is absent. The original spreadsheet is unchanged and has not been imported.
-
-Run `npm run backup:local` while the emulator is running to explicitly save a local snapshot. `npm run emulators` starts only the emulator suite. Running `npm run dev:web` or `npm run preview` alone requires the emulator host variables from `.env.example` and a running emulator.
+The local seed uses Discord-prefixed IDs directly. It replaces an old, uninitialized local fixture rather than migrating it, and skips an already initialized Discord fixture. Ctrl+C exports emulator data to ignored `.emulator-data/`; the next run imports it. `npm run backup:local` explicitly exports a running emulator. Browser drafts are scoped to both group and user.
 
 ## Screens
 
-| Route       | Vietnamese navigation | Purpose                                                                           |
-| ----------- | --------------------- | --------------------------------------------------------------------------------- |
-| `/`         | Tổng quan             | Group spending, personal summary, recent bills                                    |
-| `/new-bill` | Tạo hoá đơn           | Independent draft, participants, individual/equal splits, review, receipt option  |
-| `/balances` | Số dư cá nhân         | Pairwise balances, charge history and QR payment confirmation                     |
-| `/matrix`   | Ma trận nợ nần        | Active-member matrix and admin hub reassignment                                  |
-| `/activity` | Ledger                | Filtered bills/ledger, CSV export, receipt preview and simulated retries          |
-| `/members`  | Thành viên & quản lý  | Profiles/banks, inactive members, ledger import, JSON backup, archives, audit log |
+| Route       | Navigation           | Purpose                                                                  |
+| ----------- | -------------------- | ------------------------------------------------------------------------ |
+| `/`         | Tổng quan            | Spending calendar/chart, recent bills and personal payment history       |
+| `/new-bill` | Tạo hoá đơn          | Participants, itemized/equal splits, rounding, review and receipt option |
+| `/balances` | Số dư cá nhân        | Pairwise balances, recent charges and QR payment confirmation            |
+| `/matrix`   | Ma trận nợ nần       | Signed debt matrix and administrator hub reassignment                    |
+| `/activity` | Ledger               | Bills, immutable ledger, CSV export and simulated receipt retries        |
+| `/members`  | Thành viên & quản lý | Profiles/banks, activation, Discord sync/DMs, import, backup and audit   |
+| `/groups`   | Nhóm                 | Active group selection and global-administrator group creation           |
 
-The overview starts with recent bills and personal payment history side by side on desktop. Payment history distinguishes who covered a meal from actual repayments and omits synthetic settlement entries. Spending can be grouped by day, Monday-based week or month, with navigation through contiguous earlier windows. The current summary shows today's, this week's or this month's spending; earlier windows show their combined total. The calendar keeps month navigation above display and payer controls, with an inline add action on each date. Daily bar colors follow the same percentage as their length relative to the busiest day: 0% green, 50% yellow and 100% red. Bill markers use their percentage of the month's largest bill. Hovering a date replaces its lunar label with an add button in the same position.
+Members can edit their own group profile and bank details. Group admins can edit other members and change their activation/role. IDs always come from Discord. The last selected active group is remembered across logins.
 
-## Financial rules
+## Financial behavior
 
-New amounts are positive integer **VND**. The composer explicitly selects VND or thousands of VND and converts existing values when units change. Equal splits allocate largest remainders so every đồng reconciles. There is no implicit less-than-1,000 conversion.
+Amounts are integer VND. Inputs reject negative signs and scientific notation. The composer supports VND/thousands of VND, itemized/equal splits, and rounding up each portion to 1,000 by default. Bill dates and creation timestamps are separate; the UI uses Vietnam time.
 
 ```text
 amount A owes B = debt(A,B) - payment(A,B) - debt(B,A) + payment(B,A)
 net position A = receivables A - payables A
+UI profit/loss = payables A - receivables A
 ```
 
-The UI labels receivables as “Bạn đang lỗ” and payables as “Bạn đang lãi”; ledger calculations remain unchanged. The organizer's own meal stays in the bill total without creating self debt. Payments are recorded through QR confirmation. Payments offset a member pair, not a particular invoice. Recent charges are explicitly not labeled as unpaid invoices.
+The organizer's own meal does not create self debt. Payments offset a member pair rather than an invoice. QR generation is stateless and local; only confirmation creates an idempotent payment. It does not verify a bank transfer. Admin hub reassignment preserves every member's net position, including historical inactive members.
 
-Personal balance lists, the overview's debt list, matrix rows and member filter options show active members only. Historical records and net positions retain the full ledger. Inactive profiles remain available in member management. Hub reassignment includes inactive members, preserves every member's net position, uses the most indebted member as the hub and skips self entries. This preserves the old hub strategy, not a claim of globally minimal bank transfers.
+Bills and ledger entries remain immutable. Ledger import accepts normalized CSV/JSON with existing group member IDs, stable entry IDs and explicit ISO dates. Unknown member IDs are rejected; Discord sync must add them first. Imports commit in chunks of 150 and safely skip identical IDs on retry. JSON backup restoration currently supports ledger entries only; XLSX ingestion and full backup restoration are not implemented.
 
-The QR dialog is stateless: generating, opening or closing it makes no database writes, starts no expiry timer and does not block reassignment. The recipient, bank details and amount shown are held only in the current dialog. Confirmation records that amount using the authenticated payer and an idempotency ID; retries cannot duplicate the payment, even if the ledger changed after scanning. VietQR payloads and images are generated locally with an EMV CRC, without sending bank details to an image service. Bank-app scanning has not been certified against real accounts. Self-confirmation is not bank verification.
+Email receipt delivery remains simulated. Real Discord DMs are available only when a configured production Worker is deployed and a group admin explicitly sends them.
 
-## Backend
+## Architecture and service setup
 
-Authenticated SvelteKit endpoints verify Firebase emulator ID tokens, resolve the actor server-side, validate commands with Zod and enforce roles. Firestore transactions read a consistent snapshot, write only changed documents and update a group version. Direct browser Firestore access is denied by `firestore.rules`.
+The frontend signs into Firebase with a custom token issued after Worker-side Discord OAuth. Requests to the Worker carry Firebase ID tokens. The Worker verifies tokens, reads live roles/membership, and accesses Firestore through a dedicated service account. Browser Firestore access is denied. Each group's seven collections sit under `groups/{groupId}`; global users live under `users/{userId}`.
 
-`groups/local` holds the version. Subcollections contain `members`, `ledger`, `bills`, `receipts`, `settlements`, `archives`, `audit` and `preferences`. Bill/payment IDs provide idempotency. Settlement previews require the current version. New bills freeze receipt content and participant names. No API edits or deletes committed ledger entries.
+See [integration and deployment setup](docs/integrations.md) for the schema diagram, endpoint permissions, Discord application setup, Firebase IAM/rules, Worker secrets, Vercel configuration and automatic deployment instructions. The deployment workflow stays disabled until explicitly enabled in repository settings.
 
-This is a local review implementation. Group snapshot reads scan collections for simplicity; production scale needs pagination and maintained balance projections. Shared state polls every 15 seconds and refreshes after own mutations. It is not a realtime listener.
+State loads currently scan group collections and poll every 15 seconds. This is suitable for the internal review app; larger datasets should use projections and pagination. Group creation/sync currently accept up to 200 Discord members per channel and reject larger channels without truncating them.
 
-The backend fails closed unless both Firebase emulator hosts point to `127.0.0.1`. It cannot silently connect to a real project. Demo account switching is intentionally part of this emulator-only implementation, not production authentication.
-
-## Mocked external integrations
-
-Email outbox records are committed with bills. Receipt previews escape user content and include the complete shared bill. Success, failure and retries are simulated and visibly labeled; they never repost debt. **No real email is sent.** No original Resend key was copied.
-
-Archive links are stored as references and never automatically fetched/imported.
-
-## Historical import
-
-An administrator can use **Thành viên & quản lý → Dữ liệu & lưu trữ → Kiểm tra tệp nhập**. Accepts a JSON array, an exported app backup's `ledger` array, or UTF-8 CSV with English headers:
-
-```csv
-id,from,to,type,amount,date,description,note,legacySequence
-legacy-1,former.member,an,debt,55000,2025-05-05T12:00:00+07:00,Team lunch,,1
-legacy-2,former.member,an,payment,10000,2025-05-06T12:00:00+07:00,Repayment,,2
-```
-
-`type` accepts `debt`/`payment` or legacy `Nợ`/`Trả`. Amounts are integer VND without separators. Dates require ISO 8601 and an explicit timezone. IDs are stable strings with letters, numbers, dots, underscores or hyphens. Without `id`, a unique `sequence`/`legacySequence` produces `legacy-<sequence>`.
-
-The complete file is parsed before import. Preview shows new/known IDs, zero/self rows and unknown people. Unknown IDs become inactive placeholder profiles. Legacy zero, negative and self entries are preserved. Existing identical IDs are skipped; conflicting contents stop the import. Writes commit in chunks of 150; earlier successful chunks remain if a later one fails. Retry the same file safely after correcting the conflict. Limits: 10,000 rows and 8 MB per file.
-
-XLSX ingestion is not included; first normalize/export the ledger into this schema. JSON backup contains all app collections, but re-import currently restores **ledger history only**, not a full application backup. Reconciliation against the original 2,798 rows and 256 matrix cells still requires an authorized normalized export; it has not been run in this project.
-
-## Validation
-
-With the local app/emulators running:
+## Verification
 
 ```powershell
 npm run check
+npm run check:worker
 npm test
-npm run test:e2e
 npm run build
+npm run build:worker
+# With npm run dev running:
+npm run test:e2e
 ```
 
-Browser tests use installed Google Chrome headlessly. Unit tests cover bidirectional accounting, exact rounding, randomized settlement conservation, idempotency, permissions, stateless QR confirmation, intervening ledger changes and conflicting retries, imports, HTML escaping, frozen receipt names and QR CRCs. Browser/API tests exercise the real emulators, concurrent duplicate requests, drafts, receipts, repayments, routing and mobile layout.
+`build:worker` is a dry run and makes no deployment. Browser tests exercise local OAuth, single-use exchanges, role boundaries, inactive-member denial, group isolation, remembered selection and bill workflows. They use mock Discord only; live credentials and live OAuth require a configured environment.
 
-Local builds use `adapter-node` because Windows can disallow directory symlinks required by `adapter-vercel`. When `VERCEL` is set by Vercel, the config selects the Vercel adapter (Node 22). The Vercel deployment bundle has not been validated on the target platform. No deployment or production Firebase configuration is active.
-
-## Before production (separate future work)
-
-- Replace local account switching with real Firebase sign-in, invitations and group membership authorization.
-- Review production credentials/project selection and replace the emulator-only guards as part of that change.
-- Add a real email delivery worker/provider with protected secrets and backoff. Rotate the spreadsheet's old exposed key separately.
-- Verify intended bank profiles/QR compatibility and reconcile historical data.
-- Add pagination, maintained projections, production monitoring and operational backups.
-
-See [feature parity](docs/feature-parity.md) for the worksheet-to-app mapping.
+Useful separate commands: `npm run emulators`, `npm run seed:local`, `npm run dev:worker`, `npm run dev:web`. When running them separately, seed after the emulators start, then start Worker and frontend. [Feature parity notes](docs/feature-parity.md) describe the spreadsheet workflows preserved by the app.

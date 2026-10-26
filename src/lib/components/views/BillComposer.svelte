@@ -9,13 +9,19 @@
 	import Modal from '../Modal.svelte';
 	import Avatar from '../Avatar.svelte';
 	import MoneyInput from '../MoneyInput.svelte';
+	import BillDateInput from '../BillDateInput.svelte';
 	import type { AppState, BillLine } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, discountShares, equalShares, localDate } from '$lib/domain/ledger';
+	import { currency, billDateLabel, discountShares, equalShares, localDate } from '$lib/domain/ledger';
 	const ROUNDING_OPTIONS = [0, 1, 2, 3, 4];
 	const DEFAULT_ROUNDING = 3;
-	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
-		$props();
+	let {
+		appState,
+		actor,
+		run,
+		busy,
+		groupId
+	}: { appState: AppState; actor: string; run: RunCommand; busy: boolean; groupId: string } = $props();
 	let description = $state('');
 	let date = $state(localDate(new Date()));
 	let selected = $state<string[]>([]);
@@ -71,7 +77,7 @@
 	onMount(() => {
 		selected = [actor];
 		try {
-			const saved = localStorage.getItem(`lunchroom-draft-${actor}`);
+			const saved = localStorage.getItem(`lunchroom-draft-${groupId}-${actor}`);
 			if (saved) {
 				const draft = JSON.parse(saved);
 				description = draft.description ?? '';
@@ -98,7 +104,7 @@
 	$effect(() => {
 		if (draftReady)
 			localStorage.setItem(
-				`lunchroom-draft-${actor}`,
+				`lunchroom-draft-${groupId}-${actor}`,
 				JSON.stringify({
 					description,
 					date,
@@ -151,7 +157,7 @@
 				},
 				'Đã ghi hóa đơn và cập nhật nợ.'
 			);
-			localStorage.removeItem(`lunchroom-draft-${actor}`);
+			localStorage.removeItem(`lunchroom-draft-${groupId}-${actor}`);
 			draftReady = false;
 			confirmOpen = false;
 			await goto('/activity');
@@ -171,9 +177,7 @@
 	<div class="composer-main">
 		<section class="panel form-panel bill-details-panel" aria-label="Thông tin hóa đơn và thành viên">
 			<div class="form-two-columns">
-				<label class="field"
-					>Ngày thanh toán<Input type="date" bind:value={date} aria-invalid={dateInvalid} /></label
-				>
+				<label class="field">Ngày thanh toán<BillDateInput bind:value={date} invalid={dateInvalid} /></label>
 				<div class="field">
 					Người đã thanh toán
 					<div class="payer-field">
@@ -218,7 +222,10 @@
 					><button class:active={mode === 'equal'} onclick={() => (mode = 'equal')}>Chia đều</button>
 				</div>
 				<label class="unit-control"
-					>Đơn vị <select value={unit} onchange={(event) => changeUnit(Number(event.currentTarget.value))}
+					>Đơn vị <select
+						aria-label="Đơn vị"
+						value={unit}
+						onchange={(event) => changeUnit(Number(event.currentTarget.value))}
 						><option value={1000}>Nghìn đồng</option><option value={1}>Đồng</option></select
 					></label
 				>
@@ -246,11 +253,7 @@
 						invalid={discountInvalid}
 						placeholder={listedTotal ? String(listedTotal / unit) : '0'}
 						bind:value={discountInput}
-					/>{#if hasDiscount}<small
-							>Chia theo tỉ lệ giá từng người. Người cuối nhận phần chênh lệch để tổng luôn bằng {currency(
-								discounted
-							)}.</small
-						>{/if}</label
+					/></label
 				>{/if}
 			<div class="participant-lines">
 				{#each selected as id, i}{@const person = people.find((m) => m.id === id)!}
@@ -333,7 +336,7 @@
 	</div>
 	<div class="summary-total"><span>Tổng cộng</span><strong>{currency(total)}</strong></div>
 	<p class="fine-print">
-		Người thanh toán: {payer.name}.{emailReceipt ? '' : ' Không gửi email hoá đơn.'}
+		Người thanh toán: {payer.name} · {billDateLabel(date)}.{emailReceipt ? '' : ' Không gửi email hoá đơn.'}
 	</p>
 	<div class="modal-actions">
 		<Button onclick={submit} disabled={busy}><Check size={16} />{busy ? 'Đang ghi…' : 'Xác nhận'}</Button>

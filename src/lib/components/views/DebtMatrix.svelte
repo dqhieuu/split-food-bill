@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { Network, ShieldCheck, Info, Clock } from '@lucide/svelte';
+	import { Scale, ShieldCheck, Clock } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Modal from '../Modal.svelte';
 	import Avatar from '../Avatar.svelte';
 	import type { AppState, SettlementPlan } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, pairBalance, netBalance, settlementPlan, dateLabel } from '$lib/domain/ledger';
+	import { currency, pairBalance, netBalance, settlementPlan, dateTimeLabel } from '$lib/domain/ledger';
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
 		$props();
 	let confirmOpen = $state(false);
@@ -60,9 +60,11 @@
 				></thead
 			><tbody
 				>{#each members as row}<tr
-						><th
-							><span>{row.name}</span></th
-						>{#each members as column}{@const balance = pairBalance(appState.ledger, row.id, column.id)}<td
+						><th><span>{row.name}</span></th>{#each members as column}{@const balance = pairBalance(
+								appState.ledger,
+								row.id,
+								column.id
+							)}<td
 								class:self-cell={row.id === column.id}
 								class:debt-cell={balance > 0}
 								class:credit-cell={balance < 0}
@@ -83,20 +85,19 @@
 	</div>
 </section>
 {#if isAdmin}<Button class="simplify-button" onclick={preview} disabled={busy}
-		><Network size={20} /> Tối giản nợ</Button
+		><Scale size={20} /> Tối giản nợ</Button
 	>{/if}
 <div class="two-panels">
 	<section class="panel info-panel">
-		<span class="feature-icon"><Network size={22} /></span>
-		<h2>Quy tắc tối giản</h2>
-		<p>
-			Tối giản nợ cân bằng các khoản nợ hiện tại về 0 rồi chuyển chúng qua người phân phối tiền: người có lãi
-			- lỗ thấp nhất. Lãi - lỗ của từng người giữ nguyên.
-		</p>
-		<div class="notice">
-			<Info size={17} />
-			<p>Đây là bản ghi đổi quan hệ nợ, không phải chuyển tiền.</p>
+		<div class="simplification-heading">
+			<span class="feature-icon"><Scale size={22} /></span>
+			<h2>Cách tối giản hoạt động</h2>
 		</div>
+		<ol class="simplification-steps">
+			<li>Xác định người nào nợ tiền nhiều nhất, gọi là X</li>
+			<li>Những người nợ tiền sẽ chuyển tiền cho X</li>
+			<li>Với số tiền này, X sẽ đi phân phát lại cho những người đang bị nợ tiền</li>
+		</ol>
 		{#if !isAdmin}<p class="fine-print">Chỉ quản trị viên được tối giản nợ.</p>{/if}
 	</section>
 	<section class="panel">
@@ -107,25 +108,21 @@
 		{#each [...appState.settlements].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5) as batch}<div
 				class="settlement-history"
 			>
-				<span class="stat-icon"><Network size={17} /></span>
+				<span class="stat-icon"><Scale size={17} /></span>
 				<div>
-					<strong>Người phân phối tiền: {appState.members.find((m) => m.id === batch.hub)?.name}</strong
-					><small>{dateLabel(batch.date)} · {batch.entryCount} bản ghi trong Ledger</small>
+					<strong>Người phân phát tiền: {appState.members.find((m) => m.id === batch.hub)?.name}</strong
+					><small>{dateTimeLabel(batch.date)} · {batch.entryCount} bản ghi trong Ledger</small>
 				</div>
 			</div>{/each}{#if !appState.settlements.length}<div class="inline-empty">
 				Chưa có lần tối giản nào. Các khoản nợ vẫn giữ quan hệ ban đầu.
 			</div>{/if}
 	</section>
 </div>
-<Modal
-	bind:open={confirmOpen}
-	title="Xem lại phương án tối giản nợ"
-	description="Phạm vi luôn bao gồm tất cả thành viên, kể cả thành viên cũ."
-	wide
+<Modal bind:open={confirmOpen} title="Xem lại phương án tối giản nợ" wide compact
 	>{#if plan}<div class="notice">
 			<ShieldCheck size={20} />
 			<p>
-				Người phân phối tiền: <strong>{hubName}</strong>. Thêm {plan.entries.length} bản ghi trong Ledger.
+				Người phân phát tiền: <strong>{hubName}</strong>. Thêm {plan.entries.length} bản ghi trong Ledger.
 			</p>
 		</div>
 		<h3>Các khoản nợ sau tối giản</h3>

@@ -12,7 +12,7 @@ const args = [
 	'--export-on-exit=.emulator-data'
 ];
 if (existsSync('.emulator-data/firebase-export-metadata.json')) args.push('--import=.emulator-data');
-if (!emulatorOnly) args.push('node node_modules/vite/bin/vite.js --host 127.0.0.1');
+if (!emulatorOnly) args.push('node scripts/serve-local.mjs');
 const child = spawn(process.execPath, ['node_modules/firebase-tools/lib/bin/firebase.js', ...args], {
 	stdio: 'inherit',
 	env: {

@@ -1,0 +1,31 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "split-food-bill-api",
+	"main": "worker/src/index.ts",
+	"compatibility_date": "2026-10-26",
+	"durable_objects": { "bindings": [{ "name": "AUTH_SESSIONS", "class_name": "AuthSessions" }] },
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["AuthSessions"] }],
+	"vars": {
+		"APP_ENV": "production",
+		"FRONTEND_ORIGIN": "https://configure-your-vercel-domain.invalid",
+		"FIREBASE_PROJECT_ID": "configure-your-project",
+		"FIREBASE_API_KEY": "configure-your-public-firebase-key",
+		"FIREBASE_AUTH_DOMAIN": "configure-your-project.firebaseapp.com"
+	},
+	"env": {
+		"local": {
+			"name": "split-food-bill-api-local",
+			"durable_objects": { "bindings": [{ "name": "AUTH_SESSIONS", "class_name": "AuthSessions" }] },
+			"vars": {
+				"APP_ENV": "local",
+				"FRONTEND_ORIGIN": "http://127.0.0.1:5173",
+				"FIREBASE_PROJECT_ID": "demo-lunchroom",
+				"FIREBASE_API_KEY": "demo-lunchroom-key",
+				"FIREBASE_AUTH_DOMAIN": "localhost",
+				"FIRESTORE_EMULATOR_HOST": "127.0.0.1:8080",
+				"FIREBASE_AUTH_EMULATOR_HOST": "127.0.0.1:9099",
+				"DISCORD_ADMIN_IDS": "100000000000000001"
+			}
+		}
+	}
+}

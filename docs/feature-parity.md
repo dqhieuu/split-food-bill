@@ -6,7 +6,7 @@ Based on the saved discovery blueprint for “Copy of Lunch management”, inspe
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | Two shared food-entry threads        | Independent per-organizer browser drafts                                                             |
 | Common/individual food, amount, note | Composer with explicit VND/kVND and review                                                           |
-| Actor from Google account            | Actor from Firebase emulator authentication token                                                    |
+| Actor from Google account            | Discord identity authenticated through Firebase custom tokens                                        |
 | Bill participants owe the organizer  | Atomic bill snapshot and ledger entries; no new self debt                                            |
 | Manual repayment entry               | Manual repayment UI removed at user request; payments recorded through QR confirmation               |
 | Itemized shared email                | Durable outbox, escaped HTML, simulated success/failure/retry                                        |
@@ -17,14 +17,14 @@ Based on the saved discovery blueprint for “Copy of Lunch management”, inspe
 | Debt matrix and stake                | Dedicated matrix and full-history net positions                                                      |
 | Hub simplification                   | Admin preview, version check, compensating entries, conserved net positions                          |
 | Ledger / reverse EZLedger            | Filtered newest-first bills and immutable ledger                                                     |
-| Daily balance history                | Payment index screen removed at user request                                                        |
-| Positive-position pie                | Payment index screen removed at user request                                                        |
-| Paid/received figures                | Payment index screen removed at user request                                                        |
-| Users and bank table                 | Editable profiles, bank BIN/account/holder, active status and roles                                  |
-| Missing former users                 | Inactive placeholders during import, balances retained                                               |
+| Daily balance history                | Payment index screen removed at user request                                                         |
+| Positive-position pie                | Payment index screen removed at user request                                                         |
+| Paid/received figures                | Payment index screen removed at user request                                                         |
+| Users and bank table                 | Editable profiles, bank name/BIN/account, active status and roles; account-holder field removed      |
+| Missing former users                 | Sync from Discord first; inactive profiles retain historical balances                                |
 | Archive link                         | Saved links, JSON backup download and CSV ledger export                                              |
-| Changelog seen marker                | Release dialog, notification indicator, persisted member preference                                  |
-| App/user metadata                    | Firestore group version, preferences and audit events                                                |
+| Changelog seen marker                | Release dialog retained; unused persisted seen marker removed                                        |
+| App/user metadata                    | Firestore group version and audit events; visual preferences kept in browser storage                 |
 | Zero/self/negative historical rows   | Preserved by normalized CSV/JSON import                                                              |
 | Unfinished split modes               | Equal split is an added convenience; weighted/percentage splits are not claimed as existing features |
 

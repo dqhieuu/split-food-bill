@@ -20,8 +20,7 @@ export function createDemoState(now = new Date()): AppState {
 		active: id !== 'former',
 		role: i === 0 ? 'admin' : 'member',
 		bankCode: '970436',
-		bankAccount: `00000000${i + 1}123`,
-		bankName: name.toUpperCase()
+		bankAccount: `00000000${i + 1}123`
 	}));
 	const state: AppState = {
 		version: 1,
@@ -31,8 +30,7 @@ export function createDemoState(now = new Date()): AppState {
 		receipts: [],
 		settlements: [],
 		archives: [],
-		audit: [],
-		preferences: []
+		audit: []
 	};
 	const descriptions = [
 		'Cơm gà Hội An',
@@ -122,5 +120,7 @@ export function createDemoState(now = new Date()): AppState {
 		source: 'manual',
 		reference: 'demo-payment'
 	});
+	for (const bill of state.bills) bill.createdAt = bill.date;
+	for (const entry of state.ledger) entry.createdAt = entry.date;
 	return state;
 }

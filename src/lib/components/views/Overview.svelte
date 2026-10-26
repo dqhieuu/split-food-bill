@@ -11,15 +11,25 @@
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Avatar from '../Avatar.svelte';
+	import BillDetail from '../BillDetail.svelte';
+	import Modal from '../Modal.svelte';
 	import SpendingCalendar from './SpendingCalendar.svelte';
-	import type { AppState } from '$lib/domain/types';
-	import { currency, shortCurrency, dateLabel } from '$lib/domain/ledger';
+	import type { AppState, LedgerEntry } from '$lib/domain/types';
+	import type { RunCommand } from '$lib/client/types';
+	import { currency, shortCurrency, dateLabel, billDateLabel, dateTimeLabel } from '$lib/domain/ledger';
 	import { spendingWindow, personalPaymentHistory, type SpendingGranularity } from '$lib/domain/spending';
-	let { appState, actor }: { appState: AppState; actor: string } = $props();
+	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
+		$props();
+	let detailOpen = $state(false);
+	let selectedBillId = $state('');
+	let paymentOpen = $state(false);
+	let selectedEntryId = $state('');
+	const selectedEntry = $derived(appState.ledger.find((entry) => entry.id === selectedEntryId));
+	const selectedBill = $derived(appState.bills.find((bill) => bill.id === selectedBillId));
+	const name = (id: string) => appState.members.find((member) => member.id === id)?.name || id;
 	let granularity = $state<SpendingGranularity>('month');
 	let windowOffset = $state(0);
 	const names = { day: 'ngày', week: 'tuần', month: 'tháng' };
-	const currentLabels = { day: 'Hôm nay', week: 'Tuần này', month: 'Tháng này' };
 	const activeIds = $derived(
 		new Set(appState.members.filter((member) => member.active).map((member) => member.id))
 	);
@@ -27,17 +37,22 @@
 	const recentBills = $derived([...appState.bills].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4));
 	const window = $derived(spendingWindow(appState.bills, granularity, windowOffset));
 	const max = $derived(Math.max(1, ...window.buckets.map((bucket) => bucket.value)));
-	const summary = $derived(
-		windowOffset === 0
-			? window.buckets.at(-1)!.value
-			: window.buckets.reduce((sum, bucket) => sum + bucket.value, 0)
-	);
 	const shortDate = (key: string) => `${Number(key.slice(8))}/${Number(key.slice(5, 7))}`;
 	const bucketLabel = (key: string) =>
 		granularity === 'month' ? `T${Number(key.slice(5, 7))}/${key.slice(2, 4)}` : shortDate(key);
 	function changeGranularity(value: SpendingGranularity) {
 		granularity = value;
 		windowOffset = 0;
+	}
+	function openPayment(entry: LedgerEntry) {
+		const bill = entry.source === 'bill' && appState.bills.find((bill) => bill.id === entry.reference);
+		if (bill) {
+			selectedBillId = bill.id;
+			detailOpen = true;
+		} else {
+			selectedEntryId = entry.id;
+			paymentOpen = true;
+		}
 	}
 </script>
 
@@ -52,7 +67,13 @@
 			<a class="text-link" href="/activity">Xem tất cả <ArrowRight size={15} /></a>
 		</div>
 		<div class="bill-list">
-			{#each recentBills as bill, i}<a class="bill-row" href={`/activity?bill=${bill.id}`}>
+			{#each recentBills as bill, i}<button
+					class="bill-row"
+					onclick={() => {
+						selectedBillId = bill.id;
+						detailOpen = true;
+					}}
+				>
 					<span class="bill-symbol tone-{i % 3}"
 						>{#if i % 3 === 0}<Utensils size={21} />{:else if i % 3 === 1}<Coffee
 								size={21}
@@ -62,7 +83,7 @@
 						<strong>{bill.description}</strong><span
 							>{appState.members.find((member) => member.id === bill.organizer)?.name} đã trả
 							<span class="middot">·</span>
-							{dateLabel(bill.date)}</span
+							Ăn vào {billDateLabel(bill.date)}</span
 						>
 					</div>
 					<div class="bill-row-right">
@@ -75,7 +96,7 @@
 						</div>
 					</div>
 					<ChevronRight size={16} />
-				</a>{/each}
+				</button>{/each}
 		</div>
 	</section>
 	<section class="panel payment-history-panel">
@@ -86,21 +107,18 @@
 		<div class="payment-history-list">
 			{#each history as item}
 				{@const member = appState.members.find((person) => person.id === item.counterpartyId)}
-				<a
-					class="payment-history-row"
-					href={item.entry.source === 'bill' ? `/activity?bill=${item.entry.reference}` : '/activity'}
-				>
+				<button class="payment-history-row" onclick={() => openPayment(item.entry)}>
 					<Avatar {member} size="small" />
 					<div>
 						<strong
-							>{#if item.direction === 'you-paid-for'}Bạn đã trả cho {member?.name}{:else if item.direction === 'paid-for-you'}{member?.name}
-								đã trả cho bạn{:else if item.direction === 'sent-transfer'}Bạn đã chuyển tiền cho {member?.name}{:else}{member?.name}
-								đã chuyển tiền cho bạn{/if}</strong
+							>{name(item.entry.type === 'debt' ? item.entry.to : item.entry.from)} đã trả tiền cho {name(
+								item.entry.type === 'debt' ? item.entry.from : item.entry.to
+							)}</strong
 						>
-						<small>{dateLabel(item.entry.date)} · {item.entry.description}</small>
+						<small>{dateTimeLabel(item.entry.createdAt)} · {item.entry.description}</small>
 					</div>
 					<strong class="payment-history-amount">{currency(item.entry.amount)}</strong>
-				</a>
+				</button>
 			{:else}<p class="payment-history-empty">Chưa có thanh toán.</p>{/each}
 		</div>
 		<a href="/activity" class="panel-bottom-link">Xem lịch sử <ArrowRight size={16} /></a>
@@ -116,9 +134,6 @@
 						>{unit === 'day' ? 'Ngày' : unit === 'week' ? 'Tuần' : 'Tháng'}</button
 					>{/each}
 			</div>
-		</div>
-		<div class="spending-summary">
-			<strong>{windowOffset === 0 ? currentLabels[granularity] : 'Khoảng này'}: {currency(summary)}</strong>
 		</div>
 		<div class="spending-window-controls">
 			<button class="icon-button" aria-label="Khoảng trước" onclick={() => windowOffset++}
@@ -154,7 +169,7 @@
 								style:height={`${Math.max(bucket.value ? 3 : 0, (bucket.value / max) * 100)}%`}
 								title={`${dateLabel(bucket.key)}: ${currency(bucket.value)}`}
 							>
-								<span class="bar-tooltip">{dateLabel(bucket.key)}<br />{currency(bucket.value)}</span>
+								<span class="bar-value">{currency(bucket.value)}</span>
 							</div>
 						</div>
 						<span class:today-label={bucket.current}>{bucketLabel(bucket.key)}</span>
@@ -162,5 +177,36 @@
 			</div>
 		</div>
 	</section>
-	<SpendingCalendar bills={appState.bills} members={appState.members} />
+	<SpendingCalendar
+		bills={appState.bills}
+		members={appState.members}
+		onBillClick={(id) => {
+			selectedBillId = id;
+			detailOpen = true;
+		}}
+	/>
 </div>
+<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} {actor} {run} {busy} />
+<Modal bind:open={paymentOpen} title="Chi tiết thanh toán" description={selectedEntry?.description || ''}>
+	{#if selectedEntry}
+		<div class="summary-pair">
+			<span>Người thanh toán</span><strong
+				>{name(selectedEntry.type === 'debt' ? selectedEntry.to : selectedEntry.from)}</strong
+			>
+		</div>
+		<div class="summary-pair">
+			<span>Cho</span><strong
+				>{name(selectedEntry.type === 'debt' ? selectedEntry.from : selectedEntry.to)}</strong
+			>
+		</div>
+		<div class="summary-pair">
+			<span>Loại</span><strong>{selectedEntry.type === 'debt' ? 'Nợ' : 'Trả'}</strong>
+		</div>
+		<div class="summary-pair">
+			<span>Ngày thanh toán</span><strong>{billDateLabel(selectedEntry.date)}</strong>
+		</div>
+		<div class="summary-pair"><span>Tạo</span><strong>{dateTimeLabel(selectedEntry.createdAt)}</strong></div>
+		{#if selectedEntry.note}<p class="fine-print">{selectedEntry.note}</p>{/if}
+		<div class="summary-total"><span>Số tiền</span><strong>{currency(selectedEntry.amount)}</strong></div>
+	{/if}
+</Modal>

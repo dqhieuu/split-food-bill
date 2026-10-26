@@ -6,6 +6,9 @@ import nodeAdapter from '@sveltejs/adapter-node';
 import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
+	server: {
+		watch: { ignored: ['**/.wrangler/**', '**/.emulator-data/**', '**/artifacts/**', '**/*-debug.log'] }
+	},
 	resolve: { alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) } },
 	plugins: [
 		tailwindcss(),
