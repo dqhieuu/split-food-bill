@@ -60,10 +60,7 @@
 						.includes(search.toLocaleLowerCase('vi')) &&
 					matchesDate(e.date) &&
 					(memberFilter === 'all' || e.from === memberFilter || e.to === memberFilter) &&
-					(typeFilter === 'all' ||
-						(typeFilter === 'settlement'
-							? e.source === 'settlement'
-							: e.type === typeFilter && e.source !== 'settlement'))
+					(typeFilter === 'all' || e.type === typeFilter)
 			)
 			.sort((a, b) => b.date.localeCompare(a.date))
 	);
@@ -148,7 +145,6 @@
 <div class="page-heading">
 	<div>
 		<h1>Ledger</h1>
-		<p>Hóa đơn, khoản nợ và hoàn tiền.</p>
 	</div>
 	<Button variant="outline" onclick={downloadCsv}><Download size={16} /> Xuất sổ đã lọc</Button>
 </div>
@@ -172,13 +168,12 @@
 			/>
 		</div>
 		<select aria-label="Lọc thành viên" bind:value={memberFilter}
-			><option value="all">Tất cả thành viên</option>{#each appState.members as member}<option
+			><option value="all">Tất cả thành viên</option>{#each appState.members.filter((m) => m.active) as member}<option
 					value={member.id}>{member.name}{member.id === actor ? ' (Bạn)' : ''}</option
 				>{/each}</select
 		>{#if tab === 'ledger'}<select aria-label="Lọc loại giao dịch" bind:value={typeFilter}
-				><option value="all">Tất cả giao dịch</option><option value="debt">Khoản nợ</option><option
-					value="payment">Hoàn tiền thực tế</option
-				><option value="settlement">Tối giản nợ</option></select
+				><option value="all">Tất cả giao dịch</option><option value="debt">Nợ</option><option
+					value="payment">Trả</option></select
 			>{/if}
 		<div class="date-filter">
 			<Input type="date" aria-label="Từ ngày" bind:value={fromDate} /><span>—</span><Input
@@ -244,14 +239,8 @@
 							><td>{name(entry.from)}</td><td>{name(entry.to)}</td><td
 								><span
 									class="status-pill"
-									class:success={entry.type === 'payment' && entry.source !== 'settlement'}
-									>{entry.source === 'settlement'
-										? 'Tối giản nợ'
-										: entry.type === 'debt'
-											? 'Khoản nợ'
-											: entry.source === 'qr'
-												? 'Tự xác nhận QR'
-												: 'Hoàn tiền'}</span
+									class:success={entry.type === 'payment'}
+									>{entry.type === 'debt' ? 'Nợ' : 'Trả'}</span
 								>{#if entry.legacySequence}<small>Số cũ: {entry.legacySequence}</small>{/if}</td
 							><td class="align-right amount-cell">{currency(entry.amount)}</td></tr
 						>{/each}</tbody

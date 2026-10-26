@@ -6,110 +6,61 @@
 		ReceiptText,
 		Utensils,
 		ChevronRight,
-		CalendarDays,
+		ChevronLeft,
 		Coffee
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Avatar from '../Avatar.svelte';
 	import SpendingCalendar from './SpendingCalendar.svelte';
 	import type { AppState } from '$lib/domain/types';
-	import { currency, shortCurrency, pairBalance, dateLabel, localDate } from '$lib/domain/ledger';
-	const MONTHS_SHOWN = 6;
+	import { currency, shortCurrency, dateLabel } from '$lib/domain/ledger';
+	import { spendingWindow, personalPaymentHistory, type SpendingGranularity } from '$lib/domain/spending';
 	let { appState, actor }: { appState: AppState; actor: string } = $props();
-	const pairs = $derived(
-		appState.members
-			.filter((m) => m.id !== actor)
-			.map((m) => ({ member: m, balance: pairBalance(appState.ledger, actor, m.id) }))
-			.filter((p) => p.balance !== 0)
+	let granularity = $state<SpendingGranularity>('month');
+	let windowOffset = $state(0);
+	const names = { day: 'ngày', week: 'tuần', month: 'tháng' };
+	const currentLabels = { day: 'Hôm nay', week: 'Tuần này', month: 'Tháng này' };
+	const activeIds = $derived(
+		new Set(appState.members.filter((member) => member.active).map((member) => member.id))
 	);
-	const currentMonth = localDate(new Date()).slice(0, 7);
-	const monthBills = $derived(appState.bills.filter((b) => localDate(b.date).startsWith(currentMonth)));
-	const monthSpend = $derived(monthBills.reduce((s, b) => s + b.total, 0));
+	const history = $derived(personalPaymentHistory(appState.ledger, actor, activeIds).slice(0, 5));
 	const recentBills = $derived([...appState.bills].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4));
-	const months = $derived(
-		Array.from({ length: MONTHS_SHOWN }, (_, i) => {
-			const [year, month] = currentMonth.split('-').map(Number);
-			const index = year * 12 + month - 1 - (MONTHS_SHOWN - 1) + i;
-			const key = `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
-			return {
-				key,
-				label: `T${(index % 12) + 1}/${String(Math.floor(index / 12)).slice(2)}`,
-				value: appState.bills
-					.filter((b) => localDate(b.date).startsWith(key))
-					.reduce((s, b) => s + b.total, 0)
-			};
-		})
+	const window = $derived(spendingWindow(appState.bills, granularity, windowOffset));
+	const max = $derived(Math.max(1, ...window.buckets.map((bucket) => bucket.value)));
+	const summary = $derived(
+		windowOffset === 0
+			? window.buckets.at(-1)!.value
+			: window.buckets.reduce((sum, bucket) => sum + bucket.value, 0)
 	);
-	const max = $derived(Math.max(1, ...months.map((m) => m.value)));
+	const shortDate = (key: string) => `${Number(key.slice(8))}/${Number(key.slice(5, 7))}`;
+	const bucketLabel = (key: string) =>
+		granularity === 'month' ? `T${Number(key.slice(5, 7))}/${key.slice(2, 4)}` : shortDate(key);
+	function changeGranularity(value: SpendingGranularity) {
+		granularity = value;
+		windowOffset = 0;
+	}
 </script>
 
 <div class="page-heading">
-	<div>
-		<h1>Tổng quan</h1>
-	</div>
-	<Button href="/new-bill" class="primary-action"><Plus size={18} /> Tạo hóa đơn</Button>
-</div>
-<div class="stat-grid">
-	<div class="stat-card">
-		<div class="stat-label">
-			Chi tiêu của nhóm tháng này <span class="stat-icon"><Utensils size={17} /></span>
-		</div>
-		<strong>{currency(monthSpend)}</strong><span class="stat-foot"
-			><span class="mini-pill">{monthBills.length} hóa đơn</span></span
-		>
-	</div>
+	<div><h1>Tổng quan</h1></div>
+	<Button href="/new-bill" class="primary-action"><Plus size={18} /> Tạo hoá đơn</Button>
 </div>
 <div class="overview-grid">
-	<section class="panel spending-panel">
-		<div class="panel-heading">
-			<div>
-				<h2>Chi tiêu theo tháng</h2>
-			</div>
-			<span class="subtle-label"><CalendarDays size={14} /> {MONTHS_SHOWN} tháng gần nhất</span>
-		</div>
-		<div class="spending-summary">
-			<strong>{currency(months.reduce((s, m) => s + m.value, 0))}</strong>
-		</div>
-		<div class="bar-chart">
-			<div class="chart-grid-lines">
-				<span>{shortCurrency(max)}</span><span>{shortCurrency(max / 2)}</span><span>0 ₫</span>
-			</div>
-			<div class="chart-columns">
-				{#each months as month, i}<div class="chart-column">
-						<div class="bar-track">
-							<div
-								class:today={i === MONTHS_SHOWN - 1}
-								class="bar"
-								style:height={`${Math.max(month.value ? 3 : 0, (month.value / max) * 100)}%`}
-							>
-								<span class="bar-tooltip">{month.label}<br />{currency(month.value)}</span>
-							</div>
-						</div>
-						<span class:today-label={i === MONTHS_SHOWN - 1}
-							>{i === MONTHS_SHOWN - 1 ? 'Tháng này' : month.label}</span
-						>
-					</div>{/each}
-			</div>
-		</div>
-	</section>
-	<SpendingCalendar bills={appState.bills} members={appState.members} />
 	<section class="panel recent-panel">
 		<div class="panel-heading">
-			<div>
-				<h2>Hóa đơn gần đây</h2>
-			</div>
+			<h2>Hóa đơn gần đây</h2>
 			<a class="text-link" href="/activity">Xem tất cả <ArrowRight size={15} /></a>
 		</div>
 		<div class="bill-list">
-			{#each recentBills as bill, i}<a class="bill-row" href={`/activity?bill=${bill.id}`}
-					><span class="bill-symbol tone-{i % 3}"
+			{#each recentBills as bill, i}<a class="bill-row" href={`/activity?bill=${bill.id}`}>
+					<span class="bill-symbol tone-{i % 3}"
 						>{#if i % 3 === 0}<Utensils size={21} />{:else if i % 3 === 1}<Coffee
 								size={21}
 							/>{:else}<ReceiptText size={21} />{/if}</span
 					>
 					<div class="bill-info">
 						<strong>{bill.description}</strong><span
-							>{appState.members.find((m) => m.id === bill.organizer)?.name} đã trả
+							>{appState.members.find((member) => member.id === bill.organizer)?.name} đã trả
 							<span class="middot">·</span>
 							{dateLabel(bill.date)}</span
 						>
@@ -118,35 +69,98 @@
 						<strong>{currency(bill.total)}</strong>
 						<div class="avatar-stack">
 							{#each bill.lines.slice(0, 3) as line}<Avatar
-									member={appState.members.find((m) => m.id === line.memberId)}
+									member={appState.members.find((member) => member.id === line.memberId)}
 									size="small"
 								/>{/each}<small>{bill.lines.length} người</small>
 						</div>
 					</div>
-					<ChevronRight size={16} /></a
-				>{/each}
+					<ChevronRight size={16} />
+				</a>{/each}
 		</div>
 	</section>
-	<section class="panel balance-peek">
+	<section class="panel payment-history-panel">
 		<div class="panel-heading">
-			<div>
-				<h2>Lịch sử nợ của bạn</h2>
-			</div>
+			<h2>Lịch sử thanh toán của bạn</h2>
 			<Wallet size={19} />
 		</div>
-		<div class="balance-peek-list">
-			{#each [...pairs].sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance)).slice(0, 4) as pair}<a
-					href="/balances"
-					class="balance-peek-row"
-					><Avatar member={pair.member} />
+		<div class="payment-history-list">
+			{#each history as item}
+				{@const member = appState.members.find((person) => person.id === item.counterpartyId)}
+				<a
+					class="payment-history-row"
+					href={item.entry.source === 'bill' ? `/activity?bill=${item.entry.reference}` : '/activity'}
+				>
+					<Avatar {member} size="small" />
 					<div>
-						<strong>{pair.member.name}</strong>
+						<strong
+							>{#if item.direction === 'you-paid-for'}Bạn đã trả cho {member?.name}{:else if item.direction === 'paid-for-you'}{member?.name}
+								đã trả cho bạn{:else if item.direction === 'sent-transfer'}Bạn đã chuyển tiền cho {member?.name}{:else}{member?.name}
+								đã chuyển tiền cho bạn{/if}</strong
+						>
+						<small>{dateLabel(item.entry.date)} · {item.entry.description}</small>
 					</div>
-					<strong class:loss-amount={pair.balance < 0} class:gain-amount={pair.balance > 0}
-						>{currency(Math.abs(pair.balance))}</strong
-					></a
-				>{/each}
+					<strong class="payment-history-amount">{currency(item.entry.amount)}</strong>
+				</a>
+			{:else}<p class="payment-history-empty">Chưa có thanh toán.</p>{/each}
 		</div>
-		<a href="/balances" class="panel-bottom-link">Xem chi tiết & thanh toán <ArrowRight size={16} /></a>
+		<a href="/activity" class="panel-bottom-link">Xem lịch sử <ArrowRight size={16} /></a>
 	</section>
+	<section class="panel spending-panel">
+		<div class="panel-heading spending-heading">
+			<h2>Chi tiêu theo {names[granularity]}</h2>
+			<div class="segmented-control" role="group" aria-label="Đơn vị thời gian chi tiêu">
+				{#each ['day', 'week', 'month'] as value}{@const unit = value as SpendingGranularity}<button
+						class:active={granularity === unit}
+						aria-pressed={granularity === unit}
+						onclick={() => changeGranularity(unit)}
+						>{unit === 'day' ? 'Ngày' : unit === 'week' ? 'Tuần' : 'Tháng'}</button
+					>{/each}
+			</div>
+		</div>
+		<div class="spending-summary">
+			<strong>{windowOffset === 0 ? currentLabels[granularity] : 'Khoảng này'}: {currency(summary)}</strong>
+		</div>
+		<div class="spending-window-controls">
+			<button class="icon-button" aria-label="Khoảng trước" onclick={() => windowOffset++}
+				><ChevronLeft size={18} /></button
+			>
+			<span>{dateLabel(window.start)} – {dateLabel(window.end)}</span>
+			<button
+				class="icon-button"
+				aria-label="Khoảng sau"
+				disabled={windowOffset === 0}
+				onclick={() => windowOffset--}><ChevronRight size={18} /></button
+			>
+			{#if windowOffset > 0}<button class="text-link" onclick={() => (windowOffset = 0)}>Hiện tại</button
+				>{/if}
+		</div>
+		<div
+			class="bar-chart"
+			role="img"
+			aria-label={`Chi tiêu theo ${names[granularity]} từ ${dateLabel(window.start)} đến ${dateLabel(window.end)}`}
+		>
+			<div class="chart-grid-lines">
+				<span>{shortCurrency(max)}</span><span>{shortCurrency(max / 2)}</span><span>0 ₫</span>
+			</div>
+			<div
+				class="chart-columns"
+				style:grid-template-columns={`repeat(${window.buckets.length}, minmax(0, 1fr))`}
+			>
+				{#each window.buckets as bucket}<div class="chart-column">
+						<div class="bar-track">
+							<div
+								class="bar"
+								class:today={bucket.current}
+								style:height={`${Math.max(bucket.value ? 3 : 0, (bucket.value / max) * 100)}%`}
+								title={`${dateLabel(bucket.key)}: ${currency(bucket.value)}`}
+							>
+								<span class="bar-tooltip">{dateLabel(bucket.key)}<br />{currency(bucket.value)}</span>
+							</div>
+						</div>
+						<span class:today-label={bucket.current}>{bucketLabel(bucket.key)}</span>
+					</div>{/each}
+			</div>
+		</div>
+	</section>
+	<SpendingCalendar bills={appState.bills} members={appState.members} />
 </div>

@@ -80,7 +80,6 @@
 <div class="page-heading">
 	<div>
 		<h1>Số dư cá nhân</h1>
-		<p>Nợ được đối trừ theo từng cặp với các thành viên đang hoạt động.</p>
 	</div>
 </div>
 <div class="stat-grid">
@@ -161,7 +160,7 @@
 </section>
 <Modal
 	bind:open={qrOpen}
-	title="Thanh toán bằng VietQR"
+	title="Chuyển tiền bằng QR"
 	description={preferences.testView ? 'Tài khoản ngân hàng mẫu · Không chuyển tiền khi thử nghiệm.' : ''}
 >
 	{#if qrPayment && recipient}<div class="qr-content">

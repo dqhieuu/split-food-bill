@@ -13,7 +13,7 @@
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, discountShares, equalShares, localDate } from '$lib/domain/ledger';
 	const ROUNDING_OPTIONS = [0, 1, 2, 3, 4];
-	const DEFAULT_ROUNDING = 2;
+	const DEFAULT_ROUNDING = 3;
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
 		$props();
 	let description = $state('');
@@ -164,25 +164,12 @@
 <a href="/" class="back-link"><ArrowLeft size={16} /> Về tổng quan</a>
 <div class="page-heading">
 	<div>
-		<h1>Tạo hóa đơn</h1>
-		<p>Ghi khoản chi và phân bổ nợ.</p>
+		<h1>Tạo hoá đơn</h1>
 	</div>
 </div>
 <div class="composer-layout">
 	<div class="composer-main">
-		<section class="panel form-panel">
-			<div class="section-step">
-				<span>1</span>
-				<h2>Thông tin hóa đơn</h2>
-			</div>
-			<label class="field"
-				>Tên hóa đơn<Input
-					placeholder="Ví dụ: Cơm trưa thứ hai, cà phê chiều…"
-					bind:value={description}
-					aria-invalid={nameInvalid}
-					maxlength={300}
-				/></label
-			>
+		<section class="panel form-panel bill-details-panel" aria-label="Thông tin hóa đơn và thành viên">
 			<div class="form-two-columns">
 				<label class="field"
 					>Ngày thanh toán<Input type="date" bind:value={date} aria-invalid={dateInvalid} /></label
@@ -194,10 +181,15 @@
 					</div>
 				</div>
 			</div>
-		</section>
-		<section class="panel form-panel">
-			<div class="section-step">
-				<span>2</span>
+			<label class="field"
+				>Tên hóa đơn<Input
+					placeholder="Ví dụ: Cơm trưa thứ hai, cà phê chiều…"
+					bind:value={description}
+					aria-invalid={nameInvalid}
+					maxlength={300}
+				/></label
+			>
+			<div class="section-step participant-picker-heading">
 				<h2>Thành viên tham gia</h2>
 				<button
 					class="text-link"
@@ -208,6 +200,7 @@
 			<div class="member-picker" class:invalid-group={attempted && !selected.length}>
 				{#each people as member}<button
 						class:selected={selected.includes(member.id)}
+						aria-pressed={selected.includes(member.id)}
 						onclick={() => toggleMember(member.id)}
 						><Avatar {member} size="small" />{member.name}<span class="pick-check"
 							>{#if selected.includes(member.id)}<Check size={12} />{:else}<Plus size={12} />{/if}</span
@@ -217,7 +210,6 @@
 		</section>
 		<section class="panel form-panel">
 			<div class="section-step">
-				<span>3</span>
 				<h2>Chia hóa đơn</h2>
 			</div>
 			<div class="split-controls">
@@ -262,22 +254,22 @@
 				>{/if}
 			<div class="participant-lines">
 				{#each selected as id, i}{@const person = people.find((m) => m.id === id)!}
-					<div class="participant-line">
-						<div class="participant-top">
+					<div class="participant-line participant-split-row">
+						<div class="participant-name">
 							<Avatar member={person} size="small" /><strong>{person.name}</strong>{#if id === actor}<span
 									class="mini-pill">Phần của bạn</span
 								>{/if}
-							<div class="amount-input">
-								{#if mode === 'manual'}<MoneyInput
-										label={`Số tiền của ${person.name}`}
-										{unit}
-										invalid={amountInvalid(id, i)}
-										bind:value={amounts[id]}
-									/>{#if hasDiscount}<span class="discounted-share">→ {currency(shares[i] ?? 0)}</span
-										>{/if}{:else}<strong>{currency(shares[i] ?? 0)}</strong>{/if}
-							</div>
 						</div>
-						<div class="participant-details">
+						<div class="amount-input">
+							{#if mode === 'manual'}<MoneyInput
+									label={`Số tiền của ${person.name}`}
+									{unit}
+									invalid={amountInvalid(id, i)}
+									bind:value={amounts[id]}
+								/>{#if hasDiscount}<span class="discounted-share">→ {currency(shares[i] ?? 0)}</span
+									>{/if}{:else}<strong>{currency(shares[i] ?? 0)}</strong>{/if}
+						</div>
+						<div class="participant-food">
 							<Input
 								aria-label={`Món ăn của ${person.name}`}
 								placeholder="Món ăn (không bắt buộc)"

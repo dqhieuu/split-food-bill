@@ -17,9 +17,9 @@ Based on the saved discovery blueprint for “Copy of Lunch management”, inspe
 | Debt matrix and stake                | Dedicated matrix and full-history net positions                                                      |
 | Hub simplification                   | Admin preview, version check, compensating entries, conserved net positions                          |
 | Ledger / reverse EZLedger            | Filtered newest-first bills and immutable ledger                                                     |
-| Daily balance history                | Member-keyed line chart, 7 / 15 / 30-day ranges                                                      |
-| Positive-position pie                | Receivable distribution donut with member legend                                                     |
-| Paid/received figures                | Cumulative/today repayments; synthetic/self entries excluded                                         |
+| Daily balance history                | Payment index screen removed at user request                                                        |
+| Positive-position pie                | Payment index screen removed at user request                                                        |
+| Paid/received figures                | Payment index screen removed at user request                                                        |
 | Users and bank table                 | Editable profiles, bank BIN/account/holder, active status and roles                                  |
 | Missing former users                 | Inactive placeholders during import, balances retained                                               |
 | Archive link                         | Saved links, JSON backup download and CSV ledger export                                              |
@@ -30,4 +30,4 @@ Based on the saved discovery blueprint for “Copy of Lunch management”, inspe
 
 Bank transfers are never initiated or automatically verified. Email delivery is simulated locally. XLSX normalization and complete-backup restoration are future work; ledger history import is implemented. Private drafts are per browser/account, not synchronized between devices.
 
-The hidden QR test tab and deprecated personal-page links become profile settings and a local QR generator, not separate app pages. The old monthly-calendar implementation was not found during discovery, so this app does not claim to reproduce it. Daily history charts are implemented.
+The hidden QR test tab and deprecated personal-page links become profile settings and a local QR generator, not separate app pages. The old monthly-calendar implementation was not found during discovery, so this app does not claim to reproduce it.

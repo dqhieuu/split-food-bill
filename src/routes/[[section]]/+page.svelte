@@ -31,7 +31,6 @@
 	import Activity from '$lib/components/views/Activity.svelte';
 	import Management from '$lib/components/views/Management.svelte';
 	import DebtMatrix from '$lib/components/views/DebtMatrix.svelte';
-	import PaymentIndex from '$lib/components/views/PaymentIndex.svelte';
 	import { Switch } from '$lib/components/ui/switch';
 	import { ApiError, fetchState, login, requestJson, sendCommand } from '$lib/client/api';
 	import {
@@ -55,10 +54,9 @@
 	let demoMembers = $state<Pick<Member, 'id' | 'name' | 'role' | 'color'>[]>([]);
 	const navigation = [
 		{ path: '/', label: 'Tổng quan', icon: LayoutDashboard },
-		{ path: '/new-bill', label: 'Ghi thanh toán', icon: Plus },
+		{ path: '/new-bill', label: 'Tạo hoá đơn', icon: Plus },
 		{ path: '/balances', label: 'Số dư cá nhân', icon: Wallet },
 		{ path: '/matrix', label: 'Ma trận nợ nần', icon: Users },
-		{ path: '/index', label: 'Tiền ăn index', icon: ArrowUpRight },
 		{ path: '/activity', label: 'Ledger', icon: ReceiptText },
 		{ path: '/members', label: 'Thành viên & quản lý', icon: Users }
 	];
@@ -228,7 +226,7 @@
 					onclick={() => (mobileMenu = true)}><Menu size={21} /></button
 				><span>Hội ăn trưa</span><span class="slash">/</span><strong
 					>{section === '/new-bill'
-						? 'Tạo hóa đơn'
+						? 'Tạo hoá đơn'
 						: navigation.find((n) => n.path === section)?.label || 'Không tìm thấy'}</strong
 				>
 			</div>
@@ -271,7 +269,6 @@
 				{:else if section === '/activity'}<Activity {appState} {actor} {run} {busy} />
 				{:else if section === '/members'}<Management {appState} {actor} {run} {busy} />
 				{:else if section === '/matrix'}<DebtMatrix {appState} {actor} {run} {busy} />
-				{:else if section === '/index'}<PaymentIndex {appState} {actor} />
 				{:else}<div class="empty-state">
 						<h1>Không tìm thấy trang</h1>
 						<Button href="/">Về tổng quan</Button>
@@ -323,7 +320,6 @@
 			<li>Giao diện tối và lịch chi tiêu theo ngày kèm âm lịch.</li>
 			<li>Chia đều có làm tròn lên; nhập từng người hỗ trợ giá sau khi giảm giá.</li>
 			<li>Tối giản nợ theo đúng thuật toán của bảng tính cũ.</li>
-			<li>Tiền ăn index hiển thị mã 3 chữ cái như bảng giá chứng khoán.</li>
 			{#if preferences.testView}<li>Email hoá đơn và QR chỉ mô phỏng trong môi trường thử nghiệm.</li>{/if}
 		</ul>
 	</div>

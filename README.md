@@ -32,12 +32,13 @@ Run `npm run backup:local` while the emulator is running to explicitly save a lo
 | Route       | Vietnamese navigation | Purpose                                                                           |
 | ----------- | --------------------- | --------------------------------------------------------------------------------- |
 | `/`         | Tổng quan             | Group spending, personal summary, recent bills                                    |
-| `/new-bill` | Ghi thanh toán        | Independent draft, participants, individual/equal splits, review, receipt option  |
+| `/new-bill` | Tạo hoá đơn           | Independent draft, participants, individual/equal splits, review, receipt option  |
 | `/balances` | Số dư cá nhân         | Pairwise balances, charge history and QR payment confirmation                     |
-| `/matrix`   | Ma trận nợ nần        | All/current-member matrix and admin hub reassignment                              |
-| `/index`    | Tiền ăn index         | Daily net history, receivable distribution, cumulative/today repayments           |
+| `/matrix`   | Ma trận nợ nần        | Active-member matrix and admin hub reassignment                                  |
 | `/activity` | Ledger                | Filtered bills/ledger, CSV export, receipt preview and simulated retries          |
 | `/members`  | Thành viên & quản lý  | Profiles/banks, inactive members, ledger import, JSON backup, archives, audit log |
+
+The overview starts with recent bills and personal payment history side by side on desktop. Payment history distinguishes who covered a meal from actual repayments and omits synthetic settlement entries. Spending can be grouped by day, Monday-based week or month, with navigation through contiguous earlier windows. The current summary shows today's, this week's or this month's spending; earlier windows show their combined total. The calendar keeps month navigation above display and payer controls, with an inline add action on each date. Daily bar colors follow the same percentage as their length relative to the busiest day: 0% green, 50% yellow and 100% red. Bill markers use their percentage of the month's largest bill. Hovering a date replaces its lunar label with an add button in the same position.
 
 ## Financial rules
 
@@ -50,7 +51,7 @@ net position A = receivables A - payables A
 
 The UI labels receivables as “Bạn đang lỗ” and payables as “Bạn đang lãi”; ledger calculations remain unchanged. The organizer's own meal stays in the bill total without creating self debt. Payments are recorded through QR confirmation. Payments offset a member pair, not a particular invoice. Recent charges are explicitly not labeled as unpaid invoices.
 
-Inactive members remain in full-history balances by default. Matrix filters limit displayed pairs; index positions always use full history. Hub reassignment includes inactive members, preserves every member's net position, uses the most indebted member as the hub and skips self entries. Synthetic accounting entries are excluded from repayment metrics. This preserves the old hub strategy, not a claim of globally minimal bank transfers.
+Personal balance lists, the overview's debt list, matrix rows and member filter options show active members only. Historical records and net positions retain the full ledger. Inactive profiles remain available in member management. Hub reassignment includes inactive members, preserves every member's net position, uses the most indebted member as the hub and skips self entries. This preserves the old hub strategy, not a claim of globally minimal bank transfers.
 
 The QR dialog is stateless: generating, opening or closing it makes no database writes, starts no expiry timer and does not block reassignment. The recipient, bank details and amount shown are held only in the current dialog. Confirmation records that amount using the authenticated payer and an idempotency ID; retries cannot duplicate the payment, even if the ledger changed after scanning. VietQR payloads and images are generated locally with an EMV CRC, without sending bank details to an image service. Bank-app scanning has not been certified against real accounts. Self-confirmation is not bank verification.
 

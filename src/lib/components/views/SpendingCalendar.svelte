@@ -1,16 +1,13 @@
 <script lang="ts">
 	import { ChevronLeft, ChevronRight, ChevronDown, Plus, X } from '@lucide/svelte';
 	import { Popover } from 'bits-ui';
-	import { Button } from '$lib/components/ui/button';
 	import type { Bill, Member } from '$lib/domain/types';
 	import { currency, localDate } from '$lib/domain/ledger';
 	import { toLunar } from '$lib/domain/lunar';
 	import {
 		calendarMonth,
 		daysInMonth,
-		severityHue,
-		spendingIndicatorColor,
-		spendingDensityRatio,
+		spendingPercentageColor,
 		type CalendarBill
 	} from '$lib/domain/calendar';
 	// A day cell has room for three 22px bill bars; past that, compact mode shows two plus "+N".
@@ -18,8 +15,10 @@
 	const COMPACT_BARS = 2;
 	const WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 	const FALLBACK_COLOR = '#7f8a77';
-	let { bills, members = [] }: { bills: Bill[]; members?: Pick<Member, 'id' | 'name' | 'color'>[] } =
-		$props();
+	let {
+		bills,
+		members = []
+	}: { bills: Bill[]; members?: Pick<Member, 'id' | 'name' | 'color' | 'active'>[] } = $props();
 	const today = localDate(new Date());
 	let cursor = $state({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) });
 	let selectedKey = $state(today);
@@ -35,7 +34,8 @@
 	const monthPayers = $derived.by(() => {
 		const seen = new Map<string, string>();
 		for (const bill of bills)
-			if (localDate(bill.date).startsWith(monthKey)) seen.set(bill.organizer, payerName(bill));
+			if (localDate(bill.date).startsWith(monthKey) && memberOf(bill.organizer)?.active)
+				seen.set(bill.organizer, payerName(bill));
 		return [...seen].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
 	});
 	const activePayer = $derived(monthPayers.some((p) => p.id === payerFilter) ? payerFilter : undefined);
@@ -60,21 +60,12 @@
 					bills: month.days.get(key) ?? [],
 					total,
 					ratio: total / month.maxDayTotal,
-					barColor: spendingIndicatorColor(
-						spendingDensityRatio(
-							total,
-							month.personMeals.get(key) ?? 0,
-							month.monthTotal,
-							month.monthPersonMeals
-						)
-					)
+					barColor: spendingPercentageColor(total / month.maxDayTotal)
 				};
 			})
 		];
 	});
-	const selected = $derived(cells.find((cell) => cell?.key === selectedKey) ?? null);
 	const dateLabel = (key: string) => `${key.slice(8)}/${key.slice(5, 7)}/${key.slice(0, 4)}`;
-	const shortDate = (key: string) => `${Number(key.slice(8))}/${Number(key.slice(5, 7))}`;
 	function shift(step: number) {
 		const index = cursor.year * 12 + cursor.month - 1 + step;
 		cursor = { year: Math.floor(index / 12), month: (index % 12) + 1 };
@@ -95,20 +86,21 @@
 {/snippet}
 
 {#snippet billBar(bill: CalendarBill)}
-	<div
+	<a
 		class="cal-bill"
-		style:--hue={severityHue(bill.ratio)}
+		href={`/activity?bill=${bill.id}`}
+		style:--spend-color={bill.color}
 		title={`${bill.description} · Người trả: ${bill.payer} · ${currency(bill.amount)}`}
 	>
 		<span class="cal-bill-left"
 			><i class="cal-dot"></i><span class="cal-bill-name">{bill.description}</span></span
 		>
 		{@render payerBadge(bill, true)}
-	</div>
+	</a>
 {/snippet}
 
 {#snippet billRow(bill: CalendarBill, index: number)}
-	<a class="cal-row" href={`/activity?bill=${bill.id}`} style:--hue={severityHue(bill.ratio)}>
+	<a class="cal-row" href={`/activity?bill=${bill.id}`} style:--spend-color={bill.color}>
 		<i class="cal-dot"></i><span class="cal-row-index">{index + 1}.</span>
 		<span class="cal-row-text"
 			><strong title={bill.description}>{bill.description}</strong><small class="cal-amount"
@@ -121,30 +113,31 @@
 
 <section class="panel calendar-panel">
 	<header class="cal-header">
-		<div>
-			<div class="cal-title">
+		<div class="cal-top-row">
+			<div>
 				<h2>Lịch chi tiêu</h2>
-				<span class="cal-legend" title={`Hóa đơn lớn nhất: ${currency(month.maxBill)}`}
-					>Thấp<i aria-hidden="true"></i>Cao nhất</span
+				<p class="cal-subtitle">{currency(month.monthTotal)}</p>
+			</div>
+			<div class="cal-month">
+				<button class="icon-button" aria-label="Tháng trước" onclick={() => shift(-1)}
+					><ChevronLeft size={16} /></button
+				>
+				<strong>Tháng {cursor.month}/{cursor.year}</strong>
+				<button class="icon-button" aria-label="Tháng sau" disabled={isCurrentMonth} onclick={() => shift(1)}
+					><ChevronRight size={16} /></button
 				>
 			</div>
-			<p class="cal-subtitle">
-				<strong>{currency(month.monthTotal)}</strong> trong tháng · Thanh đầy = ngày chi nhiều nhất · Màu
-				thanh: <span class="tone-low">Xanh (Thấp)</span> →
-				<span class="tone-mid">Vàng (Vừa)</span> → <span class="tone-high">Đỏ (Cao)</span>
-			</p>
 		</div>
 		<div class="cal-controls">
 			<div class="cal-toggle" role="group" aria-label="Cách hiển thị khi nhiều hóa đơn">
 				<button
 					class:active={overflowMode === 'compact'}
 					aria-pressed={overflowMode === 'compact'}
-					title="Hiển thị 2 hóa đơn đầu + nút +N hóa đơn khác"
 					onclick={() => (overflowMode = 'compact')}>Gọn (+N bill)</button
-				><button
+				>
+				<button
 					class:active={overflowMode === 'scroll'}
 					aria-pressed={overflowMode === 'scroll'}
-					title="Cuộn tất cả hóa đơn bên trong ô"
 					onclick={() => ((overflowMode = 'scroll'), (openPopover = null))}>Cuộn trong ô</button
 				>
 			</div>
@@ -154,23 +147,14 @@
 						class:active={!activePayer}
 						aria-pressed={!activePayer}
 						onclick={() => (payerFilter = 'all')}>Tất cả</button
-					>{#each monthPayers as payer (payer.id)}<button
+					>
+					{#each monthPayers as payer (payer.id)}<button
 							class:active={activePayer === payer.id}
 							aria-pressed={activePayer === payer.id}
 							style:--payer={colorOf(payer.id)}
 							onclick={() => (payerFilter = payer.id)}><i></i>{payer.name}</button
 						>{/each}
 				</div>{/if}
-			<div class="cal-month">
-				<button class="icon-button" aria-label="Tháng trước" onclick={() => shift(-1)}
-					><ChevronLeft size={16} /></button
-				><strong>Tháng {cursor.month}/{cursor.year}</strong><button
-					class="icon-button"
-					aria-label="Tháng sau"
-					disabled={isCurrentMonth}
-					onclick={() => shift(1)}><ChevronRight size={16} /></button
-				>
-			</div>
 		</div>
 	</header>
 
@@ -189,19 +173,26 @@
 					onkeydown={(event) => onCellKey(event, cell.key)}
 				>
 					<div class="cal-date">
-						<strong class:muted={cell.key > today && !cell.total}>{cell.day}</strong><small
-							class:lunar-start={cell.isLunarMonthStart}>{cell.lunar}</small
-						>
+						<strong class:muted={cell.key > today && !cell.total}>{cell.day}</strong>
+						<span class="cal-lunar">
+							<small class:lunar-start={cell.isLunarMonthStart}>{cell.lunar}</small>
+							<a
+								class="cal-add-inline"
+								href={`/new-bill?date=${cell.key}`}
+								aria-label={`Thêm hoá đơn ngày ${dateLabel(cell.key)}`}
+								title={`Thêm hoá đơn ngày ${dateLabel(cell.key)}`}><Plus size={14} /></a
+							>
+						</span>
 					</div>
 					<div class="cal-pay">
 						<div class="cal-track" aria-hidden="true">
 							<span
-								style:width={cell.total ? `${Math.max(8, Math.round(cell.ratio * 100))}%` : '0%'}
+								style:width={`${Math.max(0, Math.min(100, cell.ratio * 100))}%`}
 								style:background-color={cell.barColor}
 							></span>
 						</div>
 						<div class="cal-pay-meta">
-							<span class="cal-amount" style:--hue={severityHue(cell.ratio)}
+							<span class="cal-amount" style:--spend-color={cell.barColor}
 								>{cell.total ? currency(cell.total) : ''}</span
 							>{#if cell.bills.length}<small>{cell.bills.length} khoản</small>{/if}
 						</div>
@@ -223,7 +214,7 @@
 										><div class="cal-popover-head">
 											<div>
 												<strong>Ngày {dateLabel(cell.key)}</strong><small>Âm lịch: {cell.lunarFull}</small>
-												<p class="cal-amount" style:--hue={severityHue(cell.ratio)}>
+												<p class="cal-amount" style:--spend-color={cell.barColor}>
 													Tổng cộng: {currency(cell.total)} ({cell.bills.length} hóa đơn)
 												</p>
 											</div>
@@ -238,28 +229,4 @@
 					</div>
 				</div>{:else}<div class="cal-day empty" aria-hidden="true"></div>{/if}{/each}
 	</div>
-
-	{#if selected}<div class="cal-bottom">
-			<section class="cal-inspector" aria-live="polite">
-				<div class="cal-inspector-head">
-					<span class="cal-date-chip"
-						><strong>{shortDate(selected.key)}</strong><small>ÂL {selected.lunarFull}</small></span
-					>
-					<h3>Danh sách hóa đơn Ngày {dateLabel(selected.key)}</h3>
-					<span class="cal-total-badge" style:--hue={severityHue(selected.ratio)}
-						>{currency(selected.total)} ({selected.bills.length} bill)</span
-					>
-				</div>
-				{#if selected.bills.length}<div class="cal-inspector-list">
-						{#each selected.bills as bill, index (bill.id)}{@render billRow(bill, index)}{/each}
-					</div>{:else}<p class="cal-empty">Chưa có hóa đơn nào trong ngày này.</p>{/if}
-			</section>
-			<section class="cal-add">
-				<h3><i></i>Thêm hóa đơn vào Ngày {shortDate(selected.key)}</h3>
-				<p>Mở trang ghi thanh toán với ngày đã chọn.</p>
-				<Button href={`/new-bill?date=${selected.key}`}
-					><Plus size={16} /> Thêm vào Ngày {selected.day}</Button
-				>
-			</section>
-		</div>{/if}
 </section>

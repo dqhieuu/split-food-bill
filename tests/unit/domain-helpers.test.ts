@@ -9,7 +9,6 @@ import {
 	shortCurrency
 } from '../../src/lib/domain/ledger';
 import { createDemoState } from '../../src/lib/domain/seed';
-import { tickerCodes } from '../../src/lib/domain/ticker';
 import { toLunar } from '../../src/lib/domain/lunar';
 import { calendarMonth, severityHue } from '../../src/lib/domain/calendar';
 import type { Bill, LedgerEntry } from '../../src/lib/domain/types';
@@ -63,20 +62,6 @@ describe('debt simplification (lunchsheet.gs minimizeTransactions)', () => {
 					expect(pairBalance(ledger, member.id, other.id)).toBe(0);
 		}
 		expect(plan.entries.some((e) => e.from === e.to)).toBe(false);
-	});
-});
-
-describe('ticker codes', () => {
-	it('derives given initial + family prefix and stays unique', () => {
-		expect(
-			tickerCodes([
-				{ id: 'a', name: 'Đặng Hoàng' },
-				{ id: 'b', name: 'Phan Văn Tuấn' },
-				{ id: 'c', name: 'Đào Hải' },
-				{ id: 'd', name: 'Đặng Huy' },
-				{ id: 'e', name: 'Đặng Hùng' }
-			])
-		).toEqual({ a: 'HDA', b: 'TPH', c: 'HAD', d: 'HUD', e: 'HUNGD' });
 	});
 });
 

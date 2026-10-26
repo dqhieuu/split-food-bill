@@ -28,13 +28,41 @@ test('Vietnamese navigation, bill posting, receipt retry and mobile layout', asy
 	for (const bar of calendar.bars) {
 		expect(bar.image).toBe('none');
 		expect(bar.color).toMatch(/^rgb\(\d+, \d+, \d+\)$/);
-		expect(bar.width).toMatch(/^\d+%$/);
+		expect(bar.width).toMatch(/^\d+(\.\d+)?%$/);
 	}
+	await expect(page.locator('.cal-bottom, .cal-legend, .page-heading p')).toHaveCount(0);
+	await expect(page.getByRole('heading', { name: 'Lịch sử thanh toán của bạn' })).toBeVisible();
+	const recentBox = await page.locator('.recent-panel').boundingBox();
+	const historyBox = await page.locator('.payment-history-panel').boundingBox();
+	expect(recentBox!.y).toBe(historyBox!.y);
+	const calendarHeader = await page.locator('.cal-month').boundingBox();
+	const calendarControls = await page.locator('.cal-controls').boundingBox();
+	expect(calendarHeader!.y + calendarHeader!.height).toBeLessThan(calendarControls!.y);
+	const spendingControls = page.getByRole('group', { name: 'Đơn vị thời gian chi tiêu' });
+	await spendingControls.getByRole('button', { name: 'Tuần', exact: true }).click();
+	await expect(page.getByRole('heading', { name: 'Chi tiêu theo tuần', exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Khoảng trước', exact: true }).click();
+	await expect(page.locator('.spending-summary')).toContainText('Khoảng này:');
+	await page.getByRole('button', { name: 'Hiện tại', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Khoảng sau', exact: true })).toBeDisabled();
+	await spendingControls.getByRole('button', { name: 'Ngày', exact: true }).click();
+	await expect(page.locator('.chart-column')).toHaveCount(7);
+	await spendingControls.getByRole('button', { name: 'Tháng', exact: true }).click();
+	await expect(page.locator('.spending-summary')).toContainText('Tháng này:');
+	const day = page.locator('.cal-day:not(.empty)').first();
+	await day.hover();
+	await expect(day.locator('.cal-lunar small')).toHaveCSS('opacity', '0');
+	await expect(day.getByRole('link', { name: /Thêm hoá đơn ngày/ })).toBeVisible();
+	await day.getByRole('link', { name: /Thêm hoá đơn ngày/ }).click();
+	await expect(page).toHaveURL(/\/new-bill\?date=\d{4}-\d{2}-01/);
+	await page.goto('/');
+	await expect(page.getByRole('heading', { name: 'Tổng quan', exact: true })).toBeVisible();
 	await mkdir('artifacts', { recursive: true });
 	await page.screenshot({ path: 'artifacts/overview-desktop.png', fullPage: true });
-	for (const name of ['Ghi thanh toán', 'Số dư cá nhân', 'Ma trận nợ nần', 'Tiền ăn index'])
-		await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
-	await page.getByRole('link', { name: 'Ghi thanh toán', exact: true }).click();
+	const navigation = page.getByRole('navigation', { name: 'Điều hướng chính' });
+	for (const name of ['Tạo hoá đơn', 'Số dư cá nhân', 'Ma trận nợ nần'])
+		await expect(navigation.getByRole('link', { name, exact: true })).toBeVisible();
+	await navigation.getByRole('link', { name: 'Tạo hoá đơn', exact: true }).click();
 	const title = `Bữa trưa kiểm thử ${Date.now()}`;
 	await page.getByRole('textbox', { name: 'Tên hóa đơn', exact: true }).fill(title);
 	await page.getByRole('button', { name: 'Chọn tất cả', exact: true }).click();
@@ -43,16 +71,16 @@ test('Vietnamese navigation, bill posting, receipt retry and mobile layout', asy
 	await page.reload();
 	await expect(page.getByRole('textbox', { name: 'Tên hóa đơn', exact: true })).toHaveValue(title);
 	await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
-	// Equal shares round up to 100 ₫ by default: 440.001 ₫ / 8 → 55.100 ₫ each.
-	await expect(page.getByRole('dialog')).toContainText('55.100');
-	await expect(page.getByRole('dialog')).toContainText('440.800');
+	// Equal shares round up to 1,000 ₫ by default: 440.001 ₫ / 8 → 56.000 ₫ each.
+	await expect(page.getByRole('dialog')).toContainText('56.000');
+	await expect(page.getByRole('dialog')).toContainText('448.000');
 	await page.getByRole('button', { name: 'Xác nhận', exact: true }).click();
 	await expect(page).toHaveURL(/\/activity/);
 	await page
 		.getByRole('button', { name: new RegExp(title) })
 		.first()
 		.click();
-	await expect(page.getByRole('dialog').first()).toContainText('440.800');
+	await expect(page.getByRole('dialog').first()).toContainText('448.000');
 	await page.getByRole('button', { name: 'Mô phỏng lỗi', exact: true }).click();
 	await expect(page.getByRole('dialog').first()).toContainText('Mô phỏng thất bại');
 	await page.getByRole('button', { name: 'Thử lại mô phỏng', exact: true }).click();
@@ -62,8 +90,6 @@ test('Vietnamese navigation, bill posting, receipt retry and mobile layout', asy
 	await page.keyboard.press('Escape');
 	await page.keyboard.press('Escape');
 	await page.getByRole('link', { name: 'Số dư cá nhân', exact: true }).click();
-	await page.getByRole('link', { name: 'Tiền ăn index', exact: true }).click();
-	await expect(page.getByRole('heading', { name: 'Chỉ số các mã ĂT trong vòng 15 ngày' })).toBeVisible();
 	await page.getByRole('link', { name: 'Ma trận nợ nần', exact: true }).click();
 	await page.getByRole('button', { name: 'Tối giản nợ', exact: true }).click();
 	await expect(page.getByRole('dialog')).toContainText('bản ghi trong Ledger');

@@ -170,7 +170,6 @@
 <div class="page-heading">
 	<div>
 		<h1>Thành viên & quản lý</h1>
-		<p>Hồ sơ, ngân hàng, lịch sử lưu trữ và dữ liệu của nhóm.</p>
 	</div>
 	{#if isAdmin}<Button onclick={() => editMember()}><Plus size={17} /> Thêm thành viên</Button>{/if}
 </div>

@@ -9,6 +9,8 @@ export type CalendarBill = {
 	amount: number;
 	/** amount / most expensive bill of the month, in [0, 1]. */
 	ratio: number;
+	/** Color corresponding to the bill's percentage of the monthly maximum. */
+	color: string;
 };
 
 export type CalendarMonth = {
@@ -21,7 +23,7 @@ export type CalendarMonth = {
 	maxBill: number;
 	monthTotal: number;
 	monthPersonMeals: number;
-	/** Informational only; the bar colour uses spend per person-meal instead. */
+	/** Informational averages; the calendar's color scale uses percentage of maximum spending. */
 	averageDailySpending: number | null;
 	averagePersonMealSpending: number | null;
 };
@@ -150,6 +152,14 @@ export function spendingIndicatorColor(ratio: number | null): string {
 		: toHex(mix(INDICATOR_YELLOW, INDICATOR_RED, (value - YELLOW_AT) / (RED_FROM - YELLOW_AT)));
 }
 
+/** Solid color along a percentage scale: 0% green, 50% yellow, 100% red. */
+export function spendingPercentageColor(ratio: number): string {
+	const value = Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 0;
+	return value <= 0.5
+		? toHex(mix(INDICATOR_GREEN, INDICATOR_YELLOW, value * 2))
+		: toHex(mix(INDICATOR_YELLOW, INDICATOR_RED, (value - 0.5) * 2));
+}
+
 /** Groups one month (`YYYY-MM`) of bills, optionally limited to a single payer. */
 export function calendarMonth(
 	bills: Bill[],
@@ -165,6 +175,8 @@ export function calendarMonth(
 			(!payerId || bill.organizer === payerId)
 	);
 	const maxBill = Math.max(1, ...inMonth.map((bill) => bill.total));
+	const monthTotal = inMonth.reduce((sum, bill) => sum + bill.total, 0);
+	const monthPersonMeals = inMonth.reduce((sum, bill) => sum + participantCount(bill), 0);
 	const days = new Map<string, CalendarBill[]>();
 	for (const bill of inMonth) {
 		const key = localDate(bill.date);
@@ -174,7 +186,8 @@ export function calendarMonth(
 			payerId: bill.organizer,
 			payer: payerName(bill),
 			amount: bill.total,
-			ratio: bill.total / maxBill
+			ratio: bill.total / maxBill,
+			color: spendingPercentageColor(bill.total / maxBill)
 		};
 		days.set(key, [...(days.get(key) ?? []), entry]);
 	}
@@ -189,8 +202,6 @@ export function calendarMonth(
 		const key = localDate(bill.date);
 		personMeals.set(key, (personMeals.get(key) ?? 0) + participantCount(bill));
 	}
-	const monthTotal = [...totals.values()].reduce((a, b) => a + b, 0);
-	const monthPersonMeals = [...personMeals.values()].reduce((a, b) => a + b, 0);
 	const [year, month] = monthKey.split('-').map(Number);
 	return {
 		days,
