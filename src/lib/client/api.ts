@@ -100,8 +100,14 @@ export async function getSession(): Promise<Session> {
 export async function selectGroup(id: string) {
 	return requestJson(`/api/groups/${id}/select`, { method: 'POST', body: '{}' });
 }
-export async function fetchState(groupId: string): Promise<{ state: AppState; actor: string; group: Group }> {
-	return requestJson(`/api/groups/${groupId}/state`);
+export type GroupState = { state: AppState; actor: string; group: Group };
+export async function fetchState(groupId: string): Promise<GroupState>;
+export async function fetchState(
+	groupId: string,
+	since: number | undefined
+): Promise<GroupState | { unchanged: true; actor: string; group: Group }>;
+export async function fetchState(groupId: string, since?: number) {
+	return requestJson(`/api/groups/${groupId}/state${since === undefined ? '' : `?since=${since}`}`);
 }
 export async function sendCommand(
 	groupId: string,

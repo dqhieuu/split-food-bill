@@ -72,7 +72,13 @@ async function route(request: Request, env: Env): Promise<Response> {
 		return Response.json({ ok: true });
 	}
 	const state = url.pathname.match(/^\/api\/groups\/([\w-]+)\/state$/);
-	if (state && request.method === 'GET') return Response.json(await loadGroup(store, state[1], user.id));
+	if (state && request.method === 'GET') {
+		const since = url.searchParams.get('since');
+		if (since !== null && !/^\d{1,15}$/.test(since)) throw new DomainError('Phiên bản không hợp lệ.', 400);
+		return Response.json(
+			await loadGroup(store, state[1], user.id, since === null ? undefined : Number(since))
+		);
+	}
 	const command = url.pathname.match(/^\/api\/groups\/([\w-]+)\/commands\/([\w-]+)$/);
 	if (command && request.method === 'POST') {
 		if (command[2] === 'retryBillNotification') {
@@ -162,7 +168,9 @@ export default {
 					status,
 					...(error instanceof DiscordRateLimitError
 						? { headers: { 'retry-after': String(error.retryAfterSeconds) } }
-						: {})
+						: status === 429
+							? { headers: { 'retry-after': '60' } }
+							: {})
 				}
 			);
 		}

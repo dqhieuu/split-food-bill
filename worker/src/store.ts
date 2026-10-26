@@ -1,6 +1,7 @@
 import { SignJWT, importPKCS8 } from 'jose';
 import type { Env } from './env';
 import { isLocal } from './env';
+import { DomainError } from '../../src/lib/domain/ledger';
 
 type Value = {
 	stringValue?: string;
@@ -88,6 +89,8 @@ export class Store {
 				...init.headers
 			}
 		});
+		if (response.status === 429)
+			throw new DomainError('Cơ sở dữ liệu đang giới hạn yêu cầu. Vui lòng thử lại sau ít phút.', 429);
 		if (!response.ok) {
 			const error = new Error(`Firestore request failed (${response.status}).`) as Error & { status: number };
 			error.status = response.status;

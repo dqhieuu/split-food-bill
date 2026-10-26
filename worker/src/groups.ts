@@ -61,9 +61,10 @@ export async function requireGroup(
 }
 export async function session(store: Store, user: GlobalUser) {
 	const all = await store.list<Group>('groups');
+	const members = await store.getMany<Member>(all.map((group) => `groups/${group.id}/members/${user.id}`));
 	const groups: GroupSummary[] = [];
 	for (const group of all) {
-		const member = await store.get<Member>(`groups/${group.id}/members/${user.id}`);
+		const member = members.get(`groups/${group.id}/members/${user.id}`);
 		if (member?.active) groups.push({ ...group, role: member.role });
 	}
 	return {
@@ -79,7 +80,12 @@ async function readGroupState(store: Store, groupId: string, uid: string, transa
 		(state[key] as unknown[]) = await store.list(`groups/${groupId}/${key}`, transaction);
 	return { group, state };
 }
-export async function loadGroup(store: Store, groupId: string, uid: string) {
+/** A poll that already holds `knownVersion` costs two document reads instead of the whole group. */
+export async function loadGroup(store: Store, groupId: string, uid: string, knownVersion?: number) {
+	if (knownVersion !== undefined) {
+		const { group } = await requireGroup(store, groupId, uid);
+		if (group.version === knownVersion) return { unchanged: true as const, group, actor: uid };
+	}
 	return store.transaction(async (tx) => ({
 		...(await readGroupState(store, groupId, uid, tx)),
 		actor: uid

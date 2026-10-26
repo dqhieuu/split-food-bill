@@ -115,9 +115,12 @@
 	async function refresh() {
 		if (!selectedGroupId) return;
 		try {
-			const result = await fetchState(selectedGroupId);
-			appState = result.state;
+			// Notification deliveries update receipts without bumping the ledger version.
+			const delivering = appState?.receipts.some((receipt) => ['queued', 'sending'].includes(receipt.status));
+			const result = await fetchState(selectedGroupId, delivering ? undefined : appState?.version);
 			group = result.group;
+			if ('unchanged' in result) return;
+			appState = result.state;
 		} catch (cause) {
 			if (cause instanceof ApiError && cause.status === 401) await signOutUser();
 			else if (cause instanceof ApiError && cause.status === 403) {
@@ -170,11 +173,14 @@
 	onMount(() => {
 		initPreferences();
 		void initialize();
-		const interval = setInterval(() => {
-			if (appState && !busy) void refresh().catch(() => {});
-		}, 15000);
+		const poll = () => {
+			if (appState && !busy && document.visibilityState === 'visible') void refresh().catch(() => {});
+		};
+		const interval = setInterval(poll, 15000);
+		document.addEventListener('visibilitychange', poll);
 		return () => {
 			clearInterval(interval);
+			document.removeEventListener('visibilitychange', poll);
 			clearTimeout(toastTimer);
 		};
 	});
