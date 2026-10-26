@@ -214,14 +214,14 @@ Use a separate staging Worker/Firebase project and configured staging origin for
 
 ## Automatic Worker deployment from this repository
 
-`.github/workflows/deploy-worker.yml` uses the official Wrangler GitHub Action. It runs Worker type checks and unit tests, then deploys on relevant pushes to `main` or manual dispatch. It is **disabled by default** using the repository variable gate.
+`.github/workflows/deploy-worker.yml` uses the official Wrangler GitHub Action. It runs Worker type checks and unit tests, then deploys on relevant pushes to `master` or manual dispatch. It is **disabled by default** using the repository variable gate.
 
 After reviewing the implementation and configuring production:
 
 1. Configure the production values in `wrangler.jsonc` and perform the initial deployment with the secrets file above.
 2. In GitHub repository settings, add secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. Use a token authorized to edit Workers in the intended Cloudflare account, including the declared Durable Object binding.
 3. Configure the GitHub `production` environment if using environment-level secrets or review rules.
-4. Set repository variable `CLOUDFLARE_DEPLOY_ENABLED` to `true` only when automatic deployment is wanted. Merge to `main` or manually dispatch the workflow. Application secrets remain in Cloudflare and are not copied into build artifacts.
+4. Set repository variable `CLOUDFLARE_DEPLOY_ENABLED` to `true` only when automatic deployment is wanted. Push to `master` or manually dispatch the workflow. Application secrets remain in Cloudflare and are not copied into build artifacts.
 
 Vercel's Git integration can independently build the frontend on pushes. Worker CI does not deploy Firestore rules; publish those explicitly as shown above. See [Cloudflare's GitHub Actions guide](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/).
 
