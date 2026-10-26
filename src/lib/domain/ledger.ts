@@ -389,7 +389,6 @@ export function applyCommand(
 			.object({
 				id: identifier,
 				name: text,
-				email: z.union([z.email(), z.literal('')]),
 				active: z.boolean(),
 				role: z.enum(['admin', 'member']),
 				bankCode: z
@@ -397,10 +396,7 @@ export function applyCommand(
 					.max(30)
 					.regex(/^[a-zA-Z0-9]*$/),
 				bankLabel: z.string().trim().max(100).optional(),
-				bankAccount: z
-					.string()
-					.max(40)
-					.regex(/^[0-9]*$/),
+				bankAccount: z.string().max(40),
 				color: z.string().regex(/^#[0-9a-fA-F]{6}$/)
 			})
 			.parse(input);
@@ -416,11 +412,6 @@ export function applyCommand(
 		data.bankLabel = bank.label;
 		if (data.id === actor && (!data.active || data.role !== editor.role))
 			throw new DomainError('Bạn không thể tự gỡ quyền quản trị hoặc khóa tài khoản đang dùng.');
-		if (
-			data.email &&
-			state.members.some((m) => m.id !== data.id && m.email.toLowerCase() === data.email.toLowerCase())
-		)
-			throw new DomainError('Email đã được sử dụng.');
 		const index = state.members.findIndex((m) => m.id === data.id);
 		if (index < 0) state.members.push(data);
 		else
@@ -457,7 +448,6 @@ export function applyCommand(
 					state.members.push({
 						id,
 						name: id,
-						email: `${id}@example.test`,
 						active: false,
 						role: 'member',
 						bankCode: '',

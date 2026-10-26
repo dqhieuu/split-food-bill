@@ -90,9 +90,9 @@ describe('batched Discord member imports', () => {
 		expect(records.get(`users/${existing.id}`)).toEqual(existing);
 		expect(records.get(`groups/${group.id}/members/${existing.id}`)).toMatchObject({
 			active: false,
-			role: 'member',
-			email: existing.email
+			role: 'member'
 		});
+		expect(records.get(`groups/${group.id}/members/${existing.id}`)).not.toHaveProperty('email');
 		expect(records.get(`groups/${group.id}/members/${admin.id}`)).toMatchObject({
 			active: true,
 			role: 'admin'

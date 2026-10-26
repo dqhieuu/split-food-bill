@@ -24,6 +24,7 @@
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, dateTimeLabel, localDate, netBalance } from '$lib/domain/ledger';
 	import { bankNames, resolveBank } from '$lib/domain/qr';
+	import { banks } from '$lib/domain/banks';
 	import { parseLedgerImport, summarizeImport, type ImportedEntry } from '$lib/domain/import';
 	let {
 		appState,
@@ -39,7 +40,6 @@
 	let memberDraft = $state<Member>({
 		id: '',
 		name: '',
-		email: '',
 		active: true,
 		role: 'member',
 		bankCode: '970436',
@@ -59,7 +59,7 @@
 	const isAdmin = $derived(appState.members.find((m) => m.id === actor)?.role === 'admin');
 	const members = $derived(
 		appState.members.filter((m) =>
-			`${m.id} ${m.name} ${m.email}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))
+			`${m.id} ${m.name}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))
 		)
 	);
 	const summary = $derived(summarizeImport(importEntries, appState));
@@ -182,7 +182,7 @@
 			<div class="search-field">
 				<Search size={17} /><Input
 					aria-label="Tìm thành viên"
-					placeholder="Tìm ID, tên hoặc email…"
+					placeholder="Tìm ID hoặc tên…"
 					bind:value={search}
 				/>
 			</div>
@@ -203,7 +203,7 @@
 					>{#each members as member}<tr class:inactive-member={!member.active}
 							><td
 								><div class="table-person">
-									<Avatar {member} /><span><strong>{member.name}</strong><small>{member.email}</small></span>
+									<Avatar {member} /><span><strong>{member.name}</strong></span>
 								</div></td
 							><td>{member.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}</td><td
 								>{member.bankLabel || bankNames[member.bankCode] || member.bankCode || 'Chưa thiết lập'}<small
@@ -324,8 +324,7 @@
 				><option value="member">Thành viên</option><option value="admin">Quản trị viên</option></select
 			></label
 		><label class="field">Tên<Input bind:value={memberDraft.name} maxlength={100} /></label><label
-			class="field">Email<Input type="email" bind:value={memberDraft.email} /></label
-		><label class="field"
+			class="field"
 			>Ngân hàng<Input
 				bind:value={bankInput}
 				list="member-bank-options"
@@ -334,11 +333,10 @@
 				maxlength={100}
 			/>
 			<datalist id="member-bank-options"
-				>{#each Object.values(bankNames) as name}<option value={name}></option>{/each}</datalist
+				>{#each banks as bank}<option value={bank.shortName} label={`${bank.name} (${bank.code})`}
+					></option>{/each}</datalist
 			></label
-		><label class="field"
-			>Số tài khoản<Input bind:value={memberDraft.bankAccount} inputmode="numeric" maxlength={40} /></label
-		>
+		><label class="field">Số tài khoản<Input bind:value={memberDraft.bankAccount} maxlength={40} /></label>
 	</div>
 	<div class="button-row">
 		<label class="checkbox-label"

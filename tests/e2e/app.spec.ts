@@ -246,6 +246,17 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		await expect(page.getByRole('button', { name: 'Thêm thành viên', exact: true })).toHaveCount(0);
 		await page.getByRole('button', { name: 'Sửa hồ sơ Thảo Linh', exact: true }).click();
 		await expect(page.getByLabel('ID', { exact: true })).toBeDisabled();
+		await expect(page.getByLabel('Email', { exact: true })).toHaveCount(0);
+		await expect(page.locator('#member-bank-options option')).toHaveCount(68);
+		await expect(page.locator('#member-bank-options option[value="Woori"]')).toHaveCount(1);
+		await page.getByLabel('Ngân hàng', { exact: true }).fill('Ngân hàng TMCP Kiên Long');
+		await page.getByLabel('Số tài khoản', { exact: true }).fill('linh.account-01');
+		await page.getByRole('button', { name: 'Lưu hồ sơ', exact: true }).click();
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(page.getByRole('row').filter({ hasText: 'Thảo Linh' })).toContainText('KienLongBank');
+		await page.getByRole('button', { name: 'Sửa hồ sơ Thảo Linh', exact: true }).click();
+		await expect(page.getByLabel('Ngân hàng', { exact: true })).toHaveValue('KienLongBank');
+		await expect(page.getByLabel('Số tài khoản', { exact: true })).toHaveValue('linh.account-01');
 		await page.keyboard.press('Escape');
 		await page.setViewportSize({ width: 390, height: 844 });
 		expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

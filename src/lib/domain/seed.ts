@@ -16,7 +16,6 @@ export function createDemoState(now = new Date()): AppState {
 		id,
 		name,
 		color,
-		email: `${id}@example.test`,
 		active: id !== 'former',
 		role: i === 0 ? 'admin' : 'member',
 		bankCode: '970436',

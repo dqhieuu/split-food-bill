@@ -59,7 +59,7 @@ for (const member of state.members)
 		discordId: member.id.slice(8),
 		name: member.name,
 		username: member.name,
-		email: member.email,
+		email: '',
 		avatarUrl: '',
 		role: member.id === id('an') ? 'admin' : 'member',
 		createdAt: now,
