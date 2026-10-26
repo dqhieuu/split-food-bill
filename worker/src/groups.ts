@@ -165,8 +165,12 @@ export async function createGroup(store: Store, user: GlobalUser, env: Env, name
 				bankAccount: '',
 				color: '#44735a'
 			});
+		const existingUsers = await store.getMany<GlobalUser>(
+			profiles.map((profile) => `users/${userId(profile.id)}`),
+			tx
+		);
 		for (const profile of profiles) {
-			const existing = await store.get<GlobalUser>(`users/${userId(profile.id)}`, tx);
+			const existing = existingUsers.get(`users/${userId(profile.id)}`);
 			const member = members.find((entry) => entry.id === userId(profile.id))!;
 			if (!member.email) member.email = existing?.email ?? '';
 			if (!existing) writes.push(store.write(`users/${userId(profile.id)}`, profileUser(profile, null, env)));
@@ -188,10 +192,18 @@ export async function syncMembers(store: Store, env: Env, groupId: string, user:
 		throw new DomainError('Đồng bộ hiện hỗ trợ tối đa 200 thành viên mỗi máy chủ.', 400);
 	await store.transaction(async (tx, writes) => {
 		const { group: current } = await requireGroup(store, groupId, user.id, true, tx);
+		const existingMembers = await store.getMany<Member>(
+			profiles.map((profile) => `groups/${groupId}/members/${userId(profile.id)}`),
+			tx
+		);
+		const existingUsers = await store.getMany<GlobalUser>(
+			profiles.map((profile) => `users/${userId(profile.id)}`),
+			tx
+		);
 		for (const profile of profiles) {
 			const uid = userId(profile.id);
-			const member = await store.get<Member>(`groups/${groupId}/members/${uid}`, tx);
-			const globalUser = await store.get<GlobalUser>(`users/${uid}`, tx);
+			const member = existingMembers.get(`groups/${groupId}/members/${uid}`);
+			const globalUser = existingUsers.get(`users/${uid}`);
 			if (!member)
 				writes.push(
 					store.write(`groups/${groupId}/members/${uid}`, {

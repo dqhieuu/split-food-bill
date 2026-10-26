@@ -97,12 +97,7 @@ export class Store {
 	}
 	async get<T>(path: string, transaction?: string): Promise<T | null> {
 		if (transaction) {
-			const results = await this.call(':batchGet', {
-				method: 'POST',
-				body: JSON.stringify({ documents: [`${this.prefix}/${path}`], transaction })
-			});
-			const found = (Array.isArray(results) ? results : [results]).find((result) => result.found)?.found;
-			return found ? (fromFields(found.fields ?? {}) as T) : null;
+			return (await this.getMany<T>([path], transaction)).get(path) ?? null;
 		}
 		try {
 			const doc = await this.call(
@@ -113,6 +108,26 @@ export class Store {
 			if ((error as { status?: number }).status === 404) return null;
 			throw error;
 		}
+	}
+	async getMany<T>(paths: string[], transaction?: string): Promise<Map<string, T | null>> {
+		const documents = [...new Set(paths)];
+		const records = new Map<string, T | null>(documents.map((path) => [path, null]));
+		if (!documents.length) return records;
+		const results = await this.call(':batchGet', {
+			method: 'POST',
+			body: JSON.stringify({
+				documents: documents.map((path) => `${this.prefix}/${path}`),
+				...(transaction ? { transaction } : {})
+			})
+		});
+		// Firestore returns documents in arbitrary order and includes explicit missing records.
+		for (const result of Array.isArray(results) ? results : [results]) {
+			if (result.found) {
+				const path = result.found.name.slice(this.prefix.length + 1);
+				if (records.has(path)) records.set(path, fromFields(result.found.fields ?? {}) as T);
+			}
+		}
+		return records;
 	}
 	async list<T>(path: string, transaction?: string): Promise<T[]> {
 		if (transaction) {
