@@ -85,7 +85,7 @@ describe('spending calendar month', () => {
 		date,
 		lines: [],
 		total,
-		emailReceipt: false,
+		discordNotification: false,
 		memberNames: { an: 'Minh An', linh: 'Thảo Linh' }
 	});
 	const name = (b: Bill) => b.memberNames?.[b.organizer] ?? b.organizer;

@@ -65,7 +65,7 @@ export function createDemoState(now = new Date()): AppState {
 			date: date.toISOString(),
 			lines,
 			total: lines.reduce((s, l) => s + l.amount, 0),
-			emailReceipt: true
+			discordNotification: true
 		});
 		lines.forEach((l, i) => {
 			if (l.memberId !== organizer)
@@ -87,7 +87,12 @@ export function createDemoState(now = new Date()): AppState {
 			id,
 			billId: id,
 			status: day % 6 === 0 ? 'queued' : 'simulated',
-			recipients: participants.map((m) => m.email),
+			recipients: participants.map((m) => m.id),
+			deliveries: participants.map((m) => ({
+				memberId: m.id,
+				status: day % 6 === 0 ? 'queued' : 'simulated',
+				error: ''
+			})),
 			attempts: day % 6 === 0 ? 0 : 1,
 			error: '',
 			createdAt: date.toISOString()

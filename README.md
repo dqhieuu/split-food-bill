@@ -2,7 +2,7 @@
 
 A Vietnamese group expense SPA using SvelteKit, Svelte 5, TypeScript, shadcn-svelte, Tailwind, Firebase Authentication/Firestore and a Cloudflare Worker. Code and documentation are English; UI is Vietnamese.
 
-Discord is the only login method. Firebase user IDs are `discord_<Discord ID>`. Global administrators create groups linked to Discord channels. Group administrators activate imported members and manage group data. Global and group roles are independent.
+Discord is the only login method. Firebase user IDs are `discord_<Discord ID>`. Global administrators create groups linked to Discord servers. Group administrators activate imported members and manage group data. Global and group roles are independent.
 
 No service has been deployed. No existing data migration is required or included.
 
@@ -38,7 +38,7 @@ The local seed uses Discord-prefixed IDs directly. It replaces an old, uninitial
 | `/balances` | Số dư cá nhân        | Pairwise balances, recent charges and QR payment confirmation            |
 | `/matrix`   | Ma trận nợ nần       | Signed debt matrix and administrator hub reassignment                    |
 | `/activity` | Ledger               | Bills, immutable ledger, CSV export and simulated receipt retries        |
-| `/members`  | Thành viên & quản lý | Profiles/banks, activation, Discord sync/DMs, import, backup and audit   |
+| `/members`  | Thành viên & quản lý | Profiles/banks, activation, Discord sync, import, backup and audit       |
 | `/groups`   | Nhóm                 | Active group selection and global-administrator group creation           |
 
 Members can edit their own group profile and bank details. Group admins can edit other members and change their activation/role. IDs always come from Discord. The last selected active group is remembered across logins.
@@ -57,7 +57,7 @@ The organizer's own meal does not create self debt. Payments offset a member pai
 
 Bills and ledger entries remain immutable. Ledger import accepts normalized CSV/JSON with existing group member IDs, stable entry IDs and explicit ISO dates. Unknown member IDs are rejected; Discord sync must add them first. Imports commit in chunks of 150 and safely skip identical IDs on retry. JSON backup restoration currently supports ledger entries only; XLSX ingestion and full backup restoration are not implemented.
 
-Email receipt delivery remains simulated. Real Discord DMs are available only when a configured production Worker is deployed and a group admin explicitly sends them.
+The bill toggle sends Discord DM notifications to its participants after the bill is committed. Each message includes the bill, date, payer, personal share and total. Delivery results are persisted per recipient; organizers and group admins can retry failed deliveries without changing debt or resending successful notifications. Local mode simulates delivery; production uses the configured Discord bot. Email delivery is no longer part of the bill flow.
 
 ## Architecture and service setup
 
@@ -65,7 +65,7 @@ The frontend signs into Firebase with a custom token issued after Worker-side Di
 
 See [integration and deployment setup](docs/integrations.md) for the schema diagram, endpoint permissions, Discord application setup, Firebase IAM/rules, Worker secrets, Vercel configuration and automatic deployment instructions. The deployment workflow stays disabled until explicitly enabled in repository settings.
 
-State loads currently scan group collections and poll every 15 seconds. This is suitable for the internal review app; larger datasets should use projections and pagination. Group creation/sync currently accept up to 200 Discord members per channel and reject larger channels without truncating them.
+State loads currently scan group collections and poll every 15 seconds. This is suitable for the internal review app; larger datasets should use projections and pagination. Group creation/sync currently accept up to 200 Discord members per server and reject larger servers without truncating them.
 
 ## Verification
 

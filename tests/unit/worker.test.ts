@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Discord, canViewChannel, avatarUrl, mockProfiles } from '../../worker/src/discord';
+import { Discord, avatarUrl, mockProfiles } from '../../worker/src/discord';
 import { encode, decode, Store } from '../../worker/src/store';
 import { assertEnvironment, type Env } from '../../worker/src/env';
 import { profileUser, groupMember, requireGroup } from '../../worker/src/groups';
@@ -12,87 +12,38 @@ const local = {
 	FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099',
 	DISCORD_ADMIN_IDS: mockProfiles[0].id
 } as Env;
-describe('Discord channel permissions', () => {
-	const guild = { id: 'guild', owner_id: 'owner' };
-	const user = { user: { id: 'person', username: 'person' }, roles: ['a', 'b'] };
-	const roles = [
-		{ id: 'guild', permissions: '1024' },
-		{ id: 'a', permissions: '0' },
-		{ id: 'b', permissions: '0' }
-	];
-	const channel = { id: 'channel', guild_id: 'guild', name: 'lunch', type: 0 };
-	it('combines everyone, role allow/deny and member-specific overrides in Discord order', () => {
-		expect(canViewChannel(user, guild, roles, channel)).toBe(true);
-		const denied = {
-			...channel,
-			permission_overwrites: [{ id: 'guild', type: 0, deny: '1024', allow: '0' }]
-		};
-		expect(canViewChannel(user, guild, roles, denied)).toBe(false);
-		const allowed = {
-			...denied,
-			permission_overwrites: [
-				...denied.permission_overwrites,
-				{ id: 'a', type: 0, deny: '1024', allow: '0' },
-				{ id: 'b', type: 0, deny: '0', allow: '1024' }
-			]
-		};
-		expect(canViewChannel(user, guild, roles, allowed)).toBe(true);
-		expect(
-			canViewChannel(user, guild, roles, {
-				...allowed,
-				permission_overwrites: [
-					...allowed.permission_overwrites,
-					{ id: 'person', type: 1, allow: '0', deny: '1024' }
-				]
-			})
-		).toBe(false);
+describe('Discord server discovery and membership', () => {
+	it('restricts bot servers to the configured allowlist', async () => {
+		const discord = new Discord({ APP_ENV: 'production', DISCORD_GUILD_IDS: '300000000000000002' } as Env);
+		const api = vi.spyOn(discord, 'api').mockResolvedValue([
+			{ id: '300000000000000001', name: 'Lunch' },
+			{ id: '300000000000000002', name: 'Coffee' }
+		]);
+		expect(await discord.guilds()).toEqual([{ id: '300000000000000002', name: 'Coffee' }]);
+		expect(api).toHaveBeenCalledWith('/users/@me/guilds?limit=200&after=0');
 	});
-	it('honors server owner and administrator bypass without treating unrelated role permissions as membership', () => {
-		expect(canViewChannel({ ...user, user: { id: 'owner', username: 'owner' } }, guild, [], channel)).toBe(
-			true
+	it('paginates server membership and excludes bots and incomplete memberships without channel filtering', async () => {
+		const discord = new Discord({ APP_ENV: 'production' } as Env);
+		vi.spyOn(discord, 'guilds').mockResolvedValue([{ id: '300000000000000001', name: 'Lunch' }]);
+		const first = Array.from({ length: 1000 }, (_, i) => ({
+			user: { id: String(100000000000000001n + BigInt(i)), username: 'member', bot: i === 0 },
+			roles: [],
+			pending: i === 1
+		}));
+		const api = vi
+			.spyOn(discord, 'api')
+			.mockResolvedValueOnce(first)
+			.mockResolvedValueOnce([
+				{ user: { id: '100000000000001001', username: 'last' }, roles: [], nick: 'Last member' }
+			]);
+		const members = await discord.members('300000000000000001');
+		expect(members).toHaveLength(999);
+		expect(members.at(-1)?.global_name).toBe('Last member');
+		expect(api).toHaveBeenNthCalledWith(
+			2,
+			'/guilds/300000000000000001/members?limit=1000&after=100000000000001000'
 		);
-		expect(canViewChannel(user, guild, [{ id: 'a', permissions: '8' }], channel)).toBe(true);
-		expect(canViewChannel(user, guild, [{ id: 'unrelated', permissions: '8' }], channel)).toBe(false);
-	});
-	it('does not expose channels hidden from the bot or thread/voice channels', async () => {
-		const responses: Record<string, unknown> = {
-			'/users/@me/guilds?limit=200&after=0': [{ id: '300000000000000001' }],
-			'/users/@me': { id: '400000000000000001', username: 'bot' },
-			'/guilds/300000000000000001': { id: '300000000000000001', owner_id: 'owner' },
-			'/guilds/300000000000000001/roles': [{ id: '300000000000000001', permissions: '1024' }],
-			'/guilds/300000000000000001/members/400000000000000001': {
-				user: { id: '400000000000000001', username: 'bot' },
-				roles: []
-			},
-			'/guilds/300000000000000001/channels': [
-				{ id: 'visible', name: 'lunch', type: 0 },
-				{
-					id: 'hidden',
-					name: 'private',
-					type: 0,
-					permission_overwrites: [{ id: '300000000000000001', type: 0, allow: '0', deny: '1024' }]
-				},
-				{ id: 'voice', name: 'voice', type: 2 },
-				{ id: 'thread', name: 'thread', type: 11 }
-			]
-		};
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async (input: string) => {
-				const path = input.replace('https://discord.com/api/v10', '');
-				if (!(path in responses)) throw new Error(`Unexpected Discord endpoint: ${path}`);
-				return Response.json(responses[path]);
-			})
-		);
-		try {
-			const channels = await new Discord({
-				APP_ENV: 'production',
-				DISCORD_BOT_TOKEN: 'test'
-			} as Env).channels();
-			expect(channels.map((entry) => entry.id)).toEqual(['visible']);
-		} finally {
-			vi.unstubAllGlobals();
-		}
+		await expect(discord.members('300000000000000002')).rejects.toMatchObject({ status: 404 });
 	});
 });
 describe('global and group identity boundaries', () => {

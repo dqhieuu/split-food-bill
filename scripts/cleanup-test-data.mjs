@@ -11,7 +11,7 @@ export async function cleanupTestData() {
 	const root = db.doc('groups/local');
 	for (const document of (await db.collection('groups').get()).docs) {
 		if (/^E2E test group \d+$/.test(document.data().name ?? '')) {
-			await db.doc(`discordChannels/${document.data().discordChannelId}`).delete();
+			await db.doc(`discordGuilds/${document.data().discordGuildId}`).delete();
 			await db.recursiveDelete(document.ref);
 		}
 	}

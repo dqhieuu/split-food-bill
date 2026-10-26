@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Plus, ArrowLeft, ArrowRight, Check, Mail, ReceiptText } from '@lucide/svelte';
+	import { Plus, ArrowLeft, ArrowRight, Check, MessageCircle, ReceiptText } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
@@ -32,7 +32,7 @@
 	let discountInput = $state<number | null>(null);
 	let rounding = $state(DEFAULT_ROUNDING);
 	let unit = $state(1000);
-	let emailReceipt = $state(true);
+	let discordNotification = $state(true);
 	let confirmOpen = $state(false);
 	let attempted = $state(false);
 	let validation = $state('');
@@ -90,7 +90,7 @@
 				discountInput = draft.discountInput ?? null;
 				rounding = draft.rounding ?? DEFAULT_ROUNDING;
 				unit = draft.unit ?? 1000;
-				emailReceipt = draft.emailReceipt ?? true;
+				discordNotification = draft.discordNotification ?? true;
 				submissionId = draft.submissionId || crypto.randomUUID();
 			}
 		} catch {
@@ -116,7 +116,7 @@
 					discountInput,
 					rounding,
 					unit,
-					emailReceipt,
+					discordNotification,
 					submissionId
 				})
 			);
@@ -153,7 +153,7 @@
 					description,
 					date: new Date(`${date}T12:00:00+07:00`).toISOString(),
 					lines,
-					emailReceipt
+					discordNotification
 				},
 				'Đã ghi hóa đơn và cập nhật nợ.'
 			);
@@ -303,10 +303,10 @@
 				</div>{/if}
 			<div class="summary-total"><span>Tổng hóa đơn</span><strong>{currency(total)}</strong></div>
 			<div class="receipt-toggle">
-				<button type="button" tabindex="-1" onclick={() => (emailReceipt = !emailReceipt)}
-					><Mail size={17} /><strong>Gửi email hoá đơn</strong></button
+				<button type="button" tabindex="-1" onclick={() => (discordNotification = !discordNotification)}
+					><MessageCircle size={17} /><strong>Gửi thông báo qua Discord</strong></button
 				>
-				<Switch aria-label="Gửi email hoá đơn" bind:checked={emailReceipt} />
+				<Switch aria-label="Gửi thông báo qua Discord" bind:checked={discordNotification} />
 			</div>
 			{#if validation}<p class="validation-error" role="alert">{validation}</p>{/if}<Button
 				class="full-width"
@@ -336,7 +336,9 @@
 	</div>
 	<div class="summary-total"><span>Tổng cộng</span><strong>{currency(total)}</strong></div>
 	<p class="fine-print">
-		Người thanh toán: {payer.name} · {billDateLabel(date)}.{emailReceipt ? '' : ' Không gửi email hoá đơn.'}
+		Người thanh toán: {payer.name} · {billDateLabel(date)}.{discordNotification
+			? ''
+			: ' Không gửi thông báo Discord.'}
 	</p>
 	<div class="modal-actions">
 		<Button onclick={submit} disabled={busy}><Check size={16} />{busy ? 'Đang ghi…' : 'Xác nhận'}</Button>

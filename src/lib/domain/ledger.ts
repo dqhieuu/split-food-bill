@@ -188,7 +188,7 @@ export function applyCommand(
 				id: identifier,
 				description: text,
 				date: z.iso.datetime(),
-				emailReceipt: z.boolean(),
+				discordNotification: z.boolean(),
 				lines: z
 					.array(
 						z.object({
@@ -242,12 +242,13 @@ export function applyCommand(
 					reference: bill.id
 				});
 		});
-		if (bill.emailReceipt)
+		if (bill.discordNotification)
 			state.receipts.push({
 				id: bill.id,
 				billId: bill.id,
 				status: 'queued',
-				recipients: bill.lines.map((l) => requireMember(state, l.memberId).email).filter(Boolean),
+				recipients: bill.lines.map((line) => line.memberId),
+				deliveries: bill.lines.map((line) => ({ memberId: line.memberId, status: 'queued', error: '' })),
 				attempts: 0,
 				error: '',
 				createdAt: now
@@ -425,16 +426,6 @@ export function applyCommand(
 		else
 			state.members[index] = { ...data, ...(existing?.avatarUrl ? { avatarUrl: existing.avatarUrl } : {}) };
 		reference = data.id;
-	} else if (command === 'simulateReceipt') {
-		const data = z.object({ id: identifier, fail: z.boolean() }).parse(input);
-		const receipt = state.receipts.find((r) => r.id === data.id);
-		const bill = state.bills.find((b) => b.id === receipt?.billId);
-		if (!receipt || !bill) throw new DomainError('Không tìm thấy biên nhận.', 404);
-		if (bill.organizer !== actor) requireAdmin(state, actor);
-		receipt.status = data.fail ? 'failed' : 'simulated';
-		receipt.attempts++;
-		receipt.error = data.fail ? 'Lỗi gửi thử nghiệm. Có thể thử lại mà không ghi thêm khoản nợ.' : '';
-		reference = receipt.id;
 	} else if (command === 'saveArchive') {
 		requireAdmin(state, actor);
 		const data = z
@@ -486,16 +477,4 @@ export function applyCommand(
 	state.audit.push({ id: crypto.randomUUID(), actor, action: command, date: now, reference });
 	state.version++;
 	return { reference };
-}
-
-export function escapeHtml(value: string) {
-	return value.replace(
-		/[&<>"']/g,
-		(char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!
-	);
-}
-export function receiptHtml(bill: Bill, members: Member[]) {
-	const name = (id: string) =>
-		escapeHtml(bill.memberNames?.[id] || members.find((m) => m.id === id)?.name || id);
-	return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f6f3ec;font-family:Arial,sans-serif;color:#272c27"><table role="presentation" width="100%"><tr><td style="padding:32px 12px"><table role="presentation" style="max-width:600px;margin:auto;background:white;border-radius:16px;width:100%;border-collapse:collapse"><tr><td style="padding:32px"><p style="color:#315e47;font-size:13px;letter-spacing:3px">CHIA TIỀN ĂN</p><h1 style="font-size:26px">Biên nhận hóa đơn</h1><p>${escapeHtml(bill.description)}</p><p>Người thanh toán: <strong>${name(bill.organizer)}</strong> · ${billDateLabel(bill.date)}</p><p>Tạo: ${dateTimeLabel(bill.createdAt)}</p><table style="width:100%;text-align:left;border-collapse:collapse"><tr style="border-bottom:1px solid #ddd"><th style="padding:14px 0">Thành viên</th><th>Món ăn</th><th style="text-align:right">Số tiền</th></tr>${bill.lines.map((l) => `<tr><td style="padding:14px 0">${name(l.memberId)}</td><td>${escapeHtml(l.description)}${l.note ? `<br><small>${escapeHtml(l.note)}</small>` : ''}</td><td style="text-align:right">${currency(l.amount)}</td></tr>`).join('')}<tr style="border-top:1px dashed #aaa"><td colspan="2" style="padding:20px 0"><strong>Tổng cộng</strong></td><td style="text-align:right"><strong>${currency(bill.total)}</strong></td></tr></table><p style="color:#777;font-size:12px">Bản xem trước nội bộ · Chưa gửi email · Thanh toán được đối trừ theo từng cặp thành viên.</p></td></tr></table></td></tr></table></body></html>`;
 }

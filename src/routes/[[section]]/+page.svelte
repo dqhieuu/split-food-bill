@@ -216,21 +216,22 @@
 				aria-label="Đóng trình đơn"
 				onclick={() => (mobileMenu = false)}><X size={20} /></button
 			>
-			<div class="workspace">
-				<span class="workspace-symbol">CTA</span>
-				<div>
-					<strong>{group?.name || 'Chọn nhóm'}</strong><select
-						aria-label="Nhóm hiện tại"
-						value={selectedGroupId}
-						onchange={async (event) => {
-							if (event.currentTarget.value) await changeGroup(event.currentTarget.value);
-						}}
-					>
-						<option value="">Chọn nhóm</option>{#each sessionData?.groups ?? [] as item}<option
-								value={item.id}>{item.name}</option
-							>{/each}
-					</select>
-				</div>
+			<div class="workspace group-selector">
+				<span class="workspace-symbol" aria-hidden="true">CTA</span>
+				<strong class="workspace-label" aria-hidden="true">{group?.name || 'Chọn nhóm'}</strong>
+				<ChevronDown size={17} aria-hidden="true" />
+				<select
+					aria-label="Nhóm hiện tại"
+					value={selectedGroupId}
+					disabled={busy || !sessionData?.groups.length}
+					onchange={async (event) => {
+						if (event.currentTarget.value) await changeGroup(event.currentTarget.value);
+					}}
+				>
+					{#each sessionData?.groups ?? [] as item}<option value={item.id}
+							>{item.name}</option
+						>{/each}
+				</select>
 			</div>
 			<nav aria-label="Điều hướng chính">
 				{#each navigation as item}
@@ -369,7 +370,7 @@
 				<li>Giao diện tối và lịch chi tiêu theo ngày kèm âm lịch.</li>
 				<li>Chia đều có làm tròn lên; nhập từng người hỗ trợ giá sau khi giảm giá.</li>
 				<li>Tối giản nợ theo đúng thuật toán của bảng tính cũ.</li>
-				{#if preferences.testView}<li>Email hoá đơn và QR chỉ mô phỏng trong môi trường thử nghiệm.</li>{/if}
+				{#if preferences.testView}<li>Thông báo Discord được mô phỏng trong môi trường cục bộ.</li>{/if}
 			</ul>
 		</div>
 		<Button onclick={() => (releaseOpen = false)}>Đóng</Button>

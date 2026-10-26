@@ -25,7 +25,6 @@ export type GlobalUser = {
 export type Group = {
 	id: string;
 	name: string;
-	discordChannelId: string;
 	discordGuildId: string;
 	createdBy: string;
 	createdAt: string;
@@ -58,14 +57,20 @@ export type Bill = {
 	createdAt?: string;
 	lines: BillLine[];
 	total: number;
-	emailReceipt: boolean;
+	discordNotification: boolean;
 	memberNames?: Record<string, string>;
+};
+export type NotificationDelivery = {
+	memberId: string;
+	status: 'queued' | 'sending' | 'sent' | 'simulated' | 'failed';
+	error: string;
 };
 export type Receipt = {
 	id: string;
 	billId: string;
-	status: 'queued' | 'simulated' | 'failed';
+	status: NotificationDelivery['status'];
 	recipients: string[];
+	deliveries: NotificationDelivery[];
 	attempts: number;
 	error: string;
 	createdAt: string;

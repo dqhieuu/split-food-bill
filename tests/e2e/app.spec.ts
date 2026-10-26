@@ -75,13 +75,13 @@ test('group activation, distinct roles, group isolation and last-group selection
 		await expect(
 			memberPage.getByText('Bạn chưa được kích hoạt trong nhóm nào.', { exact: false })
 		).toBeVisible();
-		expect((await call(memberPage, member.token, '/api/discord/channels')).status()).toBe(403);
+		expect((await call(memberPage, member.token, '/api/discord/guilds')).status()).toBe(403);
 		await page.getByRole('link', { name: 'Nhóm', exact: true }).click();
 		await page.getByLabel('Tên nhóm', { exact: true }).fill(`E2E test group ${Date.now()}`);
 		await page
-			.getByRole('combobox', { name: 'Kênh Discord', exact: true })
-			.selectOption('200000000000000002');
-		await expect(page.getByText('3 người có quyền xem kênh.', { exact: false })).toBeVisible();
+			.getByRole('combobox', { name: 'Máy chủ Discord', exact: true })
+			.selectOption('300000000000000002');
+		await expect(page.getByText('3 thành viên trong máy chủ.', { exact: false })).toBeVisible();
 		const creation = page.waitForResponse(
 			(response) => response.url() === API + '/api/groups' && response.request().method() === 'POST'
 		);
@@ -114,26 +114,17 @@ test('group activation, distinct roles, group isolation and last-group selection
 			(
 				await call(memberPage, member.token, '/api/groups', {
 					name: 'forbidden',
-					discordChannelId: '200000000000000001'
+					discordGuildId: '300000000000000001'
 				})
 			).status()
 		).toBe(403);
-		const dmRequest = {
-			id: crypto.randomUUID(),
-			groupId: group.id,
-			recipients: [AN],
-			message: 'Local mock only'
-		};
-		const dm = await call(memberPage, member.token, '/api/discord/dm', dmRequest);
-		expect(dm.ok()).toBe(true);
-		expect((await dm.json()).results[0].status).toBe('simulated');
-		expect((await call(memberPage, member.token, '/api/discord/dm', dmRequest)).status()).toBe(409);
+
 		expect(
 			(
 				await call(
 					memberPage,
 					member.token,
-					`/api/discord/channels/200000000000000001/members?groupId=${group.id}`
+					`/api/discord/guilds/300000000000000001/members?groupId=${group.id}`
 				)
 			).status()
 		).toBe(403);
@@ -160,7 +151,7 @@ test('group activation, distinct roles, group isolation and last-group selection
 					id,
 					description: 'Group isolation',
 					date: new Date().toISOString(),
-					emailReceipt: false,
+					discordNotification: false,
 					lines: [{ memberId: LINH, amount: 12345, description: 'Meal', note: '' }]
 				})
 			).ok()
@@ -208,6 +199,7 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		await expect(money).toHaveValue('12.5');
 		await money.fill('');
 		await page.getByRole('textbox', { name: 'Tên hóa đơn', exact: true }).fill(title);
+		await expect(page.getByRole('switch', { name: 'Gửi thông báo qua Discord', exact: true })).toBeChecked();
 		await page.getByRole('button', { name: 'Chọn tất cả', exact: true }).click();
 		for (const button of await page.locator('.member-picker button').all()) {
 			const name = await button.innerText();
@@ -221,8 +213,8 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		const row = page.getByRole('row').filter({ hasText: title });
 		await row.locator('td').nth(3).click();
 		await expect(page.getByRole('dialog')).toContainText('102.000');
-		await page.getByRole('button', { name: 'Mô phỏng lỗi', exact: true }).click();
-		await page.getByRole('button', { name: 'Thử lại mô phỏng', exact: true }).click();
+		await expect(page.getByRole('dialog')).toContainText('Thông báo Discord');
+		await expect(page.getByRole('dialog')).toContainText('Đã mô phỏng');
 		await page.keyboard.press('Escape');
 		await page.getByRole('link', { name: 'Tổng quan', exact: true }).click();
 		await page.locator('.recent-panel .bill-row').first().click();
@@ -241,5 +233,69 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 	} finally {
 		await activate(page, admin.token, false);
+	}
+});
+
+test('ordinary bill creators notify participants once; opt-out and notification permissions are enforced', async ({
+	page,
+	browser
+}) => {
+	const admin = await login(page);
+	const context = await browser.newContext();
+	const memberPage = await context.newPage();
+	try {
+		await activate(page, admin.token, true);
+		const member = await login(memberPage, 'Thảo Linh');
+		const input = {
+			id: `e2e-notification-${Date.now()}`,
+			description: `Bữa trưa kiểm thử ${Date.now()}`,
+			date: new Date().toISOString(),
+			discordNotification: true,
+			lines: [
+				{ memberId: LINH, amount: 35000, description: 'Cơm', note: '' },
+				{ memberId: AN, amount: 45000, description: 'Phở', note: '' }
+			]
+		};
+		const response = await call(memberPage, member.token, '/api/groups/local/commands/createBill', input);
+		expect(response.ok()).toBe(true);
+		const first = await response.json();
+		const receipt = first.state.receipts.find((receipt: { id: string }) => receipt.id === input.id);
+		expect(receipt).toMatchObject({ recipients: [LINH, AN], status: 'simulated', attempts: 1 });
+		expect(receipt.deliveries).toHaveLength(2);
+		await call(memberPage, member.token, '/api/groups/local/commands/createBill', input);
+		const retry = await call(memberPage, member.token, '/api/discord/dm', {
+			groupId: 'local',
+			billId: input.id
+		});
+		expect(retry.ok()).toBe(true);
+		const replayed = (await retry.json()).state;
+		expect(replayed.receipts.find((item: { id: string }) => item.id === input.id).attempts).toBe(1);
+		expect(replayed.bills.filter((item: { id: string }) => item.id === input.id)).toHaveLength(1);
+		expect(
+			replayed.ledger.filter((entry: { reference: string }) => entry.reference === input.id)
+		).toHaveLength(1);
+		const optedOut = { ...input, id: input.id + '-off', discordNotification: false };
+		const saved = await (
+			await call(page, admin.token, '/api/groups/local/commands/createBill', optedOut)
+		).json();
+		expect(saved.state.receipts.some((item: { id: string }) => item.id === optedOut.id)).toBe(false);
+		expect(
+			(
+				await call(memberPage, member.token, '/api/discord/dm', { groupId: 'local', billId: optedOut.id })
+			).status()
+		).toBe(403);
+		expect(
+			(
+				await call(memberPage, member.token, '/api/discord/dm', {
+					groupId: 'local',
+					billId: input.id,
+					recipients: [AN],
+					message: 'arbitrary text'
+				})
+			).status()
+		).toBe(400);
+	} finally {
+		await activate(page, admin.token, false);
+		await context.close();
 	}
 });

@@ -9,7 +9,7 @@ const bill = (id: string, date: string, total: number): Bill => ({
 	total,
 	organizer: 'an',
 	description: id,
-	emailReceipt: false,
+	discordNotification: false,
 	lines: [{ memberId: 'linh', amount: total, description: id, note: '' }]
 });
 

@@ -127,19 +127,18 @@ export async function groupCommand(
 		return { state, result, actor: uid, group: { ...group, version: state.version } };
 	});
 }
-export async function createGroup(store: Store, user: GlobalUser, env: Env, name: string, channelId: string) {
+export async function createGroup(store: Store, user: GlobalUser, env: Env, name: string, guildId: string) {
 	if (user.role !== 'admin') throw new DomainError('Chỉ quản trị viên hệ thống được tạo nhóm.', 403);
 	const discord = new Discord(env);
-	const channel = (await discord.channels()).find((channel) => channel.id === channelId);
-	if (!channel) throw new DomainError('Kênh Discord không hợp lệ.', 400);
-	const profiles = await discord.members(channelId);
+	const guild = (await discord.guilds()).find((entry) => entry.id === guildId);
+	if (!guild) throw new DomainError('Máy chủ Discord không hợp lệ.', 400);
+	const profiles = await discord.members(guildId);
 	if (profiles.length > 200)
-		throw new DomainError('Nhóm hiện hỗ trợ tối đa 200 thành viên. Chọn kênh nhỏ hơn.', 400);
+		throw new DomainError('Nhóm hiện hỗ trợ tối đa 200 thành viên. Chọn máy chủ nhỏ hơn.', 400);
 	const group: Group = {
 		id: crypto.randomUUID(),
 		name,
-		discordChannelId: channelId,
-		discordGuildId: channel.guild_id,
+		discordGuildId: guildId,
 		createdBy: user.id,
 		createdAt: new Date().toISOString(),
 		version: 1
@@ -147,8 +146,8 @@ export async function createGroup(store: Store, user: GlobalUser, env: Env, name
 	return store.transaction(async (tx, writes) => {
 		const current = await store.get<GlobalUser>(`users/${user.id}`, tx);
 		if (current?.role !== 'admin') throw new DomainError('Bạn không có quyền tạo nhóm.', 403);
-		if (await store.get(`discordChannels/${channelId}`, tx))
-			throw new DomainError('Kênh này đã liên kết với một nhóm.', 409);
+		if (await store.get(`discordGuilds/${guildId}`, tx))
+			throw new DomainError('Máy chủ này đã liên kết với một nhóm.', 409);
 		const members = profiles.map((profile) => groupMember(profile, env));
 		const creator = members.find((member) => member.id === user.id);
 		if (creator) {
@@ -174,7 +173,7 @@ export async function createGroup(store: Store, user: GlobalUser, env: Env, name
 		}
 		writes.push(
 			store.write(`groups/${group.id}`, group, true),
-			store.write(`discordChannels/${channelId}`, { channelId, groupId: group.id }, true)
+			store.write(`discordGuilds/${guildId}`, { guildId, groupId: group.id }, true)
 		);
 		for (const member of members) writes.push(store.write(`groups/${group.id}/members/${member.id}`, member));
 		writes.push(store.write(`users/${user.id}`, { ...current, lastActiveGroupId: group.id }));
@@ -184,9 +183,9 @@ export async function createGroup(store: Store, user: GlobalUser, env: Env, name
 }
 export async function syncMembers(store: Store, env: Env, groupId: string, user: GlobalUser) {
 	const { group } = await requireGroup(store, groupId, user.id, true);
-	const profiles = await new Discord(env).members(group.discordChannelId);
+	const profiles = await new Discord(env).members(group.discordGuildId);
 	if (profiles.length > 200)
-		throw new DomainError('Đồng bộ hiện hỗ trợ tối đa 200 thành viên mỗi kênh.', 400);
+		throw new DomainError('Đồng bộ hiện hỗ trợ tối đa 200 thành viên mỗi máy chủ.', 400);
 	await store.transaction(async (tx, writes) => {
 		const { group: current } = await requireGroup(store, groupId, user.id, true, tx);
 		for (const profile of profiles) {

@@ -5,7 +5,6 @@ import {
 	netBalance,
 	settlementPlan,
 	splitAmount,
-	receiptHtml,
 	dateTimeLabel,
 	billDateLabel
 } from '../../src/lib/domain/ledger';
@@ -27,7 +26,7 @@ describe('creation timestamps', () => {
 			id: 'backdated',
 			date: '2026-01-01T05:00:00.000Z',
 			description: 'Earlier meal',
-			emailReceipt: true,
+			discordNotification: true,
 			createdAt: '2000-01-01T00:00:00.000Z',
 			lines: [{ memberId: 'linh', amount: 10000, description: '', note: '' }]
 		};
@@ -130,7 +129,7 @@ describe('ledger accounting', () => {
 			id: 'test-bill',
 			description: 'Lunch',
 			date: now,
-			emailReceipt: true,
+			discordNotification: true,
 			lines: [
 				{ memberId: 'an', amount: 55000, description: '', note: '' },
 				{ memberId: 'linh', amount: 60000, description: 'Noodles', note: 'No chili' }
@@ -143,8 +142,10 @@ describe('ledger accounting', () => {
 		expect(state.bills.find((b) => b.id === input.id)?.total).toBe(115000);
 		expect(state.receipts.filter((r) => r.billId === input.id)).toHaveLength(1);
 		const balance = netBalance(state.ledger, 'an');
-		applyCommand(state, 'an', 'simulateReceipt', { id: input.id, fail: true }, now);
-		applyCommand(state, 'an', 'simulateReceipt', { id: input.id, fail: false }, now);
+		expect(state.receipts.find((r) => r.billId === input.id)?.recipients).toEqual(['an', 'linh']);
+		expect(
+			state.receipts.find((r) => r.billId === input.id)?.deliveries.every((d) => d.status === 'queued')
+		).toBe(true);
 		expect(netBalance(state.ledger, 'an')).toBe(balance);
 		expect(state.ledger.length).toBe(before + 1);
 	});
@@ -323,30 +324,6 @@ describe('migration and receipts', () => {
 		expect(() =>
 			applyCommand(state, 'an', 'importLedger', { entries: [{ ...rows[0], amount: 2 }] }, now)
 		).toThrow();
-	});
-	it('escapes receipt content and freezes participant names at posting time', () => {
-		const state = fresh();
-		applyCommand(
-			state,
-			'an',
-			'createBill',
-			{
-				id: 'escape',
-				description: '<img src=x onerror=alert(1)>',
-				date: now,
-				emailReceipt: true,
-				lines: [{ memberId: 'an', amount: 1, description: '<script>bad</script>', note: '& " >' }]
-			},
-			now
-		);
-		const bill = state.bills.find((b) => b.id === 'escape')!;
-		state.members.find((m) => m.id === 'an')!.name = 'Changed';
-		const html = receiptHtml(bill, state.members);
-		expect(html).not.toContain('<script>');
-		expect(html).not.toContain('<img src=x');
-		expect(html).toContain('&lt;script&gt;');
-		expect(html).toContain('Minh An');
-		expect(html).not.toContain('Changed');
 	});
 	it('generates an offline VietQR payload with a verified checksum', () => {
 		expect(crc16('123456789')).toBe('29B1');

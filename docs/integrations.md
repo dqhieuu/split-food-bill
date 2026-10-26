@@ -48,7 +48,7 @@ erDiagram
     GROUPS ||--o{ SETTLEMENTS : contains
     GROUPS ||--o{ ARCHIVES : contains
     GROUPS ||--o{ AUDIT : contains
-    GROUPS ||--|| DISCORD_CHANNELS : unique_channel
+    GROUPS ||--|| DISCORD_GUILDS : unique_server
     MEMBERS ||--o{ BILLS : organizer
     MEMBERS ||--o{ LEDGER : "from / to / creator"
     BILLS ||--o{ RECEIPTS : billId
@@ -67,8 +67,7 @@ erDiagram
     GROUPS {
         string id PK
         string name
-        string discordChannelId UK
-        string discordGuildId
+        string discordGuildId UK
         string createdBy FK
         string createdAt
         number version
@@ -87,18 +86,18 @@ erDiagram
     }
 ```
 
-| Path                                | Purpose / remaining fields                                                                                                                                                   |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `users/{discord_userId}`            | Global identity/profile/role and last selected group, as above                                                                                                               |
-| `groups/{groupId}`                  | Channel association and financial version, as above                                                                                                                          |
-| `discordChannels/{channelId}`       | `channelId`, `groupId`; transactional uniqueness index                                                                                                                       |
-| `groups/{groupId}/members/{userId}` | Group profile, role, activation and bank details                                                                                                                             |
-| `groups/{groupId}/bills/{id}`       | `id`, `organizer`, `description`, `date`, `createdAt`, `lines[]`, `total`, `emailReceipt`, optional `memberNames`; each line has `memberId`, `amount`, `description`, `note` |
-| `groups/{groupId}/ledger/{id}`      | `id`, `from`, `to`, `type`, `amount`, `date`, `createdAt`, `description`, `note`, `creator`, `source`, `reference`, optional `legacySequence`                                |
-| `groups/{groupId}/receipts/{id}`    | `id`, `billId`, `status`, `recipients[]`, `attempts`, `error`, `createdAt`; simulated email delivery                                                                         |
-| `groups/{groupId}/settlements/{id}` | `id`, `hub`, `date`, `creator`, `version`, `entryCount`                                                                                                                      |
-| `groups/{groupId}/archives/{id}`    | `id`, `name`, `url`, `date`                                                                                                                                                  |
-| `groups/{groupId}/audit/{id}`       | `id`, `actor`, `action`, `date`, `reference`                                                                                                                                 |
+| Path                                | Purpose / remaining fields                                                                                                                                                          |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users/{discord_userId}`            | Global identity/profile/role and last selected group, as above                                                                                                                      |
+| `groups/{groupId}`                  | Server association and financial version, as above                                                                                                                                  |
+| `discordGuilds/{guildId}`           | `guildId`, `groupId`; transactional uniqueness index                                                                                                                                |
+| `groups/{groupId}/members/{userId}` | Group profile, role, activation and bank details                                                                                                                                    |
+| `groups/{groupId}/bills/{id}`       | `id`, `organizer`, `description`, `date`, `createdAt`, `lines[]`, `total`, `discordNotification`, optional `memberNames`; each line has `memberId`, `amount`, `description`, `note` |
+| `groups/{groupId}/ledger/{id}`      | `id`, `from`, `to`, `type`, `amount`, `date`, `createdAt`, `description`, `note`, `creator`, `source`, `reference`, optional `legacySequence`                                       |
+| `groups/{groupId}/receipts/{id}`    | `id`, `billId`, `status`, `recipients[]` (Discord user IDs), `deliveries[]` (`memberId`, `status`, `error`), `attempts`, `error`, `createdAt`; Discord notification outbox          |
+| `groups/{groupId}/settlements/{id}` | `id`, `hub`, `date`, `creator`, `version`, `entryCount`                                                                                                                             |
+| `groups/{groupId}/archives/{id}`    | `id`, `name`, `url`, `date`                                                                                                                                                         |
+| `groups/{groupId}/audit/{id}`       | `id`, `actor`, `action`, `date`, `reference`                                                                                                                                        |
 
 The group is represented by the Firestore path, not a redundant `groupId` field in each child record. Member IDs repeat across groups, while bank details and display names can differ per group. Amounts are integer VND; dates are ISO strings. `bankCode` resolves a bank BIN for QR generation and `color` is an internal avatar fallback; neither has a dedicated configuration control. Removed fields such as `bankName` and department are absent.
 
@@ -106,8 +105,8 @@ Cloudflare Durable Object storage holds short-lived OAuth states, one-use handof
 
 ## Roles and membership
 
-- A **global admin** may list the bot's channels, inspect their members and create a group. A global admin does not bypass inactive group membership.
-- A **group admin** must be active. They manage activation/roles/profiles, sync members, send group DMs, import history and simplify debt. Group admin status does not grant group-creation privileges.
+- A **global admin** may list the bot's servers, inspect their members and create a group. A global admin does not bypass inactive group membership.
+- A **group admin** must be active. They manage activation/roles/profiles, sync members, retry bill notifications, import history and simplify debt. Group admin status does not grant group-creation privileges.
 - An **active group member** may access the group's state, create bills, confirm their own QR payments and update their own group profile. The backend determines the actor from the token.
 - Imported members always start inactive with group role `member`. The creator is the bootstrap exception: active group admin, allowing them to activate everyone else. Self-deactivation/demotion is blocked by the current management command.
 - Inactive members cannot read or mutate group state, even if their financial records remain for history. The last selected group is persisted in the global user document. Login falls back to another active group if access to the remembered group was removed.
@@ -123,7 +122,7 @@ npm run dev
 
 Prerequisites: Node.js 24 LTS and Java 21+. The local launcher runs Firebase emulators for `demo-lunchroom`, seeds a fresh Discord-based fixture when needed, starts Wrangler on `127.0.0.1:8787`, and starts Vite on `127.0.0.1:5173`. The first Firebase run may download emulator binaries. Use the login button and pick one of the mock Discord accounts.
 
-The seeded Minh An (`discord_100000000000000001`) is the global admin and local group's active admin. The other users are inactive. Activate Thảo Linh or Quang Huy in member management before testing their group access. A second mock channel is available for testing group creation. No real OAuth, Discord API calls or DMs occur in local mode, even if credentials exist in the shell.
+The seeded Minh An (`discord_100000000000000001`) is the global admin and local group's active admin. The other users are inactive. Activate Thảo Linh or Quang Huy in member management before testing their group access. A second mock server is available for testing group creation. No real OAuth, Discord API calls or DMs occur in local mode, even if credentials exist in the shell.
 
 Local configuration is committed under `env.local` in `wrangler.jsonc`. `.env.example` contains the frontend's `VITE_WORKER_API_URL`; Vite defaults to the local Worker URL during development. Local database/auth hosts cannot point at production. Emulator snapshots and Wrangler storage are ignored by Git.
 
@@ -142,13 +141,13 @@ npm run dev:web
 
 1. Create an application in the [Discord Developer Portal](https://discord.com/developers/applications). Record its application/client ID and generate an OAuth client secret.
 2. Create/configure its bot and obtain a bot token. Under Bot → Privileged Gateway Intents, enable **Server Members Intent** (`GUILD_MEMBERS`); approval may be required for eligible verified apps. Listing guild members requires this intent even though this app uses REST rather than a persistent Gateway connection. See [List Guild Members](https://docs.discord.com/developers/resources/guild#list-guild-members).
-3. Install the bot into the intended server with the `bot` scope. Grant View Channels for the target text channels and permission to send the requested messages. No Administrator or Message Content intent is required by this implementation. Recipient privacy settings may still prevent DMs.
+3. Install the bot into the intended server with the `bot` scope. The bot needs access to the server member list and permission to send DMs to the recipients. No Administrator or Message Content intent is required by this implementation. Recipient privacy settings may still prevent DMs.
 4. Under OAuth2, add exactly `https://YOUR-WORKER-HOST/auth/callback` as a redirect URI. The Worker requests user scopes `identify email`; it never uses email as identity. See [Discord OAuth2](https://docs.discord.com/developers/topics/oauth2).
 5. Enable Discord Developer Mode and copy the intended administrators' numeric user IDs. Set them in `DISCORD_ADMIN_IDS` as a comma-separated list. Optionally restrict server discovery with comma-separated `DISCORD_GUILD_IDS`.
 
-“Members of a channel” means non-bot guild members who can view it, after applying owner/admin, everyone-role, combined role and member-specific overwrites. Bot-visible channels are checked with the bot's own permissions. Text and announcement channels are supported; voice presence and thread membership are different features and are not included. See [Discord permissions](https://docs.discord.com/developers/topics/permissions).
+Groups link to a Discord server (called a guild in the API). Server discovery lists servers the bot has joined, optionally restricted by `DISCORD_GUILD_IDS`. Member sync paginates that server’s member list and excludes bots and incomplete memberships. Channel visibility and channel-specific overwrites do not determine group membership.
 
-Synchronization adds missing users and inactive memberships. Existing names/bank details, activation and group roles are retained. Users who leave Discord are retained for history and must be deactivated by a group admin; sync is not automatic revocation. Creation/sync currently reject channels over 200 visible human members instead of truncating them. Large servers may also need increased Worker request budgets and a background sync design.
+Synchronization adds missing users and inactive memberships. Existing names/bank details, activation and group roles are retained. Users who leave Discord are retained for history and must be deactivated by a group admin; sync is not automatic revocation. Creation/sync currently reject servers over 200 non-bot members instead of truncating them. Large servers may also need increased Worker request budgets and a background sync design.
 
 ## Connect Firebase
 
@@ -179,21 +178,15 @@ Edit the top-level production `vars` in `wrangler.jsonc`; retain the separate lo
 
 Remove all placeholder values. Production refuses emulator flags, demo project IDs and placeholder frontend URLs. Configure the Worker name/account for your Cloudflare account. The Worker uses the `AUTH_SESSIONS` SQLite Durable Object binding already declared in Wrangler.
 
-When ready to configure the remote account:
+Authenticate the CLI without deploying:
 
 ```powershell
 npx wrangler login
-npx wrangler secret put FIREBASE_CLIENT_EMAIL
-npx wrangler secret put FIREBASE_PRIVATE_KEY
-npx wrangler secret put DISCORD_CLIENT_ID
-npx wrangler secret put DISCORD_CLIENT_SECRET
-npx wrangler secret put DISCORD_BOT_TOKEN
-npx wrangler secret put DISCORD_ADMIN_IDS
-# Optional server allowlist:
-npx wrangler secret put DISCORD_GUILD_IDS
 ```
 
-Use the top-level production environment for these commands, not `--env local`. Follow Wrangler's prompt to create the Worker if it does not exist yet. The private key accepts either literal PEM newlines or escaped `\n` characters. Keep service-account JSON, OAuth secrets and bot tokens out of Git and frontend environment variables. [Cloudflare secrets documentation](https://developers.cloudflare.com/workers/configuration/secrets/) explains storage and rotation.
+Prepare `.dev.vars.production.json` locally with these keys: `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, `DISCORD_ADMIN_IDS`, and optional `DISCORD_GUILD_IDS`. This filename is ignored by the repository's `.dev.vars.*` rule. Copy `client_email` and `private_key` from the downloaded service-account JSON. The private key accepts PEM newlines or escaped `\n` characters; use a JSON serializer when copying a multiline key. Admin/server ID values are comma-separated numeric Discord IDs.
+
+Keep service-account JSON, OAuth secrets and bot tokens out of Git and frontend environment variables. Do not use `wrangler secret put` as a preparation-only command: it creates and immediately deploys a Worker version. The deployment below uploads secrets and code together. See [Cloudflare secrets documentation](https://developers.cloudflare.com/workers/configuration/secrets/).
 
 Check the bundle without deploying:
 
@@ -202,7 +195,13 @@ npm run check:worker
 npm run build:worker
 ```
 
-After reviewing the app and completing configuration, the deployment command is `npm run deploy:worker`. It deploys the API and provisions its declared Durable Object class. Set Discord's callback to the resulting stable Worker hostname. A successful production `/health` confirms required configuration is present; it does not test every external permission or credential. Validate real OAuth, a small channel sync and an explicitly requested test DM in a staging environment before general use.
+After reviewing the app and completing configuration, deploy the top-level production environment with code and secrets together:
+
+```powershell
+npm run deploy:worker -- --secrets-file .dev.vars.production.json
+```
+
+It deploys the API and provisions its declared Durable Object class. Set Discord's callback to the resulting stable Worker hostname. A successful production `/health` confirms required configuration is present; it does not test every external permission or credential. Validate real OAuth, a small server sync and a bill notification in a staging environment before general use. Future `npm run deploy:worker` calls preserve remote secrets; use `wrangler secret put` when deliberately rotating a remote secret.
 
 ## Connect Vercel
 
@@ -219,7 +218,7 @@ Use a separate staging Worker/Firebase project and configured staging origin for
 
 After reviewing the implementation and configuring production:
 
-1. Configure the production values in `wrangler.jsonc` and set the remote Worker secrets above.
+1. Configure the production values in `wrangler.jsonc` and perform the initial deployment with the secrets file above.
 2. In GitHub repository settings, add secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. Use a token authorized to edit Workers in the intended Cloudflare account, including the declared Durable Object binding.
 3. Configure the GitHub `production` environment if using environment-level secrets or review rules.
 4. Set repository variable `CLOUDFLARE_DEPLOY_ENABLED` to `true` only when automatic deployment is wanted. Merge to `main` or manually dispatch the workflow. Application secrets remain in Cloudflare and are not copied into build artifacts.
@@ -230,32 +229,34 @@ Vercel's Git integration can independently build the frontend on pushes. Worker 
 
 All `/api/*` routes require `Authorization: Bearer <Firebase ID token>`. Inputs use backend validation; an actor supplied in JSON does not override the authenticated UID.
 
-| Method / path                                                    | Access                                                        |
-| ---------------------------------------------------------------- | ------------------------------------------------------------- |
-| `GET /health`, `GET /config`                                     | Public configuration/health                                   |
-| `GET /auth/discord`, `GET /auth/callback`, `POST /auth/exchange` | OAuth flow; state/handoff constraints apply                   |
-| `GET/POST /auth/mock`                                            | Loopback local environment only                               |
-| `GET /api/session`                                               | Signed-in global user; returns active groups and selection    |
-| `POST /api/groups`                                               | Global admin; body `{name, discordChannelId}`                 |
-| `POST /api/groups/{id}/select`                                   | Active group member; remembers selection                      |
-| `GET /api/groups/{id}/state`                                     | Active group member                                           |
-| `POST /api/groups/{id}/commands/{command}`                       | Active membership plus command-specific group role            |
-| `GET /api/discord/channels`                                      | Global admin                                                  |
-| `GET /api/discord/channels/{channelId}/members`                  | Global admin, or active group admin with matching `?groupId=` |
-| `POST /api/discord/dm`                                           | Active group admin; recipients must exist in that group       |
+| Method / path                                                    | Access                                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `GET /health`, `GET /config`                                     | Public configuration/health                                               |
+| `GET /auth/discord`, `GET /auth/callback`, `POST /auth/exchange` | OAuth flow; state/handoff constraints apply                               |
+| `GET/POST /auth/mock`                                            | Loopback local environment only                                           |
+| `GET /api/session`                                               | Signed-in global user; returns active groups and selection                |
+| `POST /api/groups`                                               | Global admin; body `{name, discordGuildId}`                               |
+| `POST /api/groups/{id}/select`                                   | Active group member; remembers selection                                  |
+| `GET /api/groups/{id}/state`                                     | Active group member                                                       |
+| `POST /api/groups/{id}/commands/{command}`                       | Active membership plus command-specific group role                        |
+| `GET /api/discord/guilds`                                        | Global admin                                                              |
+| `GET /api/discord/guilds/{guildId}/members`                      | Global admin, or active group admin with matching `?groupId=`             |
+| `POST /api/discord/dm`                                           | Bill organizer or active group admin; recipients come from the saved bill |
 
-DM body:
+Bill notification retry body:
 
 ```json
 {
-	"id": "12f8d889-cd21-4a22-a10c-c0a48dba1bd7",
 	"groupId": "GROUP_ID",
-	"recipients": ["discord_123456789012345678"],
-	"message": "Nội dung tin nhắn"
+	"billId": "BILL_ID"
 }
 ```
 
-DM batches accept 1–20 recipients and up to 2,000 characters. Results identify each recipient with `sent`, `failed`, or local-only `simulated`. The same sender/request ID cannot attempt delivery twice for one hour; each sender is limited to five batches per minute. A batch claim happens before sending and before the rate check, so an uncertain response or failed batch is not automatically retried with that ID. Partial failures are returned individually. Discord rate limits, privacy settings and bot permissions can prevent delivery. This is at-most-once attempt protection rather than a guaranteed delivery queue. DMs are explicit admin actions, not automatic debt notifications.
+Logging a bill with `discordNotification: true` creates a notification outbox atomically with the bill and debt entries, then dispatches its DMs after the financial transaction commits. Recipients are the saved bill's participants, including the payer when they have a meal line. The backend constructs personalized Vietnamese content from the frozen bill; callers cannot supply arbitrary messages or recipient IDs. The toggle defaults on and opt-out creates no outbox.
+
+Per-recipient status is `queued`, `sending`, `sent`, `simulated` (local only), or `failed`. The bill detail shows these results. Organizers and group admins can retry failed notifications through this endpoint or `retryBillNotification`; retries skip successful deliveries. A Firestore claim prevents concurrent/repeated bill requests from resending completed notifications. Discord requests use stable per-bill/recipient nonces with `enforce_nonce`, providing Discord's additional short-window duplicate suppression. See [Create Message](https://docs.discord.com/developers/resources/message#create-message).
+
+DM failures never roll back a committed bill or post additional debt. Recipient privacy settings, bot permissions or rate limits can prevent delivery. Results are saved per recipient; interrupted requests may leave a `sending` status requiring operator inspection, rather than an automatic retry with an uncertain outcome. Delivery is currently processed within the request with up to four sends in parallel, not a background delivery queue. Larger recipient lists can exceed a Worker plan's subrequest budget; use a suitable plan or add a queue before scaling. No real DMs are sent in local mode.
 
 ## Verification and current limits
 
@@ -273,4 +274,4 @@ Unit and local browser tests cover identity/permission rules, OAuth replay rejec
 
 On Windows, forcing the Vercel adapter locally with `VERCEL=1` can fail while creating route symlinks (`EPERM`) when the OS account lacks symbolic-link privileges. The default local Node-adapter build does not require these links. The frontend compilation was checked locally; final Vercel adapter packaging still needs verification in Vercel's Linux build environment.
 
-Group snapshots currently scan all seven collections and refresh by polling every 15 seconds. Transactions reject more than 450 changed documents. Discord creation/sync is bounded to 200 channel members. Group discovery currently scans groups server-side to find active memberships. Larger installations should add indexed membership discovery, paginated/projection reads and background jobs. Email receipts remain simulated in both environments; sending email is outside the Discord integration implemented here.
+Group snapshots currently scan all seven collections and refresh by polling every 15 seconds. Transactions reject more than 450 changed documents. Discord creation/sync is bounded to 200 server members. Group discovery currently scans groups server-side to find active memberships. Larger installations should add indexed membership discovery, paginated/projection reads and background jobs. Bill notifications use Discord DMs in production and simulated Discord delivery locally; email receipts have been removed.

@@ -7,7 +7,8 @@ if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080')
 	throw new Error('Seeding requires the local Firestore emulator.');
 const db = getFirestore(initializeApp({ projectId: 'demo-lunchroom' }, 'discord-local-seed'));
 const root = db.doc('groups/local');
-if ((await root.get()).data()?.discordChannelId) {
+const fixture = (await root.get()).data();
+if (fixture?.discordGuildId && !fixture.discordChannelId) {
 	console.log('Local Discord fixtures are already initialized.');
 	await db.terminate();
 	process.exit(0);
@@ -44,6 +45,12 @@ for (const entry of state.ledger) {
 	entry.creator = id(entry.creator);
 }
 for (const event of state.audit) event.actor = id(event.actor);
+for (const receipt of state.receipts) {
+	receipt.recipients = receipt.recipients.map(id);
+	receipt.deliveries.forEach((delivery) => {
+		delivery.memberId = id(delivery.memberId);
+	});
+}
 const now = new Date().toISOString();
 const batch = db.batch();
 for (const member of state.members)
@@ -61,14 +68,13 @@ for (const member of state.members)
 batch.set(root, {
 	id: 'local',
 	name: 'Hội ăn trưa',
-	discordChannelId: '200000000000000001',
 	discordGuildId: '300000000000000001',
 	createdBy: id('an'),
 	createdAt: now,
 	version: state.version
 });
-batch.set(db.doc('discordChannels/200000000000000001'), {
-	channelId: '200000000000000001',
+batch.set(db.doc('discordGuilds/300000000000000001'), {
+	guildId: '300000000000000001',
 	groupId: 'local'
 });
 for (const key of ['members', 'bills', 'ledger', 'receipts', 'settlements', 'archives', 'audit'])

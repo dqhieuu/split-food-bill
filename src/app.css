@@ -1672,13 +1672,6 @@ footer {
 	word-break: break-word;
 	margin: 9px 0 14px;
 }
-.email-preview {
-	width: 100%;
-	height: 530px;
-	border: 1px solid light-dark(#e4e8d9, #292b22);
-	border-radius: 8px;
-	background: light-dark(white, #1c211d);
-}
 .two-panels {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
@@ -2779,9 +2772,6 @@ footer {
 	}
 	.modal-actions [data-slot='button'] {
 		font-size: 13px;
-	}
-	.email-preview {
-		height: 60dvh;
 	}
 	.toast > svg {
 		width: 16px;
@@ -4182,12 +4172,43 @@ button.payment-history-row {
 	font-size: 12px;
 	color: var(--muted-foreground);
 }
-.workspace select {
+.group-selector {
+	position: relative;
+	min-height: 64px;
+	transition:
+		border-color 0.15s,
+		background-color 0.15s;
+}
+.group-selector:hover {
+	border-color: var(--primary);
+	background: light-dark(#eff2e8, #252e24);
+}
+.group-selector:focus-within {
+	outline: 2px solid light-dark(#6b9576, #628c6d);
+	outline-offset: 3px;
+}
+.workspace-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.group-selector > svg,
+.group-selector .workspace-symbol {
+	flex-shrink: 0;
+}
+.group-selector select {
+	position: absolute;
+	inset: 0;
 	width: 100%;
-	height: 30px;
-	font-size: 12px;
-	margin-top: 6px;
-	padding: 2px 18px 2px 4px;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	opacity: 0;
+	cursor: pointer;
+}
+.group-selector select:disabled {
+	cursor: default;
 }
 .account-current small {
 	display: block;
@@ -4203,21 +4224,4 @@ button.payment-history-row {
 	.groups-layout {
 		grid-template-columns: minmax(0, 1fr);
 	}
-}
-.discord-message-panel {
-	margin-top: 22px;
-}
-.discord-message-panel .member-picker {
-	margin: 16px 0;
-}
-.discord-message-panel textarea {
-	min-height: 100px;
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	padding: 12px;
-	background: var(--background);
-	color: var(--foreground);
-}
-.discord-message-panel [data-slot='button'] {
-	margin-top: 16px;
 }

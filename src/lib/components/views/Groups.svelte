@@ -6,18 +6,18 @@
 	import type { Session } from '$lib/domain/types';
 	import { requestJson } from '$lib/client/api';
 	let { session, onSelect }: { session: Session; onSelect: (id: string) => Promise<void> } = $props();
-	let channels = $state<{ id: string; guildId: string; name: string }[]>([]);
+	let guilds = $state<{ id: string; name: string }[]>([]);
 	let preview = $state<{ id: string; name: string }[]>([]);
-	let channelId = $state('');
+	let guildId = $state('');
 	let name = $state('');
 	let busy = $state(false);
 	let error = $state('');
 	onMount(() => {
-		if (session.user.role === 'admin') void loadChannels();
+		if (session.user.role === 'admin') void loadGuilds();
 	});
-	async function loadChannels() {
+	async function loadGuilds() {
 		try {
-			channels = (await requestJson('/api/discord/channels')).channels;
+			guilds = (await requestJson('/api/discord/guilds')).guilds;
 		} catch (cause) {
 			error = (cause as Error).message;
 		}
@@ -25,9 +25,9 @@
 	async function previewMembers() {
 		error = '';
 		preview = [];
-		if (!channelId) return;
+		if (!guildId) return;
 		try {
-			preview = (await requestJson(`/api/discord/channels/${channelId}/members`)).members;
+			preview = (await requestJson(`/api/discord/guilds/${guildId}/members`)).members;
 		} catch (cause) {
 			error = (cause as Error).message;
 		}
@@ -38,7 +38,7 @@
 		try {
 			const { group } = await requestJson('/api/groups', {
 				method: 'POST',
-				body: JSON.stringify({ name, discordChannelId: channelId })
+				body: JSON.stringify({ name, discordGuildId: guildId })
 			});
 			await onSelect(group.id);
 		} catch (cause) {
@@ -56,7 +56,7 @@
 		{#each session.groups as group}<button class="group-choice" onclick={() => onSelect(group.id)}
 				><Users size={20} /><span
 					><strong>{group.name}</strong><small
-						>{group.role === 'admin' ? 'Quản trị viên nhóm' : 'Thành viên'} · {group.discordChannelId}</small
+						>{group.role === 'admin' ? 'Quản trị viên nhóm' : 'Thành viên'} · {group.discordGuildId}</small
 					></span
 				></button
 			>
@@ -68,18 +68,17 @@
 			<h2>Tạo nhóm</h2>
 			<label class="field">Tên nhóm<Input bind:value={name} maxlength={100} /></label>
 			<label class="field"
-				>Kênh Discord<select aria-label="Kênh Discord" bind:value={channelId} onchange={previewMembers}
-					><option value="">Chọn kênh</option>{#each channels as channel}<option value={channel.id}
-							>#{channel.name} · {channel.id}</option
+				>Máy chủ Discord<select aria-label="Máy chủ Discord" bind:value={guildId} onchange={previewMembers}
+					><option value="">Chọn máy chủ</option>{#each guilds as guild}<option value={guild.id}
+							>{guild.name} · {guild.id}</option
 						>{/each}</select
 				></label
 			>
 			{#if preview.length}<p class="fine-print">
-					{preview.length} người có quyền xem kênh. Thành viên mới sẽ ở trạng thái ngừng hoạt động; người tạo là
+					{preview.length} thành viên trong máy chủ. Thành viên mới sẽ ở trạng thái ngừng hoạt động; người tạo là
 					quản trị viên nhóm.
 				</p>{/if}
-			<Button onclick={create} disabled={busy || !name.trim() || !channelId}
-				><Plus size={17} /> Tạo nhóm</Button
+			<Button onclick={create} disabled={busy || !name.trim() || !guildId}><Plus size={17} /> Tạo nhóm</Button
 			>
 		</section>{/if}
 </div>

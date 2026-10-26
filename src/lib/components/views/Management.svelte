@@ -20,7 +20,6 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import Avatar from '../Avatar.svelte';
 	import Modal from '../Modal.svelte';
-	import { requestJson } from '$lib/client/api';
 	import type { AppState, Member } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, dateTimeLabel, localDate, netBalance } from '$lib/domain/ledger';
@@ -57,35 +56,6 @@
 	let importProgress = $state('');
 	let importing = $state(false);
 	let acknowledged = $state(false);
-	let dmRecipients = $state<string[]>([]);
-	let dmMessage = $state('');
-	let dmResult = $state('');
-	let dmBusy = $state(false);
-	async function sendDirectMessages() {
-		dmBusy = true;
-		dmResult = '';
-		try {
-			const { results } = await requestJson('/api/discord/dm', {
-				method: 'POST',
-				body: JSON.stringify({
-					id: crypto.randomUUID(),
-					groupId,
-					recipients: dmRecipients,
-					message: dmMessage
-				})
-			});
-			dmResult = results
-				.map(
-					(result: { uid: string; status: string }) =>
-						`${appState.members.find((member) => member.id === result.uid)?.name}: ${result.status === 'simulated' ? 'Đã mô phỏng' : result.status === 'sent' ? 'Đã gửi' : 'Không gửi được'}`
-				)
-				.join(' · ');
-		} catch (cause) {
-			dmResult = (cause as Error).message;
-		} finally {
-			dmBusy = false;
-		}
-	}
 	const isAdmin = $derived(appState.members.find((m) => m.id === actor)?.role === 'admin');
 	const members = $derived(
 		appState.members.filter((m) =>
@@ -100,12 +70,11 @@
 		confirmQrPayment: 'Ghi thanh toán QR',
 		settleDebts: 'Tối giản nợ',
 		saveMember: 'Cập nhật thành viên',
-		simulateReceipt: 'Mô phỏng biên nhận',
+		retryBillNotification: 'Gửi lại thông báo Discord',
 		saveArchive: 'Thêm lưu trữ',
 		markReleaseSeen: 'Đã xem cập nhật',
 		importLedger: 'Nhập lịch sử',
-		syncDiscordMembers: 'Đồng bộ thành viên Discord',
-		sendDiscordDm: 'Gửi tin nhắn Discord'
+		syncDiscordMembers: 'Đồng bộ thành viên Discord'
 	};
 	function editMember(member: Member) {
 		memberDraft = structuredClone($state.snapshot(member));
@@ -265,7 +234,7 @@
 				<div class="data-action-card">
 					<FileJson size={25} />
 					<h2>Sao lưu dữ liệu</h2>
-					<p>Tải bản JSON gồm thành viên, hóa đơn, sổ giao dịch, biên nhận và nhật ký.</p>
+					<p>Tải bản JSON gồm thành viên, hóa đơn, sổ giao dịch, thông báo và nhật ký.</p>
 					{#if isAdmin}<Button variant="outline" onclick={downloadBackup}
 							><Download size={16} /> Tải bản sao JSON</Button
 						>{:else}<p class="fine-print">Chỉ quản trị viên được xuất bản sao đầy đủ.</p>{/if}
@@ -343,28 +312,6 @@
 				Các thay đổi tiếp theo sẽ được ghi lại tại đây.
 			</div>{/if}{/if}
 </section>
-{#if isAdmin}<section class="panel form-panel discord-message-panel">
-		<h2>Tin nhắn Discord</h2>
-		<div class="member-picker">
-			{#each appState.members as member}<button
-					class:selected={dmRecipients.includes(member.id)}
-					aria-pressed={dmRecipients.includes(member.id)}
-					onclick={() =>
-						(dmRecipients = dmRecipients.includes(member.id)
-							? dmRecipients.filter((id) => id !== member.id)
-							: [...dmRecipients, member.id])}>{member.name}</button
-				>{/each}
-		</div>
-		<label class="field"
-			>Nội dung tin nhắn<textarea aria-label="Nội dung tin nhắn" maxlength={2000} bind:value={dmMessage}
-			></textarea></label
-		>
-		<Button
-			disabled={dmBusy || !dmRecipients.length || dmRecipients.length > 20 || !dmMessage.trim()}
-			onclick={sendDirectMessages}>Gửi tin nhắn riêng</Button
-		>
-		{#if dmResult}<p class="fine-print" role="status">{dmResult}</p>{/if}
-	</section>{/if}
 <Modal
 	bind:open={memberOpen}
 	title="Chỉnh sửa hồ sơ"

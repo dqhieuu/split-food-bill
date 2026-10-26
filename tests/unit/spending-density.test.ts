@@ -26,7 +26,7 @@ function bill(id: string, date: string, shares: [string, number][], organizer = 
 		date,
 		lines: shares.map(([memberId, amount]) => ({ memberId, amount, description: id, note: '' })),
 		total: shares.reduce((sum, [, amount]) => sum + amount, 0),
-		emailReceipt: false
+		discordNotification: false
 	};
 }
 const name = (b: Bill) => b.organizer;

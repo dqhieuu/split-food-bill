@@ -2,23 +2,15 @@ import { z, ZodError } from 'zod';
 import type { Env } from './env';
 import { assertEnvironment, isLocal } from './env';
 import { Store } from './store';
-import { authenticatedUser, sessionOperation } from './identity';
+import { authenticatedUser } from './identity';
 import { oauth } from './oauth';
 import { createGroup, groupCommand, loadGroup, requireGroup, session, syncMembers } from './groups';
 import { Discord } from './discord';
 import { DomainError } from '../../src/lib/domain/ledger';
-import type { GlobalUser, Member } from '../../src/lib/domain/types';
+import type { GlobalUser } from '../../src/lib/domain/types';
+import { deliverBillNotifications } from './notifications';
 export { AuthSessions } from './sessions';
 
-const bodySchema = z.object({
-	groupId: z.string().regex(/^[\w-]{1,100}$/),
-	recipients: z
-		.array(z.string().regex(/^discord_\d{17,20}$/))
-		.min(1)
-		.max(20),
-	message: z.string().trim().min(1).max(2000),
-	id: z.string().uuid()
-});
 async function route(request: Request, env: Env): Promise<Response> {
 	const url = new URL(request.url);
 	const store = new Store(env);
@@ -40,10 +32,10 @@ async function route(request: Request, env: Env): Promise<Response> {
 		return Response.json(await session(store, user));
 	if (url.pathname === '/api/groups' && request.method === 'POST') {
 		const data = z
-			.object({ name: z.string().trim().min(1).max(100), discordChannelId: z.string().regex(/^\d{17,20}$/) })
+			.object({ name: z.string().trim().min(1).max(100), discordGuildId: z.string().regex(/^\d{17,20}$/) })
 			.parse(await request.json());
 		return Response.json(
-			{ group: await createGroup(store, user, env, data.name, data.discordChannelId) },
+			{ group: await createGroup(store, user, env, data.name, data.discordGuildId) },
 			{ status: 201 }
 		);
 	}
@@ -60,76 +52,55 @@ async function route(request: Request, env: Env): Promise<Response> {
 	if (state && request.method === 'GET') return Response.json(await loadGroup(store, state[1], user.id));
 	const command = url.pathname.match(/^\/api\/groups\/([\w-]+)\/commands\/([\w-]+)$/);
 	if (command && request.method === 'POST') {
+		if (command[2] === 'retryBillNotification') {
+			const { id } = z.object({ id: z.string().regex(/^[\w.-]{1,100}$/) }).parse(await request.json());
+			await deliverBillNotifications(store, env, command[1], user.id, id, true);
+			return Response.json({ ...(await loadGroup(store, command[1], user.id)), result: { reference: id } });
+		}
 		if (command[2] === 'syncDiscordMembers')
 			return Response.json({
 				...(await syncMembers(store, env, command[1], user)),
 				result: { reference: command[1] }
 			});
-		return Response.json(await groupCommand(store, command[1], user.id, command[2], await request.json()));
+		const outcome = await groupCommand(store, command[1], user.id, command[2], await request.json());
+		if (command[2] === 'createBill' && outcome.result.reference) {
+			try {
+				await deliverBillNotifications(store, env, command[1], user.id, outcome.result.reference);
+			} catch {
+				console.error('Bill saved; Discord notification delivery did not complete.');
+			}
+			return Response.json({ ...(await loadGroup(store, command[1], user.id)), result: outcome.result });
+		}
+		return Response.json(outcome);
 	}
-	if (url.pathname === '/api/discord/channels' && request.method === 'GET') {
+	if (url.pathname === '/api/discord/guilds' && request.method === 'GET') {
 		if (user.role !== 'admin')
-			throw new DomainError('Chỉ quản trị viên hệ thống được xem các kênh của bot.', 403);
+			throw new DomainError('Chỉ quản trị viên hệ thống được xem các máy chủ của bot.', 403);
 		return Response.json({
-			channels: (await new Discord(env).channels()).map(({ id, guild_id, name, type }) => ({
-				id,
-				guildId: guild_id,
-				name,
-				type
-			}))
+			guilds: (await new Discord(env).guilds()).map(({ id, name, icon }) => ({ id, name, icon }))
 		});
 	}
-	const channelMembers = url.pathname.match(/^\/api\/discord\/channels\/(\d{17,20})\/members$/);
-	if (channelMembers && request.method === 'GET') {
+	const guildMembers = url.pathname.match(/^\/api\/discord\/guilds\/(\d{17,20})\/members$/);
+	if (guildMembers && request.method === 'GET') {
 		if (user.role !== 'admin') {
 			const groupId = url.searchParams.get('groupId') ?? '';
 			const { group } = await requireGroup(store, groupId, user.id, true);
-			if (group.discordChannelId !== channelMembers[1]) throw new DomainError('Kênh không thuộc nhóm.', 403);
+			if (group.discordGuildId !== guildMembers[1]) throw new DomainError('Máy chủ không thuộc nhóm.', 403);
 		}
 		return Response.json({
-			members: (await new Discord(env).members(channelMembers[1])).map((profile) => ({
+			members: (await new Discord(env).members(guildMembers[1])).map((profile) => ({
 				id: `discord_${profile.id}`,
 				name: profile.global_name || profile.username
 			}))
 		});
 	}
 	if (url.pathname === '/api/discord/dm' && request.method === 'POST') {
-		const input = bodySchema.parse(await request.json());
-		await requireGroup(store, input.groupId, user.id, true);
-		const recipients = [...new Set(input.recipients)];
-		for (const id of recipients)
-			if (!(await store.get<Member>(`groups/${input.groupId}/members/${id}`)))
-				throw new DomainError('Người nhận phải là thành viên của nhóm.', 400);
-		const limitKey = `dm-rate:${user.id}:${Math.floor(Date.now() / 60000)}`;
-		if (!(await sessionOperation<boolean>(env, 'claim', `dm:${user.id}:${input.id}`, { ttl: 3600000 })))
-			throw new DomainError('Đợt tin nhắn này đã được xử lý. Không gửi lại để tránh trùng.', 409);
-		let allowed = false;
-		for (let slot = 0; slot < 5; slot++) {
-			if (await sessionOperation<boolean>(env, 'claim', `${limitKey}:${slot}`, { ttl: 65000 })) {
-				allowed = true;
-				break;
-			}
-		}
-		if (!allowed) throw new DomainError('Chỉ gửi tối đa 5 đợt tin nhắn mỗi phút.', 429);
-		const results = [];
-		for (const uid of recipients) {
-			try {
-				results.push({ uid, ...(await new Discord(env).dm(uid.slice(8), input.message)) });
-			} catch {
-				results.push({ uid, status: 'failed' });
-			}
-		}
-		const id = crypto.randomUUID();
-		await store.commit([
-			store.write(`groups/${input.groupId}/audit/${id}`, {
-				id,
-				actor: user.id,
-				action: 'sendDiscordDm',
-				reference: input.id,
-				date: new Date().toISOString()
-			})
-		]);
-		return Response.json({ results });
+		const input = z
+			.object({ groupId: z.string().regex(/^[\w-]{1,100}$/), billId: z.string().regex(/^[\w.-]{1,100}$/) })
+			.strict()
+			.parse(await request.json());
+		await deliverBillNotifications(store, env, input.groupId, user.id, input.billId, true);
+		return Response.json(await loadGroup(store, input.groupId, user.id));
 	}
 	throw new DomainError('Không tìm thấy API.', 404);
 }

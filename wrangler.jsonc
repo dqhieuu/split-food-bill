@@ -7,10 +7,10 @@
 	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["AuthSessions"] }],
 	"vars": {
 		"APP_ENV": "production",
-		"FRONTEND_ORIGIN": "https://configure-your-vercel-domain.invalid",
-		"FIREBASE_PROJECT_ID": "configure-your-project",
-		"FIREBASE_API_KEY": "configure-your-public-firebase-key",
-		"FIREBASE_AUTH_DOMAIN": "configure-your-project.firebaseapp.com"
+		"FRONTEND_ORIGIN": "https://anthitcho.vercel.app",
+		"FIREBASE_PROJECT_ID": "split-food-bill",
+		"FIREBASE_API_KEY": "AIzaSyB_sNBJhIGuvqpKFQTzs7ReRVxoMsmOxbA",
+		"FIREBASE_AUTH_DOMAIN": "split-food-bill.firebaseapp.com"
 	},
 	"env": {
 		"local": {
