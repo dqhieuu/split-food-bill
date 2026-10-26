@@ -3,7 +3,7 @@ export class AuthSessions {
 	constructor(private state: DurableObjectState) {}
 	async fetch(request: Request) {
 		const data = (await request.json()) as {
-			op: 'put' | 'take' | 'claim';
+			op: 'put' | 'get' | 'take' | 'claim';
 			key: string;
 			value?: unknown;
 			ttl?: number;
@@ -11,6 +11,7 @@ export class AuthSessions {
 		};
 		const result = await this.state.storage.transaction(async (tx) => {
 			const existing = await tx.get<{ value: any; expiresAt: number }>(data.key);
+			if (data.op === 'get') return existing && existing.expiresAt > Date.now() ? existing.value : null;
 			if (data.op === 'put') {
 				await tx.put(data.key, {
 					value: data.value,

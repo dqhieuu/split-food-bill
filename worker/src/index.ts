@@ -5,7 +5,7 @@ import { Store } from './store';
 import { authenticatedUser } from './identity';
 import { oauth } from './oauth';
 import { createGroup, groupCommand, loadGroup, requireGroup, session, syncMembers } from './groups';
-import { Discord } from './discord';
+import { Discord, DiscordRateLimitError } from './discord';
 import { DomainError } from '../../src/lib/domain/ledger';
 import type { GlobalUser } from '../../src/lib/domain/types';
 import { deliverBillNotifications } from './notifications';
@@ -133,7 +133,12 @@ export default {
 								? 'Thông tin gửi lên không hợp lệ.'
 								: 'Chưa kết nối được dịch vụ. Kiểm tra cấu hình backend.'
 				},
-				{ status }
+				{
+					status,
+					...(error instanceof DiscordRateLimitError
+						? { headers: { 'retry-after': String(error.retryAfterSeconds) } }
+						: {})
+				}
 			);
 		}
 		const headers = new Headers(response.headers);
@@ -148,6 +153,7 @@ export default {
 			headers.set('vary', 'Origin');
 			headers.set('access-control-allow-headers', 'Authorization, Content-Type');
 			headers.set('access-control-allow-methods', 'GET, POST, OPTIONS');
+			headers.set('access-control-expose-headers', 'Retry-After');
 		}
 		return new Response(response.body, { status: response.status, headers });
 	}

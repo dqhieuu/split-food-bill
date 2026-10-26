@@ -149,6 +149,8 @@ npm run dev:web
 
 Groups link to a Discord server (called a guild in the API). Server discovery lists servers the bot has joined, optionally restricted by `DISCORD_GUILD_IDS`. Member sync paginates that server’s member list and excludes bots and incomplete memberships. Channel visibility and channel-specific overwrites do not determine group membership.
 
+Server lists are cached for 60 seconds and member lists for 30 seconds in backend Durable Object storage, scoped to the bot identity. Group creation reuses the server list within its request. The backend shares route/global cooldowns and honors Discord's `Retry-After`, `retry_after` and rate-limit reset headers. Short cooldowns allow up to three attempts with a total wait budget of two seconds; longer cooldowns return HTTP 429 with `Retry-After` and a Vietnamese wait message. Network failures are not automatically retried. Rate-limit logs include the route and timing without credentials. See [Discord rate limits](https://docs.discord.com/developers/topics/rate-limits).
+
 Synchronization adds missing users and inactive memberships. Existing names/bank details, activation and group roles are retained. Users who leave Discord are retained for history and must be deactivated by a group admin; sync is not automatic revocation. Creation/sync currently reject servers over 200 non-bot members instead of truncating them. Large servers may also need increased Worker request budgets and a background sync design.
 
 ## Connect Firebase
