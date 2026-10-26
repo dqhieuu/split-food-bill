@@ -1,7 +1,12 @@
 import type { Bill, Group } from './types';
 import { billDateLabel, currency } from './ledger';
 
-const text = (value: string) => value.replace(/\s+/g, ' ').replace(/([\\`*_~|\[\]<>])/g, '\\$1');
+function text(value: string, limit: number) {
+	const characters = Array.from(value.replace(/\s+/g, ' ').trim());
+	const shortened =
+		characters.length > limit ? characters.slice(0, limit - 1).join('') + '…' : characters.join('');
+	return shortened.replace(/([\\`*_~|\[\]<>])/g, '\\$1');
+}
 
 export function billNotificationMessage(
 	bill: Bill,
@@ -11,18 +16,17 @@ export function billNotificationMessage(
 ) {
 	const line = bill.lines.find((entry) => entry.memberId === recipient);
 	if (!line) throw new Error('Notification recipient is not a bill participant.');
-	const message = [
-		'Chia tiền ăn',
-		`Hóa đơn: ${text(bill.description)}`,
-		`Nhóm: ${text(group.name)}`,
-		`Ăn vào ${billDateLabel(bill.date)}`,
-		`Người đã thanh toán: ${text(bill.memberNames?.[bill.organizer] ?? bill.organizer)}`,
-		`Phần của bạn: ${currency(line.amount)}`,
-		`Tổng hóa đơn: ${currency(bill.total)}`,
-		...(line.description ? [`Món ăn: ${text(line.description)}`] : []),
-		...(line.note ? [`Ghi chú: ${text(line.note)}`] : [])
+	return [
+		`**Hóa đơn: ${text(bill.description, 120)}**`,
+		`${text(group.name, 80)} · Ăn vào ${billDateLabel(bill.date)}`,
+		'',
+		`**Phần của bạn: ${currency(line.amount)}**`,
+		...(line.description ? [`• Món ăn: ${text(line.description, 120)}`] : []),
+		...(line.note ? [`• Ghi chú: ${text(line.note, 240)}`] : []),
+		'',
+		`Người đã thanh toán: **${text(bill.memberNames?.[bill.organizer] ?? bill.organizer, 80)}**`,
+		`Tổng hóa đơn: **${currency(bill.total)}**`,
+		'',
+		`[Mở Chia tiền ăn](<${new URL(origin).origin}>)`
 	].join('\n');
-	const link = `\n${origin}`;
-	const limit = 2000 - link.length;
-	return (message.length > limit ? message.slice(0, limit - 1) + '…' : message) + link;
 }
