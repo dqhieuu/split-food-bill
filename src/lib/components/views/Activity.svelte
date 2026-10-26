@@ -240,4 +240,4 @@
 			>{/if}
 	</div>
 </section>
-<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} {actor} {run} {busy} />
+<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} />

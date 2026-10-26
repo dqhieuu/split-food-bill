@@ -186,7 +186,7 @@
 		}}
 	/>
 </div>
-<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} {actor} {run} {busy} />
+<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} />
 <Modal bind:open={paymentOpen} title="Chi tiết thanh toán" description={selectedEntry?.description || ''}>
 	{#if selectedEntry}
 		<div class="summary-pair">

@@ -183,7 +183,7 @@ export async function createGroup(store: Store, user: GlobalUser, env: Env, name
 }
 export async function syncMembers(store: Store, env: Env, groupId: string, user: GlobalUser) {
 	const { group } = await requireGroup(store, groupId, user.id, true);
-	const profiles = await new Discord(env).members(group.discordGuildId);
+	const profiles = await new Discord(env).members(group.discordGuildId, true);
 	if (profiles.length > 200)
 		throw new DomainError('Đồng bộ hiện hỗ trợ tối đa 200 thành viên mỗi máy chủ.', 400);
 	await store.transaction(async (tx, writes) => {

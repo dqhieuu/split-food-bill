@@ -1654,24 +1654,6 @@ footer {
 	font-size: 13px;
 	color: light-dark(#6e7865, #a3ab9c);
 }
-.receipt-detail {
-	padding: 18px;
-	background: light-dark(#f5f7ee, #1d1e19);
-	border-radius: 9px;
-}
-.receipt-detail > div:first-child {
-	display: flex;
-	align-items: center;
-	gap: 9px;
-	font-size: 14px;
-	color: light-dark(#6e7865, #a3ab9c);
-}
-.receipt-detail p {
-	font-size: 13px;
-	color: light-dark(#6e7865, #a3ab9c);
-	word-break: break-word;
-	margin: 9px 0 14px;
-}
 .two-panels {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
@@ -4224,4 +4206,13 @@ button.payment-history-row {
 	.groups-layout {
 		grid-template-columns: minmax(0, 1fr);
 	}
+}
+
+.system-reset-action {
+	margin-top: 24px;
+}
+.reset-progress {
+	display: flex;
+	align-items: center;
+	gap: 10px;
 }

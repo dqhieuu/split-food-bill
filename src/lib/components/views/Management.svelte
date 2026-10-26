@@ -165,7 +165,7 @@
 	</div>
 	{#if isAdmin}<Button
 			onclick={() => run('syncDiscordMembers', {}, 'Đã đồng bộ thành viên Discord.').catch(() => {})}
-			disabled={busy}><Users size={17} /> Đồng bộ Discord</Button
+			disabled={busy}><Users size={17} /> Làm mới thành viên Discord</Button
 		>{/if}
 </div>
 <section class="panel">

@@ -128,6 +128,18 @@ describe('Discord rate-limit handling', () => {
 });
 
 describe('Discord discovery caching', () => {
+	it('refreshes a member list on demand while keeping normal reads cached', async () => {
+		const fetch = vi
+			.fn()
+			.mockResolvedValueOnce(Response.json([{ id: 'guild', name: 'Lunch' }]))
+			.mockResolvedValueOnce(Response.json([]))
+			.mockResolvedValueOnce(Response.json([{ user: { id: 'member', username: 'New member' }, roles: [] }]));
+		vi.stubGlobal('fetch', fetch);
+		expect(await new Discord(env).members('guild')).toHaveLength(0);
+		expect(await new Discord(env).members('guild')).toHaveLength(0);
+		expect(await new Discord(env).members('guild', true)).toHaveLength(1);
+		expect(fetch).toHaveBeenCalledTimes(3);
+	});
 	it('shares server and member results across preview and create requests', async () => {
 		const fetch = vi
 			.fn()

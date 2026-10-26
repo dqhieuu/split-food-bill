@@ -101,7 +101,7 @@ erDiagram
 
 The group is represented by the Firestore path, not a redundant `groupId` field in each child record. Member IDs repeat across groups, while bank details and display names can differ per group. Amounts are integer VND; dates are ISO strings. `bankCode` resolves a bank BIN for QR generation and `color` is an internal avatar fallback; neither has a dedicated configuration control. Removed fields such as `bankName` and department are absent.
 
-Cloudflare Durable Object storage holds short-lived OAuth states, one-use handoffs, DM deduplication IDs and rate-limit slots. These are backend internals rather than Firestore business collections. The Wrangler `migrations` declaration creates the Durable Object SQLite class; it is platform resource provisioning, not a migration of app data.
+Cloudflare Durable Object storage holds short-lived OAuth states, one-use handoffs, DM deduplication IDs, rate-limit slots and database-reset checkpoints/locks. These are backend internals rather than Firestore business collections. The Wrangler `migrations` declaration creates the Durable Object SQLite class; it is platform resource provisioning, not a migration of app data.
 
 ## Roles and membership
 
@@ -251,6 +251,8 @@ All `/api/*` routes require `Authorization: Bearer <Firebase ID token>`. Inputs 
 | `GET /api/discord/guilds/{guildId}/members`                      | Global admin, or active group admin with matching `?groupId=`             |
 | `POST /api/discord/dm`                                           | Bill organizer or active group admin; recipients come from the saved bill |
 
+| `POST /api/admin/database-reset` | Start: global admin; continue: verified UID of the initiating admin |
+
 Bill notification retry body:
 
 ```json
@@ -262,9 +264,21 @@ Bill notification retry body:
 
 Logging a bill with `discordNotification: true` creates a notification outbox atomically with the bill and debt entries, then dispatches its DMs after the financial transaction commits. Recipients are the saved bill's participants, including the payer when they have a meal line. The backend constructs personalized Vietnamese content from the frozen bill; callers cannot supply arbitrary messages or recipient IDs. The toggle defaults on and opt-out creates no outbox.
 
-Per-recipient status is `queued`, `sending`, `sent`, `simulated` (local only), or `failed`. The bill detail shows these results. Organizers and group admins can retry failed notifications through this endpoint or `retryBillNotification`; retries skip successful deliveries. A Firestore claim prevents concurrent/repeated bill requests from resending completed notifications. Discord requests use stable per-bill/recipient nonces with `enforce_nonce`, providing Discord's additional short-window duplicate suppression. See [Create Message](https://docs.discord.com/developers/resources/message#create-message).
+Per-recipient status is `queued`, `sending`, `sent`, `simulated` (local only), or `failed`. These results are retained for backend diagnostics and are not displayed in bill details. Organizers and group admins can retry failed notifications through this endpoint or `retryBillNotification`; retries skip successful deliveries. A Firestore claim prevents concurrent/repeated bill requests from resending completed notifications. Discord requests use stable per-bill/recipient nonces with `enforce_nonce`, providing Discord's additional short-window duplicate suppression. See [Create Message](https://docs.discord.com/developers/resources/message#create-message).
 
 DM failures never roll back a committed bill or post additional debt. Recipient privacy settings, bot permissions or rate limits can prevent delivery. Results are saved per recipient; interrupted requests may leave a `sending` status requiring operator inspection, rather than an automatic retry with an uncertain outcome. Delivery is currently processed within the request with up to four sends in parallel, not a background delivery queue. Larger recipient lists can exceed a Worker plan's subrequest budget; use a suitable plan or add a queue before scaling. No real DMs are sent in local mode.
+
+## Database reset
+
+Group management exposes a reset button only to global system admins. Starting requires the exact confirmation `XÓA TOÀN BỘ` and a currently stored global admin role. Group admin privileges alone do not grant access.
+
+The reset recursively deletes every Firestore collection and document in the configured database, including global users, groups, all group data, unknown collections and orphaned subcollections. Firebase Authentication identities, Cloudflare secrets and short-lived backend state are outside its scope. At least one valid `DISCORD_ADMIN_IDS` entry must be configured before starting; an allowlisted Discord user receives the global admin role again on their next login. Other deleted user profiles are recreated through login as members.
+
+`POST /api/admin/database-reset` accepts `{id, action: "start", confirmation}` with a UUID request ID. Subsequent requests use `{id, action: "continue"}` and require the initiating user's verified Firebase identity, even after their Firestore profile has been deleted. Each request performs bounded work and saves its checkpoint after idempotent deletions commit. Normal application endpoints are unavailable while the reset is active. The initiating user's profile is deleted last, and the browser signs out after completion.
+
+The browser remembers an unfinished request locally and resumes it on reload. Checkpoints and the maintenance lock expire after one hour without progress; an expired request must be restarted by a current global admin. Already completed deletions are irreversible.
+
+The Discord member preview refresh button passes `?refresh=true` to the member endpoint. The group member management refresh action also bypasses the member cache. Both still respect Discord cooldowns; synchronization preserves existing membership activation and roles.
 
 ## Verification and current limits
 
@@ -278,7 +292,7 @@ npm run build:worker
 npm run test:e2e
 ```
 
-Unit and local browser tests cover identity/permission rules, OAuth replay rejection, unauthorized origins, inactive access denial, global/group role separation, independent group state, last group selection and bill/payment workflows. Local tests do not establish that real Firebase IAM, Discord intent approval or live bank scanning are configured. Production credentials were not available and nothing has been deployed.
+Unit and local browser tests cover identity/permission rules, OAuth replay rejection, unauthorized origins, inactive access denial, global/group role separation, independent group state, last group selection and bill/payment workflows. Local tests do not establish that real Firebase IAM, Discord intent approval or live bank scanning are configured.
 
 On Windows, forcing the Vercel adapter locally with `VERCEL=1` can fail while creating route symlinks (`EPERM`) when the OS account lacks symbolic-link privileges. The default local Node-adapter build does not require these links. The frontend compilation was checked locally; final Vercel adapter packaging still needs verification in Vercel's Linux build environment.
 

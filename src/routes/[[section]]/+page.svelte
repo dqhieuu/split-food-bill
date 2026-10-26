@@ -24,6 +24,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import DatabaseReset from '$lib/components/DatabaseReset.svelte';
 	import Overview from '$lib/components/views/Overview.svelte';
 	import BillComposer from '$lib/components/views/BillComposer.svelte';
 	import Balances from '$lib/components/views/Balances.svelte';
@@ -63,6 +64,7 @@
 	let mobileMenu = $state(false);
 	let releaseOpen = $state(false);
 	let accountOpen = $state(false);
+	let resetOpen = $state(false);
 	const navigation = [
 		{ path: '/', label: 'Tổng quan', icon: LayoutDashboard },
 		{ path: '/new-bill', label: 'Tạo hoá đơn', icon: Plus },
@@ -129,6 +131,7 @@
 		error = '';
 		try {
 			const auth = await initializeAuth();
+			if (auth.uid) actor = auth.uid;
 			if (auth.signedIn) await restoreSession();
 		} catch (cause) {
 			error = (cause as Error).message;
@@ -228,9 +231,7 @@
 						if (event.currentTarget.value) await changeGroup(event.currentTarget.value);
 					}}
 				>
-					{#each sessionData?.groups ?? [] as item}<option value={item.id}
-							>{item.name}</option
-						>{/each}
+					{#each sessionData?.groups ?? [] as item}<option value={item.id}>{item.name}</option>{/each}
 				</select>
 			</div>
 			<nav aria-label="Điều hướng chính">
@@ -311,6 +312,7 @@
 				{:else if sessionData && (section === '/groups' || !appState)}
 					<Groups
 						session={sessionData}
+						onReset={() => (resetOpen = true)}
 						onSelect={async (id) => {
 							await changeGroup(id);
 							if (!error) await goto('/');
@@ -358,7 +360,7 @@
 		{#if sessionData}<div class="account-current">
 				<Avatar member={sessionData.user} />
 				<div>
-					<strong>{sessionData.user.name}</strong><small>{sessionData.user.id}</small><small
+					<strong>{sessionData.user.name}</strong><small
 						>{sessionData.user.role === 'admin' ? 'Quản trị viên hệ thống' : 'Thành viên hệ thống'}</small
 					>
 				</div>
@@ -376,3 +378,11 @@
 		<Button onclick={() => (releaseOpen = false)}>Đóng</Button>
 	</Modal>
 {/if}
+<DatabaseReset
+	bind:open={resetOpen}
+	{actor}
+	onComplete={async () => {
+		error = '';
+		await signOutUser();
+	}}
+/>

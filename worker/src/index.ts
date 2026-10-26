@@ -2,7 +2,8 @@ import { z, ZodError } from 'zod';
 import type { Env } from './env';
 import { assertEnvironment, isLocal } from './env';
 import { Store } from './store';
-import { authenticatedUser } from './identity';
+import { authenticatedUser, verifiedUserId } from './identity';
+import { continueDatabaseReset, requireAvailableDatabase, startDatabaseReset } from './database-reset';
 import { oauth } from './oauth';
 import { createGroup, groupCommand, loadGroup, requireGroup, session, syncMembers } from './groups';
 import { Discord, DiscordRateLimitError } from './discord';
@@ -25,6 +26,28 @@ async function route(request: Request, env: Env): Promise<Response> {
 			},
 			...(isLocal(env) ? { authEmulatorUrl: `http://${env.FIREBASE_AUTH_EMULATOR_HOST}` } : {})
 		});
+	if (url.pathname === '/api/admin/database-reset' && request.method === 'POST') {
+		const input = z
+			.object({
+				id: z.string().uuid(),
+				action: z.enum(['start', 'continue']),
+				confirmation: z.string().optional()
+			})
+			.strict()
+			.parse(await request.json());
+		return Response.json(
+			input.action === 'start'
+				? await startDatabaseReset(
+						store,
+						env,
+						await authenticatedUser(request, env, store),
+						input.id,
+						input.confirmation ?? ''
+					)
+				: await continueDatabaseReset(store, env, await verifiedUserId(request, env), input.id)
+		);
+	}
+	await requireAvailableDatabase(env);
 	const authResponse = await oauth(request, env, store);
 	if (authResponse) return authResponse;
 	const user = await authenticatedUser(request, env, store);
@@ -88,7 +111,9 @@ async function route(request: Request, env: Env): Promise<Response> {
 			if (group.discordGuildId !== guildMembers[1]) throw new DomainError('Máy chủ không thuộc nhóm.', 403);
 		}
 		return Response.json({
-			members: (await new Discord(env).members(guildMembers[1])).map((profile) => ({
+			members: (
+				await new Discord(env).members(guildMembers[1], url.searchParams.get('refresh') === 'true')
+			).map((profile) => ({
 				id: `discord_${profile.id}`,
 				name: profile.global_name || profile.username
 			}))

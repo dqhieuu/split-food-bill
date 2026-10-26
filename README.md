@@ -38,7 +38,7 @@ The local seed uses Discord-prefixed IDs directly. It replaces an old, uninitial
 | `/new-bill` | Tạo hoá đơn          | Participants, itemized/equal splits, rounding, review and receipt option |
 | `/balances` | Số dư cá nhân        | Pairwise balances, recent charges and QR payment confirmation            |
 | `/matrix`   | Ma trận nợ nần       | Signed debt matrix and administrator hub reassignment                    |
-| `/activity` | Ledger               | Bills, immutable ledger, CSV export and simulated receipt retries        |
+| `/activity` | Ledger               | Bills, immutable ledger and CSV export                                   |
 | `/members`  | Thành viên & quản lý | Profiles/banks, activation, Discord sync, import, backup and audit       |
 | `/groups`   | Nhóm                 | Active group selection and global-administrator group creation           |
 
@@ -58,7 +58,7 @@ The organizer's own meal does not create self debt. Payments offset a member pai
 
 Bills and ledger entries remain immutable. Ledger import accepts normalized CSV/JSON with existing group member IDs, stable entry IDs and explicit ISO dates. Unknown member IDs are rejected; Discord sync must add them first. Imports commit in chunks of 150 and safely skip identical IDs on retry. JSON backup restoration currently supports ledger entries only; XLSX ingestion and full backup restoration are not implemented.
 
-The bill toggle sends Discord DM notifications to its participants after the bill is committed. Each message includes the bill, date, payer, personal share and total. Delivery results are persisted per recipient; organizers and group admins can retry failed deliveries without changing debt or resending successful notifications. Local mode simulates delivery; production uses the configured Discord bot. Email delivery is no longer part of the bill flow.
+The bill toggle sends Discord DM notifications to its participants after the bill is committed. Each message includes the bill, date, payer, personal share and total. Delivery results are persisted per recipient for backend diagnostics; bill details do not display notification status. The retry API skips successful deliveries without changing debt. Local mode simulates delivery; production uses the configured Discord bot. Email delivery is no longer part of the bill flow.
 
 ## Architecture and service setup
 
@@ -83,3 +83,5 @@ npm run test:e2e
 `build:worker` is a dry run and makes no deployment. Browser tests exercise local OAuth, single-use exchanges, role boundaries, inactive-member denial, group isolation, remembered selection and bill workflows. They use mock Discord only; live credentials and live OAuth require a configured environment.
 
 Useful separate commands: `npm run emulators`, `npm run seed:local`, `npm run dev:worker`, `npm run dev:web`. When running them separately, seed after the emulators start, then start Worker and frontend. [Feature parity notes](docs/feature-parity.md) describe the spreadsheet workflows preserved by the app.
+
+Discord member previews and group member management include explicit refresh buttons that bypass the member cache. System admins can reset all Firestore data from group management after typing the confirmation phrase. See [database reset](docs/integrations.md#database-reset) for scope and recovery.

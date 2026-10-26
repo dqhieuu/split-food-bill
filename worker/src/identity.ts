@@ -10,7 +10,7 @@ import { Store } from './store';
 const keys = createRemoteJWKSet(
 	new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
 );
-export async function authenticatedUser(request: Request, env: Env, store: Store): Promise<GlobalUser> {
+export async function verifiedUserId(request: Request, env: Env): Promise<string> {
 	const token = request.headers.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];
 	if (!token) throw new DomainError('Vui lòng đăng nhập bằng Discord.', 401);
 	let uid: string;
@@ -60,6 +60,10 @@ export async function authenticatedUser(request: Request, env: Env, store: Store
 	} catch {
 		throw new DomainError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', 401);
 	}
+	return uid;
+}
+export async function authenticatedUser(request: Request, env: Env, store: Store): Promise<GlobalUser> {
+	const uid = await verifiedUserId(request, env);
 	const user = await store.get<GlobalUser>(`users/${uid}`);
 	if (!user || user.discordId !== uid.slice(8))
 		throw new DomainError('Không tìm thấy tài khoản Discord.', 403);

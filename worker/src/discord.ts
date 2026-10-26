@@ -53,10 +53,10 @@ export class Discord {
 			);
 		return `discord:${await this.namespace}:${name}`;
 	}
-	private async cached<T>(name: string, ttl: number, load: () => Promise<T>): Promise<T> {
+	private async cached<T>(name: string, ttl: number, load: () => Promise<T>, refresh = false): Promise<T> {
 		if (!this.env.AUTH_SESSIONS) return load();
 		const key = await this.key(`cache:${name}`);
-		const value = await sessionOperation<T | null>(this.env, 'get', key);
+		const value = refresh ? null : await sessionOperation<T | null>(this.env, 'get', key);
 		if (value !== null) return value;
 		const result = await load();
 		if (new TextEncoder().encode(JSON.stringify(result)).byteLength <= 64000)
@@ -152,26 +152,31 @@ export class Discord {
 			.filter(Boolean);
 		return guilds.filter((guild) => !allowed?.length || allowed.includes(guild.id));
 	}
-	async members(guildId: string): Promise<DiscordProfile[]> {
+	async members(guildId: string, refresh = false): Promise<DiscordProfile[]> {
 		if (!(await this.guilds()).some((guild) => guild.id === guildId))
 			throw new DomainError('Bot chưa tham gia máy chủ này.', 404);
 		if (isLocal(this.env)) return mockProfiles;
-		return this.cached(`members:${guildId}`, 30000, async () => {
-			const members: GuildMember[] = [];
-			let after = '0';
-			for (;;) {
-				const page = await this.api<GuildMember[]>(`/guilds/${guildId}/members?limit=1000&after=${after}`);
-				members.push(...page);
-				if (page.length < 1000) break;
-				after = page.reduce(
-					(largest, member) => (BigInt(member.user.id) > BigInt(largest) ? member.user.id : largest),
-					after
-				);
-			}
-			return members
-				.filter((member) => !member.user.bot && !member.pending)
-				.map((member) => ({ ...member.user, global_name: member.nick || member.user.global_name }));
-		});
+		return this.cached(
+			`members:${guildId}`,
+			30000,
+			async () => {
+				const members: GuildMember[] = [];
+				let after = '0';
+				for (;;) {
+					const page = await this.api<GuildMember[]>(`/guilds/${guildId}/members?limit=1000&after=${after}`);
+					members.push(...page);
+					if (page.length < 1000) break;
+					after = page.reduce(
+						(largest, member) => (BigInt(member.user.id) > BigInt(largest) ? member.user.id : largest),
+						after
+					);
+				}
+				return members
+					.filter((member) => !member.user.bot && !member.pending)
+					.map((member) => ({ ...member.user, global_name: member.nick || member.user.global_name }));
+			},
+			refresh
+		);
 	}
 	async dm(id: string, message: string, nonce?: string) {
 		if (isLocal(this.env)) return { status: 'simulated' as const };

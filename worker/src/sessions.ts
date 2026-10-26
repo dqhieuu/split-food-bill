@@ -21,7 +21,7 @@ export class AuthSessions {
 			}
 			if (data.op === 'claim') {
 				if (existing && existing.expiresAt > Date.now()) return false;
-				await tx.put(data.key, { value: true, expiresAt: Date.now() + (data.ttl ?? 60000) });
+				await tx.put(data.key, { value: data.value ?? true, expiresAt: Date.now() + (data.ttl ?? 60000) });
 				return true;
 			}
 			if (

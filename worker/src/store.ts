@@ -149,6 +149,34 @@ export class Store {
 			...(createOnly ? { currentDocument: { exists: false } } : {})
 		};
 	}
+	delete(path: string): Write {
+		return { delete: `${this.prefix}/${path}` };
+	}
+	async collectionIds(parent: string, pageToken = ''): Promise<{ items: string[]; nextPageToken?: string }> {
+		const result = await this.call(`${parent ? `/${parent}` : ''}:listCollectionIds`, {
+			method: 'POST',
+			body: JSON.stringify({ pageSize: 50, ...(pageToken ? { pageToken } : {}) })
+		});
+		return { items: result.collectionIds ?? [], nextPageToken: result.nextPageToken };
+	}
+	async documentPaths(
+		collection: string,
+		pageToken = ''
+	): Promise<{ items: string[]; nextPageToken?: string }> {
+		const query = new URLSearchParams({
+			pageSize: '50',
+			showMissing: 'true',
+			'mask.fieldPaths': 'id',
+			...(pageToken ? { pageToken } : {})
+		});
+		const result = await this.call(`/${collection}?${query}`);
+		return {
+			items: (result.documents ?? []).map((document: { name: string }) =>
+				document.name.slice(this.prefix.length + 1)
+			),
+			nextPageToken: result.nextPageToken
+		};
+	}
 	async commit(writes: Write[], transaction?: string) {
 		if (writes.length || transaction)
 			await this.call(':commit', {

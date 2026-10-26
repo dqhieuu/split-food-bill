@@ -76,11 +76,29 @@ test('group activation, distinct roles, group isolation and last-group selection
 			memberPage.getByText('Bạn chưa được kích hoạt trong nhóm nào.', { exact: false })
 		).toBeVisible();
 		expect((await call(memberPage, member.token, '/api/discord/guilds')).status()).toBe(403);
+		await expect(
+			memberPage.getByRole('button', { name: 'Xóa toàn bộ cơ sở dữ liệu', exact: true })
+		).toHaveCount(0);
+		expect(
+			(
+				await call(memberPage, member.token, '/api/admin/database-reset', {
+					id: crypto.randomUUID(),
+					action: 'start',
+					confirmation: 'XÓA TOÀN BỘ'
+				})
+			).status()
+		).toBe(403);
 		await page.getByRole('link', { name: 'Nhóm', exact: true }).click();
 		await page.getByLabel('Tên nhóm', { exact: true }).fill(`E2E test group ${Date.now()}`);
 		await page
 			.getByRole('combobox', { name: 'Máy chủ Discord', exact: true })
 			.selectOption('300000000000000002');
+		await expect(page.getByText('3 thành viên trong máy chủ.', { exact: false })).toBeVisible();
+		const refresh = page.waitForRequest((request) =>
+			request.url().includes('/api/discord/guilds/300000000000000002/members?refresh=true')
+		);
+		await page.getByRole('button', { name: 'Làm mới danh sách Discord', exact: true }).click();
+		await refresh;
 		await expect(page.getByText('3 thành viên trong máy chủ.', { exact: false })).toBeVisible();
 		const creation = page.waitForResponse(
 			(response) => response.url() === API + '/api/groups' && response.request().method() === 'POST'
@@ -213,8 +231,8 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		const row = page.getByRole('row').filter({ hasText: title });
 		await row.locator('td').nth(3).click();
 		await expect(page.getByRole('dialog')).toContainText('102.000');
-		await expect(page.getByRole('dialog')).toContainText('Thông báo Discord');
-		await expect(page.getByRole('dialog')).toContainText('Đã mô phỏng');
+		await expect(page.locator('.receipt-detail')).toHaveCount(0);
+
 		await page.keyboard.press('Escape');
 		await page.getByRole('link', { name: 'Tổng quan', exact: true }).click();
 		await page.locator('.recent-panel .bill-row').first().click();
@@ -224,7 +242,7 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		await expect(page.getByRole('dialog')).toBeVisible();
 		await page.keyboard.press('Escape');
 		await page.getByRole('link', { name: 'Thành viên & quản lý', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Đồng bộ Discord', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Làm mới thành viên Discord', exact: true })).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Thêm thành viên', exact: true })).toHaveCount(0);
 		await page.getByRole('button', { name: 'Sửa hồ sơ Thảo Linh', exact: true }).click();
 		await expect(page.getByLabel('ID', { exact: true })).toBeDisabled();
@@ -234,6 +252,27 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 	} finally {
 		await activate(page, admin.token, false);
 	}
+});
+
+test('system reset requires confirmation and can be cancelled without deleting data', async ({ page }) => {
+	await login(page);
+	let resetRequests = 0;
+	page.on('request', (request) => {
+		if (request.url() === API + '/api/admin/database-reset') resetRequests++;
+	});
+	await page.getByRole('button', { name: 'Tài khoản', exact: true }).click();
+	await expect(page.getByRole('dialog')).not.toContainText(AN);
+	await expect(page.getByRole('dialog')).toContainText('Quản trị viên hệ thống');
+	await page.keyboard.press('Escape');
+	await page.getByRole('link', { name: 'Nhóm', exact: true }).click();
+	await page.getByRole('button', { name: 'Xóa toàn bộ cơ sở dữ liệu', exact: true }).click();
+	const submit = page.getByRole('button', { name: 'Xóa toàn bộ dữ liệu', exact: true });
+	await expect(submit).toBeDisabled();
+	await page.getByRole('textbox', { name: 'Xác nhận xóa cơ sở dữ liệu', exact: true }).fill('XÓA TOÀN BỘ');
+	await expect(submit).toBeEnabled();
+	await page.getByRole('button', { name: 'Đóng', exact: true }).first().click();
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	expect(resetRequests).toBe(0);
 });
 
 test('ordinary bill creators notify participants once; opt-out and notification permissions are enforced', async ({

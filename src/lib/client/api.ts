@@ -69,7 +69,7 @@ export async function initializeAuth() {
 		await signInWithCustomToken(auth, response.token);
 	}
 	if (auth.currentUser && !/^discord_\d{17,20}$/.test(auth.currentUser.uid)) await signOut(auth);
-	return { signedIn: !!auth.currentUser, local: config.mode === 'local' };
+	return { signedIn: !!auth.currentUser, local: config.mode === 'local', uid: auth.currentUser?.uid };
 }
 export async function beginDiscordLogin() {
 	const bytes = crypto.getRandomValues(new Uint8Array(32));
