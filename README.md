@@ -8,9 +8,10 @@ No service has been deployed. No existing data migration is required or included
 
 ## Run locally
 
-Install Node.js 24 LTS, npm and Java 21+ on PATH, then:
+Install Node.js 24 LTS and Java 21+ on PATH. Use the pinned npm 11.19.1 for local installs and CI:
 
 ```powershell
+npm install --global npm@11.19.1
 npm ci
 npm run dev
 ```

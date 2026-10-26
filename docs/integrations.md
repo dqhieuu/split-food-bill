@@ -122,6 +122,8 @@ npm run dev
 
 Prerequisites: Node.js 24 LTS and Java 21+. The local launcher runs Firebase emulators for `demo-lunchroom`, seeds a fresh Discord-based fixture when needed, starts Wrangler on `127.0.0.1:8787`, and starts Vite on `127.0.0.1:5173`. The first Firebase run may download emulator binaries. Use the login button and pick one of the mock Discord accounts.
 
+The repository pins Node.js 24 through `.node-version` and npm 11.19.1 through `packageManager` in `package.json`. Cloudflare Workers Builds reads these files to select its toolchain; the GitHub workflow also installs the pinned npm explicitly. Use `npm install --global npm@11.19.1` if your local npm differs. npm 10 resolves optional SvelteKit peer dependencies differently and can reject this npm 11 lockfile as out of sync. Keep the pinned npm version when updating dependencies and commit `package.json` and `package-lock.json` together. See [Cloudflare build image configuration](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/).
+
 The seeded Minh An (`discord_100000000000000001`) is the global admin and local group's active admin. The other users are inactive. Activate Thảo Linh or Quang Huy in member management before testing their group access. A second mock server is available for testing group creation. No real OAuth, Discord API calls or DMs occur in local mode, even if credentials exist in the shell.
 
 Local configuration is committed under `env.local` in `wrangler.jsonc`. The frontend defaults to the local Worker URL during development, so no frontend environment file is needed. Set `VITE_WORKER_API_URL` in Vercel for production as described below. Local database/auth hosts cannot point at production. Emulator snapshots and Wrangler storage are ignored by Git.
