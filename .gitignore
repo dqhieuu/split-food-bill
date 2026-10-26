@@ -5,7 +5,6 @@ build/
 dist/
 .env
 .env.*
-!.env.example
 .emulator-data/
 firebase-export-*/
 *-debug.log

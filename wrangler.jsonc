@@ -1,6 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "split-food-bill-api",
+	"workers_dev": true,
 	"main": "worker/src/index.ts",
 	"compatibility_date": "2026-10-26",
 	"durable_objects": { "bindings": [{ "name": "AUTH_SESSIONS", "class_name": "AuthSessions" }] },

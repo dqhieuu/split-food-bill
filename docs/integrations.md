@@ -124,7 +124,7 @@ Prerequisites: Node.js 24 LTS and Java 21+. The local launcher runs Firebase emu
 
 The seeded Minh An (`discord_100000000000000001`) is the global admin and local group's active admin. The other users are inactive. Activate Thảo Linh or Quang Huy in member management before testing their group access. A second mock server is available for testing group creation. No real OAuth, Discord API calls or DMs occur in local mode, even if credentials exist in the shell.
 
-Local configuration is committed under `env.local` in `wrangler.jsonc`. `.env.example` contains the frontend's `VITE_WORKER_API_URL`; Vite defaults to the local Worker URL during development. Local database/auth hosts cannot point at production. Emulator snapshots and Wrangler storage are ignored by Git.
+Local configuration is committed under `env.local` in `wrangler.jsonc`. The frontend defaults to the local Worker URL during development, so no frontend environment file is needed. Set `VITE_WORKER_API_URL` in Vercel for production as described below. Local database/auth hosts cannot point at production. Emulator snapshots and Wrangler storage are ignored by Git.
 
 Separate processes, if desired:
 
@@ -177,6 +177,8 @@ Edit the top-level production `vars` in `wrangler.jsonc`; retain the separate lo
 | `FIREBASE_AUTH_DOMAIN` | Usually `<project>.firebaseapp.com`                                                  |
 
 Remove all placeholder values. Production refuses emulator flags, demo project IDs and placeholder frontend URLs. Configure the Worker name/account for your Cloudflare account. The Worker uses the `AUTH_SESSIONS` SQLite Durable Object binding already declared in Wrangler.
+
+`workers_dev: true` explicitly enables the Worker's public `workers.dev` address on deployment. If Cloudflare shows “No URLs enabled” for an existing Worker, open Workers & Pages → your Worker → Settings → Domains & Routes and enable its `workers.dev` route. If the account has no Workers subdomain yet, set one on the Workers & Pages overview. Copy the resulting stable Worker URL and append `/auth/callback` for Discord's OAuth redirect. See [Cloudflare workers.dev routing](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
 
 Authenticate the CLI without deploying:
 
