@@ -24,6 +24,7 @@
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, dateTimeLabel, localDate, netBalance } from '$lib/domain/ledger';
 	import { bankNames, resolveBank } from '$lib/domain/qr';
+	import { banks } from '$lib/domain/banks';
 	import { parseLedgerImport, summarizeImport, type ImportedEntry } from '$lib/domain/import';
 	let {
 		appState,
@@ -39,7 +40,6 @@
 	let memberDraft = $state<Member>({
 		id: '',
 		name: '',
-		email: '',
 		active: true,
 		role: 'member',
 		bankCode: '970436',
@@ -56,11 +56,12 @@
 	let importProgress = $state('');
 	let importing = $state(false);
 	let acknowledged = $state(false);
+	let activationChanges = $state<Record<string, boolean>>({});
 	const isAdmin = $derived(appState.members.find((m) => m.id === actor)?.role === 'admin');
 	const members = $derived(
-		appState.members.filter((m) =>
-			`${m.id} ${m.name} ${m.email}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))
-		)
+		appState.members
+			.filter((m) => `${m.id} ${m.name}`.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi')))
+			.sort((a, b) => Number(b.id === actor) - Number(a.id === actor) || Number(b.active) - Number(a.active))
 	);
 	const summary = $derived(summarizeImport(importEntries, appState));
 	const actionLabels: Record<string, string> = {
@@ -81,6 +82,21 @@
 		bankInput = memberDraft.bankLabel ?? bankNames[memberDraft.bankCode] ?? memberDraft.bankCode;
 		validation = '';
 		memberOpen = true;
+	}
+	async function setMemberActive(member: Member, active: boolean) {
+		if (!isAdmin || busy || member.id === actor || member.active === active) return;
+		activationChanges[member.id] = active;
+		try {
+			await run(
+				'saveMember',
+				{ ...member, active },
+				active ? `Đã kích hoạt ${member.name}.` : `Đã ngừng hoạt động ${member.name}.`
+			);
+		} catch {
+			// The shared command handler displays errors; restore the saved switch state below.
+		} finally {
+			delete activationChanges[member.id];
+		}
 	}
 	async function saveMember() {
 		validation = '';
@@ -182,7 +198,7 @@
 			<div class="search-field">
 				<Search size={17} /><Input
 					aria-label="Tìm thành viên"
-					placeholder="Tìm ID, tên hoặc email…"
+					placeholder="Tìm ID hoặc tên…"
 					bind:value={search}
 				/>
 			</div>
@@ -200,10 +216,10 @@
 						></th></tr
 					></thead
 				><tbody
-					>{#each members as member}<tr class:inactive-member={!member.active}
+					>{#each members as member (member.id)}<tr class:inactive-member={!member.active}
 							><td
 								><div class="table-person">
-									<Avatar {member} /><span><strong>{member.name}</strong><small>{member.email}</small></span>
+									<Avatar {member} /><span><strong>{member.name}</strong></span>
 								</div></td
 							><td>{member.role === 'admin' ? 'Quản trị viên' : 'Thành viên'}</td><td
 								>{member.bankLabel || bankNames[member.bankCode] || member.bankCode || 'Chưa thiết lập'}<small
@@ -217,12 +233,20 @@
 								class:negative={netBalance(appState.ledger, member.id) < 0}
 								>{currency(netBalance(appState.ledger, member.id))}</td
 							><td
-								>{#if isAdmin || member.id === actor}<Button
-										variant="ghost"
-										size="icon"
-										aria-label={`Sửa hồ sơ ${member.name}`}
-										onclick={() => editMember(member)}><Pencil size={16} /></Button
-									>{/if}</td
+								><div class="member-row-actions">
+									{#if isAdmin}<Switch
+											aria-label={`Kích hoạt ${member.name}`}
+											checked={activationChanges[member.id] ?? member.active}
+											disabled={busy || member.id === actor}
+											onCheckedChange={(active) => setMemberActive(member, active)}
+										/>{/if}
+									{#if isAdmin || member.id === actor}<Button
+											variant="ghost"
+											size="icon"
+											aria-label={`Sửa hồ sơ ${member.name}`}
+											onclick={() => editMember(member)}><Pencil size={16} /></Button
+										>{/if}
+								</div></td
 							></tr
 						>{/each}</tbody
 				>
@@ -324,8 +348,7 @@
 				><option value="member">Thành viên</option><option value="admin">Quản trị viên</option></select
 			></label
 		><label class="field">Tên<Input bind:value={memberDraft.name} maxlength={100} /></label><label
-			class="field">Email<Input type="email" bind:value={memberDraft.email} /></label
-		><label class="field"
+			class="field"
 			>Ngân hàng<Input
 				bind:value={bankInput}
 				list="member-bank-options"
@@ -334,11 +357,10 @@
 				maxlength={100}
 			/>
 			<datalist id="member-bank-options"
-				>{#each Object.values(bankNames) as name}<option value={name}></option>{/each}</datalist
+				>{#each banks as bank}<option value={bank.shortName} label={`${bank.name} (${bank.code})`}
+					></option>{/each}</datalist
 			></label
-		><label class="field"
-			>Số tài khoản<Input bind:value={memberDraft.bankAccount} inputmode="numeric" maxlength={40} /></label
-		>
+		><label class="field">Số tài khoản<Input bind:value={memberDraft.bankAccount} maxlength={40} /></label>
 	</div>
 	<div class="button-row">
 		<label class="checkbox-label"

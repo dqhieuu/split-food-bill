@@ -73,8 +73,12 @@ afterEach(() => vi.restoreAllMocks());
 describe('bill Discord notifications', () => {
 	it('uses frozen payer names, personalized shares and bounded Vietnamese message content', () => {
 		const content = billNotificationMessage(bill, { name: 'Hội ăn trưa' }, AN, env.FRONTEND_ORIGIN);
-		expect(content).toContain('Người đã thanh toán: Thảo Linh');
-		expect(content).toContain('Phần của bạn: 55.000');
+		expect(content).toContain('**Hóa đơn: Bữa trưa**\nHội ăn trưa · Ăn vào');
+		expect(content).toContain('Người đã thanh toán: **Thảo Linh**');
+		expect(content).toContain('\n\n**Phần của bạn: 55.000 ₫**');
+		expect(content).toContain('Tổng hóa đơn: **100.000 ₫**');
+		expect(content).toContain('• Món ăn: Phở\n• Ghi chú: Ít cay');
+		expect(content).toContain('[Mở Chia tiền ăn](<http://127.0.0.1:5173>)');
 		expect(content).toContain('Thứ Hai');
 		expect(content).toContain('Ít cay');
 		const long = {
@@ -82,9 +86,11 @@ describe('bill Discord notifications', () => {
 			description: '*'.repeat(300),
 			lines: bill.lines.map((line) => ({ ...line, note: '*'.repeat(500), description: '*'.repeat(300) }))
 		};
-		expect(
-			billNotificationMessage(long, { name: '*'.repeat(100) }, AN, env.FRONTEND_ORIGIN).length
-		).toBeLessThanOrEqual(2000);
+		const shortened = billNotificationMessage(long, { name: '*'.repeat(100) }, AN, env.FRONTEND_ORIGIN);
+		expect(shortened.length).toBeLessThanOrEqual(2000);
+		expect(shortened).toContain('Tổng hóa đơn: **100.000 ₫**');
+		expect(shortened).toContain('\\*');
+		expect(shortened).toContain('[Mở Chia tiền ăn]');
 		expect(() => billNotificationMessage(bill, { name: 'Lunch' }, 'outsider', env.FRONTEND_ORIGIN)).toThrow();
 	});
 	it('persists partial failures and retries only failed recipients without changing the bill', async () => {

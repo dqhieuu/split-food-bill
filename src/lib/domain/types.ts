@@ -1,7 +1,6 @@
 export type Member = {
 	id: string;
 	name: string;
-	email: string;
 	active: boolean;
 	role: 'admin' | 'member';
 	bankCode: string;

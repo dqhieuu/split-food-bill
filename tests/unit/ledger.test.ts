@@ -162,7 +162,7 @@ describe('ledger accounting', () => {
 	});
 });
 describe('member profile permissions', () => {
-	it('allows an ordinary member to update their own name, email and bank details', () => {
+	it('allows an ordinary member to update their own name and bank details', () => {
 		const state = fresh();
 		const member = state.members.find((person) => person.id === 'linh')!;
 		applyCommand(
@@ -175,19 +175,19 @@ describe('member profile permissions', () => {
 				bankName: 'Obsolete account holder',
 				email: 'updated@example.test',
 				bankLabel: 'MB Bank',
-				bankAccount: '00112233'
+				bankAccount: 'hieu.dao-ăn_01'
 			},
 			now
 		);
 		expect(state.members.find((person) => person.id === 'linh')).toMatchObject({
 			name: 'Updated member',
-			email: 'updated@example.test',
 			role: 'member',
 			active: true,
 			bankCode: '970422',
-			bankAccount: '00112233'
+			bankAccount: 'hieu.dao-ăn_01'
 		});
 		expect(state.members.find((person) => person.id === 'linh')).not.toHaveProperty('bankName');
+		expect(state.members.find((person) => person.id === 'linh')).not.toHaveProperty('email');
 	});
 	it('rejects editing another profile, creating members, privilege changes and self deactivation', () => {
 		const state = fresh();
@@ -334,7 +334,13 @@ describe('migration and receipts', () => {
 	});
 	it('resolves suggested banks to QR codes and preserves arbitrary bank text without a fabricated code', () => {
 		expect(resolveBank('  vIet com bank ')).toEqual({ code: '970436', label: 'Vietcombank' });
-		expect(resolveBank('970422')).toEqual({ code: '970422', label: 'MB Bank' });
+		expect(resolveBank('970422')).toEqual({ code: '970422', label: 'MBBank' });
+		expect(resolveBank('WRB')).toEqual({ code: '970457', label: 'Woori' });
+		expect(resolveBank('ngan hang tmcp kien long')).toEqual({ code: '970452', label: 'KienLongBank' });
+		expect(resolveBank('KEBHCM')).toEqual({ code: '970466', label: 'KEBHanaHCMBank' });
+		expect(resolveBank('IBKHN')).toEqual({ code: '970455', label: 'IBKHN' });
+		expect(resolveBank('IBKHCM')).toEqual({ code: '970456', label: 'IBKHCM' });
+		expect(resolveBank('IBK')).toEqual({ code: '', label: 'IBK' });
 		const state = fresh();
 		const member = state.members.find((member) => member.id === 'linh')!;
 		applyCommand(state, 'an', 'saveMember', { ...member, bankLabel: 'Ngân hàng nội bộ' }, now);

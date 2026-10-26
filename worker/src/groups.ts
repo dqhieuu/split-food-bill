@@ -35,7 +35,6 @@ export function groupMember(profile: DiscordProfile, env: Env): Member {
 	return {
 		id: userId(profile.id),
 		name: profile.global_name || profile.username,
-		email: profile.email ?? '',
 		avatarUrl: isLocal(env) ? '' : avatarUrl(profile),
 		active: false,
 		role: 'member',
@@ -163,7 +162,6 @@ export async function createGroup(store: Store, user: GlobalUser, env: Env, name
 			members.push({
 				id: user.id,
 				name: user.name,
-				email: user.email,
 				avatarUrl: user.avatarUrl,
 				active: true,
 				role: 'admin',
@@ -177,8 +175,6 @@ export async function createGroup(store: Store, user: GlobalUser, env: Env, name
 		);
 		for (const profile of profiles) {
 			const existing = existingUsers.get(`users/${userId(profile.id)}`);
-			const member = members.find((entry) => entry.id === userId(profile.id))!;
-			if (!member.email) member.email = existing?.email ?? '';
 			if (!existing) writes.push(store.write(`users/${userId(profile.id)}`, profileUser(profile, null, env)));
 		}
 		writes.push(
@@ -210,13 +206,7 @@ export async function syncMembers(store: Store, env: Env, groupId: string, user:
 			const uid = userId(profile.id);
 			const member = existingMembers.get(`groups/${groupId}/members/${uid}`);
 			const globalUser = existingUsers.get(`users/${uid}`);
-			if (!member)
-				writes.push(
-					store.write(`groups/${groupId}/members/${uid}`, {
-						...groupMember(profile, env),
-						email: profile.email ?? globalUser?.email ?? ''
-					})
-				);
+			if (!member) writes.push(store.write(`groups/${groupId}/members/${uid}`, groupMember(profile, env)));
 			if (!globalUser) writes.push(store.write(`users/${uid}`, profileUser(profile, null, env)));
 		}
 		writes.push(store.write(`groups/${groupId}`, { ...current, version: current.version + 1 }));

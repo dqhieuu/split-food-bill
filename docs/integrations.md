@@ -75,7 +75,6 @@ erDiagram
     MEMBERS {
         string id PK "same global user id"
         string name
-        string email
         boolean active
         string role "group admin or member"
         string avatarUrl
@@ -99,7 +98,11 @@ erDiagram
 | `groups/{groupId}/archives/{id}`    | `id`, `name`, `url`, `date`                                                                                                                                                         |
 | `groups/{groupId}/audit/{id}`       | `id`, `actor`, `action`, `date`, `reference`                                                                                                                                        |
 
-The group is represented by the Firestore path, not a redundant `groupId` field in each child record. Member IDs repeat across groups, while bank details and display names can differ per group. Amounts are integer VND; dates are ISO strings. `bankCode` resolves a bank BIN for QR generation and `color` is an internal avatar fallback; neither has a dedicated configuration control. Removed fields such as `bankName` and department are absent.
+The group is represented by the Firestore path, not a redundant `groupId` field in each child record. Member IDs repeat across groups, while bank details and display names can differ per group. Amounts are integer VND; dates are ISO strings. `bankCode` resolves a bank BIN for QR generation and `color` is an internal avatar fallback; neither has a dedicated configuration control. Member email, `bankName` and department are absent from the current member schema. Optional Discord email remains on the global user profile only.
+
+Bank suggestions are bundled locally in `src/lib/domain/banks.ts`, covering all 66 entries in the [VietQR bank directory](https://api.vietqr.vn/vi/danh-sach-ma-ngan-hang) plus separate IBK Hanoi and Ho Chi Minh City branches. The snapshot was checked on 2026-10-27; routing BINs are cross-referenced against the [VietQR bank API](https://api.vietqr.io/v2/banks). Matching accepts full names, short names, provider codes and BINs. Generic IBK deliberately has no routing BIN because its two branches differ. Free text remains supported and does not acquire an invented BIN. Suggestions and QR generation require no runtime third-party bank lookup.
+
+Bank account identifiers are free text, including letters and punctuation, with a 40-character limit. They are stored and passed to QR generation unchanged.
 
 Cloudflare Durable Object storage holds short-lived OAuth states, one-use handoffs, DM deduplication IDs, rate-limit slots and database-reset checkpoints/locks. These are backend internals rather than Firestore business collections. The Wrangler `migrations` declaration creates the Durable Object SQLite class; it is platform resource provisioning, not a migration of app data.
 

@@ -1,3 +1,5 @@
+import { banks } from './banks';
+
 // VietQR EMVCo payload generated locally; bank details never leave the app.
 function field(id: string, value: string): string {
 	return id + new TextEncoder().encode(value).length.toString().padStart(2, '0') + value;
@@ -25,18 +27,9 @@ export function vietQrPayload(bankCode: string, account: string, amount: number,
 		'6304';
 	return content + crc16(content);
 }
-export const bankNames: Record<string, string> = {
-	'970436': 'Vietcombank',
-	'970422': 'MB Bank',
-	'970418': 'BIDV',
-	'970407': 'Techcombank',
-	'970415': 'VietinBank',
-	'970416': 'ACB',
-	'970432': 'VPBank',
-	'970423': 'TPBank',
-	'970403': 'Sacombank',
-	'970405': 'Agribank'
-};
+export const bankNames: Record<string, string> = Object.fromEntries(
+	banks.filter((bank) => bank.bin).map((bank) => [bank.bin, bank.shortName])
+);
 
 export function resolveBank(value: string): { code: string; label: string } {
 	const label = value.trim();
@@ -45,10 +38,13 @@ export function resolveBank(value: string): { code: string; label: string } {
 			.normalize('NFD')
 			.replace(/\p{Diacritic}/gu, '')
 			.toLowerCase()
+			.replace(/đ/g, 'd')
 			.replace(/[^a-z0-9]/g, '');
-	const match = Object.entries(bankNames).find(
-		([code, name]) => code === label || normalize(name) === normalize(label)
-	);
-	if (match) return { code: match[0], label: match[1] };
+	if (bankNames[label]) return { code: label, label: bankNames[label] };
+	const matches = (name: string) => normalize(name) === normalize(label);
+	const match =
+		banks.find((bank) => [bank.code, bank.shortName, bank.name].some(matches)) ??
+		banks.find((bank) => bank.aliases.some(matches));
+	if (match) return { code: match.bin, label: match.shortName };
 	return { code: /^\d{6}$/.test(label) ? label : '', label };
 }

@@ -74,9 +74,9 @@
 				'Mã',
 				'Ngày thanh toán',
 				'Ngày tạo',
-				'Người trả / Người nợ',
-				'Người nhận',
+				'Bên A',
 				'Loại',
+				'Bên B',
 				'Số tiền VND',
 				'Nội dung',
 				'Ghi chú',
@@ -87,8 +87,8 @@
 				e.date,
 				e.createdAt || '',
 				name(e.from),
-				name(e.to),
 				e.type === 'debt' ? 'Nợ' : 'Trả',
+				name(e.to),
 				e.amount,
 				e.description,
 				e.note,
@@ -204,8 +204,8 @@
 			<table class="data-table ledger-table">
 				<thead
 					><tr
-						><th>Ngày & nội dung</th><th>Người nợ / trả</th><th>Người nhận</th><th>Loại</th><th
-							class="align-right">Số tiền</th
+						><th>Ngày & nội dung</th><th>Bên A</th><th>Loại</th><th>Bên B</th><th class="align-right"
+							>Số tiền</th
 						></tr
 					></thead
 				><tbody
@@ -214,13 +214,13 @@
 								><strong>{entry.description || 'Không có mô tả'}</strong><small
 									>{dateTimeLabel(entry.createdAt)}</small
 								>{#if entry.note}<small>{entry.note}</small>{/if}
-							</td><td>{name(entry.from)}</td><td>{name(entry.to)}</td><td
+							</td><td>{name(entry.from)}</td><td
 								><span
 									class="status-pill"
 									class:success={entry.type === 'payment'}
 									class:danger={entry.type === 'debt'}>{entry.type === 'debt' ? 'Nợ' : 'Trả'}</span
 								>{#if entry.legacySequence}<small>Số cũ: {entry.legacySequence}</small>{/if}</td
-							><td class="align-right amount-cell">{currency(entry.amount)}</td></tr
+							><td>{name(entry.to)}</td><td class="align-right amount-cell">{currency(entry.amount)}</td></tr
 						>{/each}</tbody
 				>
 			</table>
