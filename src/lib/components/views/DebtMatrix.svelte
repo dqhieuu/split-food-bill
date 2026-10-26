@@ -69,11 +69,7 @@
 								class:debt-cell={balance > 0}
 								class:credit-cell={balance < 0}
 								title={`${row.name} → ${column.name}: ${currency(balance)}`}
-								>{row.id === column.id
-									? '—'
-									: balance
-										? new Intl.NumberFormat('vi-VN').format(balance)
-										: '·'}</td
+								>{row.id === column.id ? '—' : currency(balance)}</td
 							>{/each}<td
 							class:debt-cell={netBalance(appState.ledger, row.id) > 0}
 							class:credit-cell={netBalance(appState.ledger, row.id) < 0}
