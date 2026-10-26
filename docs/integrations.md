@@ -182,6 +182,8 @@ Remove all placeholder values. Production refuses emulator flags, demo project I
 
 `workers_dev: true` explicitly enables the Worker's public `workers.dev` address on deployment. If Cloudflare shows “No URLs enabled” for an existing Worker, open Workers & Pages → your Worker → Settings → Domains & Routes and enable its `workers.dev` route. If the account has no Workers subdomain yet, set one on the Workers & Pages overview. Copy the resulting stable Worker URL and append `/auth/callback` for Discord's OAuth redirect. See [Cloudflare workers.dev routing](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
 
+The production Worker name is `split-food-bill`, matching `https://split-food-bill.daohieu61.workers.dev`. Secrets are scoped to a Worker: secrets on another Worker, such as the earlier `split-food-bill-api`, are not available here. Keep the name in `wrangler.jsonc`, the Cloudflare Git integration, Vercel's API URL, and Discord's callback host aligned.
+
 Authenticate the CLI without deploying:
 
 ```powershell
