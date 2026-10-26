@@ -34,8 +34,10 @@
 		new Set(appState.members.filter((member) => member.active).map((member) => member.id))
 	);
 	const history = $derived(personalPaymentHistory(appState.ledger, actor, activeIds).slice(0, 5));
-	const recentBills = $derived([...appState.bills].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4));
-	const window = $derived(spendingWindow(appState.bills, granularity, windowOffset));
+	// Undone bills stay in the ledger for history but no longer count as spending.
+	const liveBills = $derived(appState.bills.filter((bill) => !bill.undoneAt));
+	const recentBills = $derived([...liveBills].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4));
+	const window = $derived(spendingWindow(liveBills, granularity, windowOffset));
 	const max = $derived(Math.max(1, ...window.buckets.map((bucket) => bucket.value)));
 	const shortDate = (key: string) => `${Number(key.slice(8))}/${Number(key.slice(5, 7))}`;
 	const bucketLabel = (key: string) =>
@@ -178,7 +180,7 @@
 		</div>
 	</section>
 	<SpendingCalendar
-		bills={appState.bills}
+		bills={liveBills}
 		members={appState.members}
 		onBillClick={(id) => {
 			selectedBillId = id;
@@ -186,7 +188,7 @@
 		}}
 	/>
 </div>
-<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} />
+<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} {actor} {run} {busy} />
 <Modal bind:open={paymentOpen} title="Chi tiết thanh toán" description={selectedEntry?.description || ''}>
 	{#if selectedEntry}
 		<div class="summary-pair">

@@ -8,7 +8,7 @@
 	import EmptyState from '../EmptyState.svelte';
 	import type { AppState, Member } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, billDateLabel, pairBalance } from '$lib/domain/ledger';
+	import { currency, billDateLabel, cancelledEntryIds, pairBalance } from '$lib/domain/ledger';
 	import { vietQrPayload, bankNames } from '$lib/domain/qr';
 	import { preferences } from '$lib/client/preferences.svelte';
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
@@ -127,11 +127,14 @@
 					>
 				</div>
 			</div>
-			{#if expanded === pair.member.id}{@const entries = [...appState.ledger]
+			{#if expanded === pair.member.id}{@const cancelled = cancelledEntryIds(
+					appState.ledger
+				)}{@const entries = [...appState.ledger]
 					.filter(
 						(e) =>
 							e.type === 'debt' &&
 							e.source !== 'settlement' &&
+							!cancelled.has(e.id) &&
 							((e.from === actor && e.to === pair.member.id) || (e.to === actor && e.from === pair.member.id))
 					)
 					.sort((a, b) => b.date.localeCompare(a.date))}

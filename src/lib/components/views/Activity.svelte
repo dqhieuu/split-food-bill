@@ -100,7 +100,9 @@
 							? 'Xác nhận QR'
 							: e.source === 'bill'
 								? 'Hóa đơn'
-								: 'Hoàn tiền'
+								: e.source === 'reversal'
+									? 'Hoàn tác hóa đơn'
+									: 'Hoàn tiền'
 			])
 		];
 		const url = URL.createObjectURL(
@@ -173,7 +175,10 @@
 							><td
 								><button class="table-title-button" onclick={() => openBill(bill)}
 									><span class="bill-symbol tone-0"><ReceiptText size={18} /></span><span
-										><strong>{bill.description}</strong><small>Ăn vào {billDateLabel(bill.date)}</small></span
+										><strong
+											>{bill.description}{#if bill.undoneAt}
+												<span class="status-pill">Đã hoàn tác</span>{/if}</strong
+										><small>Ăn vào {billDateLabel(bill.date)}</small></span
 									></button
 								></td
 							><td
@@ -240,4 +245,4 @@
 			>{/if}
 	</div>
 </section>
-<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} />
+<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} {actor} {run} {busy} />

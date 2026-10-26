@@ -113,6 +113,16 @@ export function discountShares(amounts: number[], discountedTotal: number): numb
 	shares[shares.length - 1] = discountedTotal - shares.slice(0, -1).reduce((a, b) => a + b, 0);
 	return shares;
 }
+/** Bill debts cancelled by an undo, together with the reversal entries that cancel them. */
+export function cancelledEntryIds(ledger: LedgerEntry[]): Set<string> {
+	const ids = new Set<string>();
+	for (const entry of ledger)
+		if (entry.source === 'reversal') {
+			ids.add(entry.id);
+			ids.add(entry.id.replace(/-undo$/, ''));
+		}
+	return ids;
+}
 function requireMember(state: AppState, id: string, active = false): Member {
 	const member = state.members.find((m) => m.id === id);
 	if (!member || (active && !member.active))
@@ -253,6 +263,37 @@ export function applyCommand(
 				error: '',
 				createdAt: now
 			});
+		reference = bill.id;
+	} else if (command === 'undoBill') {
+		const { id } = z.object({ id: identifier }).parse(input);
+		const bill = state.bills.find((b) => b.id === id);
+		if (!bill) throw new DomainError('Không tìm thấy hóa đơn.', 404);
+		if (bill.organizer !== actor && requireMember(state, actor, true).role !== 'admin')
+			throw new DomainError('Chỉ người trả hóa đơn hoặc quản trị viên được hoàn tác.', 403);
+		if (bill.undoneAt) throw new DomainError('Hóa đơn đã được hoàn tác và không thể hoàn tác lại.', 409);
+		const debts = state.ledger.filter((entry) => entry.source === 'bill' && entry.reference === bill.id);
+		requireAvailableEntryIds(
+			state,
+			debts.map((entry) => `${entry.id}-undo`)
+		);
+		// Append-only: each bill debt is cancelled by an equal debt in the opposite direction.
+		for (const entry of debts)
+			state.ledger.push({
+				id: `${entry.id}-undo`,
+				from: entry.to,
+				to: entry.from,
+				type: 'debt',
+				amount: entry.amount,
+				date: now,
+				createdAt: now,
+				description: `Hoàn tác: ${entry.description}`,
+				note: '',
+				creator: actor,
+				source: 'reversal',
+				reference: bill.id
+			});
+		bill.undoneAt = now;
+		bill.undoneBy = actor;
 		reference = bill.id;
 	} else if (command === 'recordPayments') {
 		const data = z

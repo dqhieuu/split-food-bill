@@ -43,7 +43,7 @@ export type LedgerEntry = {
 	description: string;
 	note: string;
 	creator: string;
-	source: 'bill' | 'manual' | 'qr' | 'settlement' | 'import';
+	source: 'bill' | 'manual' | 'qr' | 'settlement' | 'import' | 'reversal';
 	reference: string;
 	legacySequence?: string;
 };
@@ -58,6 +58,9 @@ export type Bill = {
 	total: number;
 	discordNotification: boolean;
 	memberNames?: Record<string, string>;
+	/** Set once when the bill is undone; an undone bill can never be undone or restored again. */
+	undoneAt?: string;
+	undoneBy?: string;
 };
 export type NotificationDelivery = {
 	memberId: string;

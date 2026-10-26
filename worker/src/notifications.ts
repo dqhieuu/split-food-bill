@@ -34,6 +34,7 @@ export async function deliverBillNotifications(
 		const { group, member } = await requireGroup(store, groupId, actor, false, tx);
 		const bill = await store.get<Bill>(`groups/${groupId}/bills/${billId}`, tx);
 		if (!bill) throw new DomainError('Không tìm thấy hóa đơn.', 404);
+		if (bill.undoneAt) throw new DomainError('Hóa đơn đã được hoàn tác nên không gửi thông báo.', 409);
 		if (bill.organizer !== actor && member.role !== 'admin')
 			throw new DomainError('Chỉ người ghi hóa đơn hoặc quản trị viên nhóm được gửi lại thông báo.', 403);
 		const receipt = await store.get<Receipt>(path, tx);

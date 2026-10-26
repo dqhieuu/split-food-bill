@@ -1,5 +1,5 @@
 import type { Bill, LedgerEntry } from './types';
-import { localDate } from './ledger';
+import { cancelledEntryIds, localDate } from './ledger';
 
 export type SpendingGranularity = 'day' | 'week' | 'month';
 
@@ -52,10 +52,12 @@ export function spendingWindow(
 
 /** Bill debts describe who paid on whose behalf; repayments describe actual transfer direction. */
 export function personalPaymentHistory(ledger: LedgerEntry[], actor: string, activeIds: Set<string>) {
+	const cancelled = cancelledEntryIds(ledger);
 	return ledger
 		.filter(
 			(entry) =>
 				entry.source !== 'settlement' &&
+				!cancelled.has(entry.id) &&
 				entry.from !== entry.to &&
 				(entry.from === actor || entry.to === actor) &&
 				activeIds.has(entry.from === actor ? entry.to : entry.from)
