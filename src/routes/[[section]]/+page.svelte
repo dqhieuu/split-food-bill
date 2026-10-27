@@ -90,11 +90,11 @@
 	let toastTimer: ReturnType<typeof setTimeout>;
 	/** Keeps the header and the group picker in step when an admin renames the group. */
 	function applyGroup(next: Group) {
-		group = next;
+		if (group?.id === next.id) group = next;
 		if (sessionData)
 			sessionData = {
 				...sessionData,
-				groups: sessionData.groups.map((item) => (item.id === next.id ? { ...item, name: next.name } : item))
+				groups: sessionData.groups.map((item) => (item.id === next.id ? { ...item, ...next } : item))
 			};
 	}
 	function notify(message: string, isError = false) {
@@ -339,6 +339,7 @@
 					<Groups
 						session={sessionData}
 						onReset={() => (resetOpen = true)}
+						onUpdated={applyGroup}
 						onSelect={async (id) => {
 							await changeGroup(id);
 							if (!error) await goto('/');
@@ -369,7 +370,6 @@
 								{run}
 								{busy}
 								groupId={selectedGroupId}
-								groupName={group?.name ?? ''}
 							/>
 						{:else if section === '/matrix'}<DebtMatrix {appState} {actor} {run} {busy} />
 						{:else}<div class="empty-state">
@@ -380,7 +380,7 @@
 				{/if}
 			</main>
 			<footer>
-				<span>Chia tiền ăn</span><span>VND <span class="footer-dot">·</span> Giờ Việt Nam</span>
+				<span>100% prompt bởi Yoasobi Fangei Club</span>
 			</footer>
 		</div>
 	</div>

@@ -103,7 +103,7 @@
 						</div>
 					</div>
 					<ChevronRight size={16} />
-				</button>{/each}
+				</button>{:else}<p class="overview-empty">Chưa có hóa đơn.</p>{/each}
 		</div>
 	</section>
 	<section class="panel payment-history-panel">
@@ -126,7 +126,7 @@
 					</div>
 					<strong class="payment-history-amount">{currency(item.entry.amount)}</strong>
 				</button>
-			{:else}<p class="payment-history-empty">Chưa có thanh toán.</p>{/each}
+			{:else}<p class="overview-empty">Chưa có thanh toán.</p>{/each}
 		</div>
 		<a href="/activity" class="panel-bottom-link">Xem lịch sử <ArrowRight size={16} /></a>
 	</section>

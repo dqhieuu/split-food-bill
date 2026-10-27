@@ -3,13 +3,22 @@
 	import { Plus, Users, RefreshCw, Trash2 } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import type { Session } from '$lib/domain/types';
+	import type { Group, GroupSummary, Session } from '$lib/domain/types';
+	import GroupConfig from '../GroupConfig.svelte';
 	import { requestJson } from '$lib/client/api';
 	let {
 		session,
 		onSelect,
-		onReset
-	}: { session: Session; onSelect: (id: string) => Promise<void>; onReset: () => void } = $props();
+		onReset,
+		onUpdated
+	}: {
+		session: Session;
+		onSelect: (id: string) => Promise<void>;
+		onReset: () => void;
+		onUpdated: (group: Group) => void;
+	} = $props();
+	let configGroup = $state<GroupSummary | null>(null);
+	let configOpen = $state(false);
 	let guilds = $state<{ id: string; name: string }[]>([]);
 	let preview = $state<{ id: string; name: string }[]>([]);
 	let guildId = $state('');
@@ -62,7 +71,12 @@
 <div class="groups-layout">
 	<section class="panel form-panel">
 		<h2>Nhóm của bạn</h2>
-		{#each session.groups as group}<button class="group-choice" onclick={() => onSelect(group.id)}
+		{#each session.groups as group}<button
+				class="group-choice"
+				onclick={() => {
+					configGroup = group;
+					configOpen = true;
+				}}
 				><Users size={20} /><span
 					><strong>{group.name}</strong><small
 						>{group.role === 'admin' ? 'Quản trị viên nhóm' : 'Thành viên'} · {group.discordGuildId}</small
@@ -103,3 +117,12 @@
 		<Button variant="destructive" onclick={onReset}><Trash2 size={16} />Xóa toàn bộ cơ sở dữ liệu</Button>
 	</div>{/if}
 {#if error}<p class="validation-error" role="alert">{error}</p>{/if}
+{#if configOpen && configGroup}<GroupConfig
+		bind:open={configOpen}
+		group={configGroup}
+		onUpdated={(next) => {
+			if (configGroup) configGroup = { ...configGroup, ...next };
+			onUpdated(next);
+		}}
+		onSelect={() => onSelect(configGroup!.id)}
+	/>{/if}

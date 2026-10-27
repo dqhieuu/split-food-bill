@@ -10,7 +10,7 @@ export async function cleanupTestData() {
 	const db = getFirestore(app);
 	const root = db.doc('groups/local');
 	for (const document of (await db.collection('groups').get()).docs) {
-		if (/^E2E test group \d+$/.test(document.data().name ?? '')) {
+		if (/^E2E test group \d+(?: renamed)?$/.test(document.data().name ?? '')) {
 			await db.doc(`discordGuilds/${document.data().discordGuildId}`).delete();
 			await db.recursiveDelete(document.ref);
 		}

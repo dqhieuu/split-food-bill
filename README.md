@@ -1,4 +1,4 @@
-# Chia tiền ăn 
+# Chia tiền ăn
 
 A Vietnamese group expense SPA using SvelteKit, Svelte 5, TypeScript, shadcn-svelte, Tailwind, Firebase Authentication/Firestore and a Cloudflare Worker. Code and documentation are English; UI is Vietnamese.
 
@@ -82,6 +82,6 @@ npm run test:e2e
 
 `build:worker` is a dry run and makes no deployment. Browser tests exercise local OAuth, single-use exchanges, role boundaries, inactive-member denial, group isolation, remembered selection and bill workflows. They use mock Discord only; live credentials and live OAuth require a configured environment.
 
-Useful separate commands: `npm run emulators`, `npm run seed:local`, `npm run dev:worker`, `npm run dev:web`. When running them separately, seed after the emulators start, then start Worker and frontend. [Feature parity notes](docs/feature-parity.md) describe the spreadsheet workflows preserved by the app.
+Useful separate commands: `npm run emulators`, `npm run seed:local`, `npm run dev:worker`, `npm run dev:web`. When running them separately, seed after the emulators start, then start Worker and frontend.
 
 Discord member previews and group member management include explicit refresh buttons that bypass the member cache. System admins can reset all Firestore data from group management after typing the confirmation phrase. See [database reset](docs/integrations.md#database-reset) for scope and recovery.

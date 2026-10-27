@@ -108,6 +108,31 @@ test('group activation, distinct roles, group isolation and last-group selection
 		expect(response.status()).toBe(201);
 		const { group } = await response.json();
 		await expect(page.getByRole('heading', { name: 'Tổng quan', exact: true })).toBeVisible();
+		await expect(page.locator('.overview-empty')).toHaveText(['Chưa có hóa đơn.', 'Chưa có thanh toán.']);
+		const emptyStyles = await page.locator('.overview-empty').evaluateAll((items) =>
+			items.map((item) => {
+				const style = getComputedStyle(item);
+				return [style.fontSize, style.color, style.padding, style.textAlign];
+			})
+		);
+		expect(emptyStyles[0]).toEqual(emptyStyles[1]);
+		await page.getByRole('combobox', { name: 'Nhóm hiện tại', exact: true }).selectOption('local');
+		await expect(page.locator('.loading-panel')).toHaveCount(0);
+		await page.getByRole('link', { name: 'Nhóm', exact: true }).click();
+		await page.locator('.group-choice').filter({ hasText: group.name }).click();
+		await expect(page.getByRole('dialog', { name: 'Cấu hình nhóm' })).toBeVisible();
+		await expect(page.getByRole('dialog').getByLabel('Máy chủ Discord', { exact: true })).toHaveValue(
+			group.discordGuildId
+		);
+		const renamed = group.name + ' renamed';
+		await page.getByRole('dialog').getByLabel('Tên nhóm', { exact: true }).fill(renamed);
+		await page.getByRole('button', { name: 'Lưu cấu hình', exact: true }).click();
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(page.locator('.group-choice').filter({ hasText: renamed })).toBeVisible();
+		await expect(page.getByRole('combobox', { name: 'Nhóm hiện tại', exact: true })).toHaveValue('local');
+		await page.locator('.group-choice').filter({ hasText: renamed }).click();
+		await page.getByRole('button', { name: 'Mở nhóm', exact: true }).click();
+		await expect(page.getByRole('heading', { name: 'Tổng quan', exact: true })).toBeVisible();
 		expect((await call(memberPage, member.token, `/api/groups/${group.id}/state`)).status()).toBe(403);
 		expect(
 			(await call(memberPage, member.token, `/api/groups/${group.id}/commands/createBill`, {})).status()
