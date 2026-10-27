@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import QRCode from 'qrcode';
 	import { Wallet, ArrowUpRight, ArrowDownLeft, QrCode, History, ChevronDown } from '@lucide/svelte';
@@ -18,12 +19,35 @@
 	let filter = $state('all');
 	let expanded = $state<string[]>([]);
 	let qrOpen = $state(false);
-	let qrPayment = $state<{ id: string; amount: number; recipient: Member } | null>(null);
+	let qrPayment = $state<{
+		id: string;
+		amount: number;
+		recipient: Member;
+		payer: Pick<Member, 'id' | 'name'>;
+	} | null>(null);
 	let confirmed = $state(false);
 	let qrImage = $state('');
 	let qrError = $state('');
+	const currentMember = $derived(appState.members.find((member) => member.id === actor));
+	const isAdmin = $derived(currentMember?.active && currentMember.role === 'admin');
+	const account = $derived(
+		appState.members.find((member) => member.id === page.url.searchParams.get('member')) ?? currentMember
+	);
+	const accountId = $derived(account?.id ?? actor);
+	const isOwnAccount = $derived(accountId === actor);
+	const subject = $derived(isOwnAccount ? 'Bạn' : (account?.name ?? 'Thành viên'));
+	const canManage = $derived(!!currentMember?.active && (isOwnAccount || !!isAdmin));
+	let openedAccount = '';
 	let openedRecipient = '';
 	$effect(() => {
+		if (openedAccount !== accountId) {
+			openedAccount = accountId;
+			openedRecipient = '';
+			filter = 'all';
+			expanded = [];
+			qrOpen = false;
+			qrPayment = null;
+		}
 		const to = page.url.searchParams.get('to');
 		if (to && to !== openedRecipient) {
 			openedRecipient = to;
@@ -35,8 +59,8 @@
 	});
 	const pairs = $derived(
 		appState.members
-			.filter((m) => m.id !== actor)
-			.map((member) => ({ member, balance: pairBalance(appState.ledger, actor, member.id) }))
+			.filter((m) => m.id !== accountId)
+			.map((member) => ({ member, balance: pairBalance(appState.ledger, accountId, member.id) }))
 	);
 	const visible = $derived(
 		pairs
@@ -46,10 +70,19 @@
 	const owed = $derived(pairs.reduce((s, p) => s + Math.max(0, -p.balance), 0));
 	const owing = $derived(pairs.reduce((s, p) => s + Math.max(0, p.balance), 0));
 	const recipient = $derived(qrPayment?.recipient);
+	async function changeAccount(id: string) {
+		if (busy) return;
+		const url = new URL(page.url.href);
+		if (id === actor) url.searchParams.delete('member');
+		else url.searchParams.set('member', id);
+		url.searchParams.delete('to');
+		await goto(url.pathname + url.search, { replace: true });
+	}
 	function toggleHistory(id: string) {
 		expanded = expanded.includes(id) ? expanded.filter((item) => item !== id) : [...expanded, id];
 	}
 	function qrDisabledReason(member: Member) {
+		if (!canManage) return 'Chỉ quản trị viên nhóm được thanh toán thay người khác.';
 		if (busy) return 'Đang xử lý giao dịch. Vui lòng chờ.';
 		if (!member.active) return 'Thành viên chưa được kích hoạt trong nhóm.';
 		if (!member.bankCode || !member.bankAccount)
@@ -57,10 +90,16 @@
 		return '';
 	}
 	async function openQr(to: string) {
+		if (!canManage || busy || !account) return;
 		const person = appState.members.find((member) => member.id === to);
-		const amount = pairBalance(appState.ledger, actor, to);
+		const amount = pairBalance(appState.ledger, accountId, to);
 		if (!person?.active || !person.bankCode || !person.bankAccount || amount <= 0) return;
-		const payment = { id: crypto.randomUUID(), amount, recipient: structuredClone($state.snapshot(person)) };
+		const payment = {
+			id: crypto.randomUUID(),
+			amount,
+			recipient: structuredClone($state.snapshot(person)),
+			payer: { id: account.id, name: account.name }
+		};
 		qrPayment = payment;
 		confirmed = false;
 		qrError = '';
@@ -77,11 +116,16 @@
 		}
 	}
 	async function confirmQrPayment() {
-		if (!qrPayment || !confirmed) return;
+		if (!qrPayment || !confirmed || !canManage || busy || qrPayment.payer.id !== accountId) return;
 		try {
 			await run(
 				'confirmQrPayment',
-				{ id: qrPayment.id, to: qrPayment.recipient.id, amount: qrPayment.amount },
+				{
+					id: qrPayment.id,
+					to: qrPayment.recipient.id,
+					amount: qrPayment.amount,
+					...(qrPayment.payer.id !== actor ? { from: qrPayment.payer.id } : {})
+				},
 				'Đã ghi thanh toán.'
 			);
 			qrOpen = false;
@@ -91,22 +135,44 @@
 	}
 </script>
 
-<div class="page-heading">
+<div class="page-heading balances-heading">
 	<div>
-		<h1>Tài khoản của bạn</h1>
+		<h1>{isOwnAccount ? 'Tài khoản của bạn' : `Tài khoản của ${account?.name}`}</h1>
+		{#if !isOwnAccount}<p>
+				{canManage
+					? 'Bạn có thể thanh toán thay thành viên này với quyền quản trị viên nhóm.'
+					: 'Chế độ chỉ xem. Bạn có thể xem số dư và lịch sử của thành viên này.'}
+			</p>{/if}
 	</div>
+	<label class="balance-account-picker"
+		><span>Xem tài khoản</span>
+		<select
+			aria-label="Xem tài khoản"
+			value={accountId}
+			disabled={busy}
+			onchange={(event) => void changeAccount(event.currentTarget.value)}
+		>
+			{#each appState.members as member}<option value={member.id}
+					>{member.name}{member.id === actor ? ' (Bạn)' : ''}{member.active
+						? ''
+						: ' (Đã ngừng hoạt động)'}</option
+				>{/each}
+		</select>
+	</label>
 </div>
 <div class="stat-grid">
 	<div class="stat-card">
-		<div class="stat-label">Bạn đang nợ <ArrowUpRight size={19} /></div>
+		<div class="stat-label">{subject} đang nợ <ArrowUpRight size={19} /></div>
 		<strong class="gain-amount">{currency(owing)}</strong><span class="stat-foot"
 			>{pairs.filter((p) => p.balance > 0).length} khoản cần thanh toán</span
 		>
 	</div>
 	<div class="stat-card">
-		<div class="stat-label">Bạn đang bị nợ <ArrowDownLeft size={19} /></div>
+		<div class="stat-label">{subject} đang bị nợ <ArrowDownLeft size={19} /></div>
 		<strong class="loss-amount">{currency(owed)}</strong><span class="stat-foot"
-			>{pairs.filter((p) => p.balance < 0).length} người cần trả tiền cho bạn</span
+			>{pairs.filter((p) => p.balance < 0).length} người cần trả tiền cho {isOwnAccount
+				? 'bạn'
+				: account?.name}</span
 		>
 	</div>
 	<div class="stat-card">
@@ -143,7 +209,11 @@
 				</div>
 				<div class="counterpart-amount">
 					<small
-						>{pair.balance > 0 ? 'Bạn đang nợ' : pair.balance < 0 ? 'Bạn đang bị nợ' : 'Không còn nợ'}</small
+						>{pair.balance > 0
+							? `${subject} đang nợ`
+							: pair.balance < 0
+								? `${subject} đang bị nợ`
+								: 'Không còn nợ'}</small
 					><strong class:gain-amount={pair.balance > 0} class:loss-amount={pair.balance < 0}
 						>{currency(Math.abs(pair.balance))}</strong
 					>
@@ -181,7 +251,8 @@
 							e.type === 'debt' &&
 							e.source !== 'settlement' &&
 							!cancelled.has(e.id) &&
-							((e.from === actor && e.to === pair.member.id) || (e.to === actor && e.from === pair.member.id))
+							((e.from === accountId && e.to === pair.member.id) ||
+								(e.to === accountId && e.from === pair.member.id))
 					)
 					.sort((a, b) => b.date.localeCompare(a.date))}
 				<div class="counterpart-history" id={`history-${pair.member.id}`}>
@@ -192,15 +263,15 @@
 							<div class="counterpart-history-info">
 								<strong>{entry.description || 'Khoản nợ'}</strong>
 								<small
-									>{dateLabel(entry.date)} · {entry.from === actor
-										? `Bạn nợ ${pair.member.name}`
-										: `${pair.member.name} nợ bạn`}</small
+									>{dateLabel(entry.date)} · {entry.from === accountId
+										? `${subject} nợ ${pair.member.name}`
+										: `${pair.member.name} nợ ${isOwnAccount ? 'bạn' : account?.name}`}</small
 								>
 							</div>
 							<strong
 								class="counterpart-history-amount"
-								class:gain-amount={entry.from === actor}
-								class:loss-amount={entry.to === actor}>{currency(entry.amount)}</strong
+								class:gain-amount={entry.from === accountId}
+								class:loss-amount={entry.to === accountId}>{currency(entry.amount)}</strong
 							>
 						</div>{/each}{#if !entries.length}<p class="counterpart-history-empty">
 							Chưa có khoản nợ trực tiếp; số dư có thể đến từ tối giản nợ.
@@ -225,17 +296,28 @@
 				/>{/if}
 			<h2>{currency(qrPayment.amount)}</h2>
 			<strong>{recipient.name}</strong>
+			{#if qrPayment.payer.id !== actor}<p>
+					Người trả: {qrPayment.payer.name} · Bạn xác nhận thay với quyền quản trị viên.
+				</p>{/if}
 			<p>
 				{recipient.bankLabel || bankNames[recipient.bankCode] || recipient.bankCode} · {recipient.bankAccount}
 			</p>
 			{#if qrError}<p class="validation-error" role="alert">{qrError}</p>{/if}
 		</div>
 		<label class="checkbox-label"
-			><Checkbox bind:checked={confirmed} aria-label="Đã chuyển khoản xong" />Đã chuyển khoản xong</label
+			><Checkbox
+				bind:checked={confirmed}
+				disabled={!canManage || busy}
+				aria-label={qrPayment.payer.id === actor
+					? 'Đã chuyển khoản xong'
+					: `${qrPayment.payer.name} đã chuyển khoản xong`}
+			/>{qrPayment.payer.id === actor
+				? 'Đã chuyển khoản xong'
+				: `${qrPayment.payer.name} đã chuyển khoản xong`}</label
 		>
 		<div class="modal-actions">
 			<Button variant="outline" disabled={busy} onclick={() => (qrOpen = false)}>Đóng</Button><Button
-				disabled={busy || !confirmed || !qrImage}
+				disabled={busy || !confirmed || !qrImage || !canManage}
 				onclick={confirmQrPayment}>Đã thanh toán</Button
 			>
 		</div>{/if}

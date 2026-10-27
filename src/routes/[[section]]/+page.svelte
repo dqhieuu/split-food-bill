@@ -41,6 +41,7 @@
 		logout,
 		getSession,
 		selectGroup,
+		saveDiscordNotificationPreference,
 		sendCommand
 	} from '$lib/client/api';
 	import {
@@ -102,6 +103,15 @@
 		toast = message;
 		toastIsError = isError;
 		toastTimer = setTimeout(() => (toast = ''), 5500);
+	}
+	async function changeDiscordNotificationPreference(enabled: boolean) {
+		const uid = sessionData?.user.id;
+		const { preferences } = await saveDiscordNotificationPreference(enabled);
+		if (sessionData && sessionData.user.id === uid)
+			sessionData = {
+				...sessionData,
+				user: { ...sessionData.user, preferences: { ...sessionData.user.preferences, ...preferences } }
+			};
 	}
 	async function changeGroup(id: string) {
 		busy = true;
@@ -360,6 +370,9 @@
 									groupId={selectedGroupId}
 									aiEnabled={!!group?.aiEnabled}
 									groupName={group?.name ?? ''}
+									discordNotificationPreference={sessionData?.user.preferences?.discordBillNotifications ??
+										true}
+									onDiscordNotificationPreferenceChange={changeDiscordNotificationPreference}
 								/>{/key}
 						{:else if section === '/balances'}{#key actor}<Balances {appState} {actor} {run} {busy} />{/key}
 						{:else if section === '/activity'}<Activity

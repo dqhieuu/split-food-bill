@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createDemoState } from '../../src/lib/domain/seed';
 import type { AppState, LedgerEntry } from '../../src/lib/domain/types';
+import { applyCommand, pairBalance } from '../../src/lib/domain/ledger';
 import { customToken } from '../../worker/src/identity';
 import type { Env } from '../../worker/src/env';
 
@@ -9,6 +10,7 @@ const now = '2026-10-27T05:00:00.000Z';
 
 async function openFixture(page: Page, path = '/balances', configure?: (state: AppState) => void) {
 	const state = createDemoState(new Date(now));
+	const userPreferences = { discordBillNotifications: true };
 	state.members.find((member) => member.id === 'an')!.id = ACTOR;
 	state.members.find((member) => member.id === 'linh')!.bankAccount = '';
 	const debt = (id: string, from: string, to: string, amount: number): LedgerEntry => ({
@@ -79,7 +81,8 @@ async function openFixture(page: Page, path = '/balances', configure?: (state: A
 					avatarUrl: '',
 					email: '',
 					createdAt: now,
-					updatedAt: now
+					updatedAt: now,
+					preferences: userPreferences
 				},
 				groups: [{ ...group, role: 'admin' }],
 				selectedGroupId: 'local'
@@ -87,6 +90,10 @@ async function openFixture(page: Page, path = '/balances', configure?: (state: A
 		})
 	);
 	await page.route('**/api/groups/local/select', (route) => route.fulfill({ json: {} }));
+	await page.route('**/api/preferences', (route) => {
+		userPreferences.discordBillNotifications = route.request().postDataJSON().discordBillNotifications;
+		return route.fulfill({ json: { preferences: userPreferences } });
+	});
 	await page.route('**/api/groups/local/state*', (route) =>
 		route.fulfill({ json: { state, actor: ACTOR, group } })
 	);
@@ -117,7 +124,7 @@ async function openFixture(page: Page, path = '/balances', configure?: (state: A
 	await page.goto(`${path}#auth_code=${'a'.repeat(43)}`);
 	await expect(page.locator('.account-button')).toContainText('Minh An');
 	await expect(page.locator('.loading-panel')).toHaveCount(0);
-	return { image: Buffer.from(image, 'base64') };
+	return { image: Buffer.from(image, 'base64'), state, userPreferences };
 }
 
 for (const width of [1280, 390]) {
@@ -203,6 +210,97 @@ for (const width of [1280, 390]) {
 			await expect(huy.locator('.counterpart-history')).toBeVisible();
 		});
 
+		test('admin views another member’s balances and pays with the correct payer and audit creator', async ({
+			page
+		}) => {
+			const { state } = await openFixture(page);
+			let commands = 0;
+			await page.route('**/api/groups/local/commands/confirmQrPayment', async (route) => {
+				commands++;
+				const input = route.request().postDataJSON();
+				expect(input).toMatchObject({ from: 'huy', to: ACTOR, amount: 20000 });
+				const result = applyCommand(state, ACTOR, 'confirmQrPayment', input, now);
+				await route.fulfill({ json: { state, result } });
+			});
+			const historyLength = await page.evaluate(() => history.length);
+			await page.getByLabel('Xem tài khoản', { exact: true }).selectOption('huy');
+			await expect(page).toHaveURL(/\/balances\?member=huy$/);
+			await expect(page.getByRole('heading', { name: 'Tài khoản của Quang Huy', exact: true })).toBeVisible();
+			await expect(page.locator('.account-button')).toContainText('Minh An');
+			expect(await page.evaluate(() => history.length)).toBe(historyLength);
+			await expect(page.locator('.stat-card').first()).toContainText('Quang Huy đang nợ');
+			await expect(page.locator('.stat-card').first()).toContainText('20.000 ₫');
+			await expect(page.locator('.counterpart-name').filter({ hasText: 'Quang Huy' })).toHaveCount(0);
+			const recipient = page.locator('.counterpart').filter({ hasText: 'Minh An' });
+			await recipient.getByRole('button', { name: 'Lịch sử với Minh An', exact: true }).click();
+			await expect(recipient.locator('.counterpart-history')).toContainText('Quang Huy nợ Minh An');
+			await page.locator('main').screenshot({ path: 'artifacts/member-balances-admin-' + width + '.png' });
+			await recipient.getByRole('button', { name: 'Mã QR', exact: true }).click();
+			const dialog = page.getByRole('dialog', { name: 'Chuyển tiền bằng QR', exact: true });
+			await expect(dialog).toContainText('Người trả: Quang Huy');
+			await expect(dialog.getByRole('button', { name: 'Đã thanh toán', exact: true })).toBeDisabled();
+			expect(commands).toBe(0);
+			await dialog.getByRole('checkbox', { name: 'Quang Huy đã chuyển khoản xong', exact: true }).click();
+			await expect(dialog.getByRole('button', { name: 'Đã thanh toán', exact: true })).toBeEnabled();
+			await dialog.getByRole('button', { name: 'Đã thanh toán', exact: true }).click();
+			await expect(dialog).toHaveCount(0);
+			await expect(recipient).toContainText('Không còn nợ');
+			expect(commands).toBe(1);
+			expect(state.ledger.at(-1)).toMatchObject({
+				from: 'huy',
+				to: ACTOR,
+				creator: ACTOR,
+				amount: 20000,
+				description: 'Quản trị viên xác nhận thanh toán bằng QR'
+			});
+			await page.reload();
+			await expect(page.getByRole('heading', { name: 'Tài khoản của Quang Huy', exact: true })).toBeVisible();
+			await page.getByLabel('Xem tài khoản', { exact: true }).selectOption(ACTOR);
+			await expect(page.getByRole('heading', { name: 'Tài khoản của bạn', exact: true })).toBeVisible();
+			await expect(page).toHaveURL(/\/balances$/);
+		});
+
+		test('regular members can browse another account and history while payment actions remain disabled', async ({
+			page
+		}) => {
+			const { state } = await openFixture(page, '/balances?member=huy&to=' + ACTOR, (state) => {
+				state.members.find((member) => member.id === ACTOR)!.role = 'member';
+			});
+			await expect(page.getByRole('heading', { name: 'Tài khoản của Quang Huy', exact: true })).toBeVisible();
+			await expect(page.locator('.balances-heading')).toContainText('Chế độ chỉ xem');
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+			const recipient = page.locator('.counterpart').filter({ hasText: 'Minh An' });
+			await expect(recipient.locator('.counterpart-history')).toContainText('Quang Huy nợ Minh An');
+			await expect(recipient.getByRole('button', { name: 'Mã QR', exact: true })).toBeDisabled();
+			await recipient.locator('.qr-button-with-tooltip').focus();
+			await expect(recipient.getByRole('tooltip')).toContainText('Chỉ quản trị viên nhóm');
+			await page.getByRole('button', { name: 'Nợ (1)', exact: true }).click();
+			await expect(page.locator('.counterpart')).toHaveCount(1);
+			await page.locator('main').screenshot({ path: 'artifacts/member-balances-readonly-' + width + '.png' });
+			await page.getByLabel('Xem tài khoản', { exact: true }).selectOption(ACTOR);
+			await expect(page.getByRole('heading', { name: 'Tài khoản của bạn', exact: true })).toBeVisible();
+			await expect(page.locator('.balances-heading')).not.toContainText('Chế độ chỉ xem');
+			await expect(
+				page
+					.locator('.counterpart')
+					.filter({ hasText: 'Hoàng Nam' })
+					.getByRole('button', { name: 'Mã QR', exact: true })
+			).toBeEnabled();
+			await page.getByLabel('Xem tài khoản', { exact: true }).selectOption('huy');
+			await expect(recipient.getByRole('button', { name: 'Mã QR', exact: true })).toBeDisabled();
+			state.members.find((member) => member.id === ACTOR)!.role = 'admin';
+			state.version++;
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await expect(recipient.getByRole('button', { name: 'Mã QR', exact: true })).toBeEnabled();
+			await recipient.getByRole('button', { name: 'Mã QR', exact: true }).click();
+			state.members.find((member) => member.id === ACTOR)!.role = 'member';
+			state.version++;
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			const dialog = page.getByRole('dialog', { name: 'Chuyển tiền bằng QR', exact: true });
+			await expect(dialog.getByRole('checkbox')).toBeDisabled();
+			await expect(dialog.getByRole('button', { name: 'Đã thanh toán', exact: true })).toBeDisabled();
+		});
+
 		test('internal links replace browser history and receipt images open fullscreen over bill details', async ({
 			page,
 			context
@@ -266,6 +364,126 @@ for (const width of [1280, 390]) {
 			await expect(
 				page.getByRole('button', { name: 'Xem ảnh hóa đơn toàn màn hình', exact: true })
 			).toBeFocused();
+		});
+
+		test('Discord notification preference survives a saved bill, stale drafts and reloads, with rollback on save failure', async ({
+			page
+		}) => {
+			const { state, userPreferences } = await openFixture(page, '/new-bill');
+			let billId = '';
+			await page.route('**/api/groups/local/commands/createBill', async (route) => {
+				const input = route.request().postDataJSON();
+				expect(input.discordNotification).toBe(false);
+				billId = input.id;
+				const result = applyCommand(state, ACTOR, 'createBill', input, now);
+				await route.fulfill({ json: { state, result } });
+			});
+			const toggle = page.getByRole('switch', { name: 'Gửi thông báo qua Discord', exact: true });
+			await expect(toggle).toBeChecked();
+			await toggle.click();
+			await expect.poll(() => userPreferences.discordBillNotifications).toBe(false);
+			await expect(toggle).toBeEnabled();
+			await page.getByLabel('Tên hóa đơn', { exact: true }).fill('Hóa đơn không gửi Discord');
+			await page.getByLabel('Số tiền của Minh An', { exact: true }).fill('30');
+			await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
+			await page
+				.getByRole('dialog', { name: 'Xác nhận hóa đơn', exact: true })
+				.getByRole('button', { name: 'Xác nhận', exact: true })
+				.click();
+			await expect(page).toHaveURL(/\/activity$/);
+			expect(state.receipts.some((receipt) => receipt.billId === billId)).toBe(false);
+			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
+			await page.locator('nav a[href="/new-bill"]').click();
+			await expect(toggle).not.toBeChecked();
+			await page.evaluate((actor) => {
+				const key = `lunchroom-draft-local-${actor}`;
+				const draft = JSON.parse(localStorage.getItem(key) || '{}');
+				draft.discordNotification = true;
+				localStorage.setItem(key, JSON.stringify(draft));
+			}, ACTOR);
+			await page.reload();
+			await expect(toggle).not.toBeChecked();
+			await page.getByRole('button', { name: 'Gửi thông báo qua Discord', exact: true }).click();
+			await expect.poll(() => userPreferences.discordBillNotifications).toBe(true);
+			await expect(toggle).toBeEnabled();
+			await page.reload();
+			await expect(toggle).toBeChecked();
+			await page.route('**/api/preferences', (route) =>
+				route.fulfill({ status: 503, json: { message: 'Unavailable' } })
+			);
+			await toggle.click();
+			await expect(page.getByRole('alert')).toContainText('Không lưu được tùy chọn Discord');
+			await expect(toggle).toBeChecked();
+			expect(userPreferences.discordBillNotifications).toBe(true);
+		});
+
+		test('already-paid toggle persists in drafts and logs debt plus repayment without changing balances', async ({
+			page
+		}) => {
+			const { state } = await openFixture(page, '/new-bill');
+			const originalLedger = structuredClone(state.ledger);
+			const balancesBefore = state.members.map((member) => pairBalance(state.ledger, ACTOR, member.id));
+			let createdId = '';
+			await page.route('**/api/groups/local/commands/createBill', async (route) => {
+				const input = route.request().postDataJSON();
+				expect(input.alreadyPaid).toBe(true);
+				createdId = input.id;
+				const result = applyCommand(state, ACTOR, 'createBill', input, now);
+				await route.fulfill({ json: { state, result } });
+			});
+			await page.route('**/api/groups/local/commands/undoBill', async (route) => {
+				const result = applyCommand(state, ACTOR, 'undoBill', route.request().postDataJSON(), now);
+				await route.fulfill({ json: { state, result } });
+			});
+			const toggle = page.getByRole('switch', { name: 'Mọi người đã thanh toán', exact: true });
+			await expect(toggle).not.toBeChecked();
+			await page.getByLabel('Tên hóa đơn', { exact: true }).fill('Cơm trưa đã thanh toán');
+			await page.locator('.member-picker').getByRole('button', { name: 'Thảo Linh', exact: true }).click();
+			await page.getByLabel('Số tiền của Minh An', { exact: true }).fill('30');
+			await page.getByLabel('Số tiền của Thảo Linh', { exact: true }).fill('55');
+			await toggle.click();
+			await page.reload();
+			await expect(toggle).toBeChecked();
+			await expect(page.getByLabel('Số tiền của Thảo Linh', { exact: true })).toHaveValue('55');
+			await page.locator('.bill-summary').screenshot({ path: `artifacts/already-paid-summary-${width}.png` });
+			await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
+			const confirmation = page.getByRole('dialog', { name: 'Xác nhận hóa đơn', exact: true });
+			await expect(confirmation.getByRole('status')).toContainText('Không phát sinh nợ mới');
+			await confirmation.getByRole('button', { name: 'Xem trước Discord', exact: true }).click();
+			const preview = page.getByRole('dialog', { name: 'Xem trước Discord', exact: true });
+			await expect(preview).toContainText('Đã thanh toán: 55.000 ₫');
+			await expect(preview).not.toContainText('Bạn phải trả');
+			await expect(preview).not.toContainText('Mở mã QR');
+			await page.keyboard.press('Escape');
+			await confirmation.getByRole('button', { name: 'Xác nhận', exact: true }).click();
+			await expect(page).toHaveURL(/\/activity$/);
+			const billRow = page.locator('.clickable-bill-row').filter({ hasText: 'Cơm trưa đã thanh toán' });
+			await expect(billRow.locator('.paid-bill-label')).toHaveText('Đã thanh toán');
+			expect(state.ledger.slice(0, originalLedger.length)).toEqual(originalLedger);
+			expect(state.members.map((member) => pairBalance(state.ledger, ACTOR, member.id))).toEqual(
+				balancesBefore
+			);
+			const entries = state.ledger.filter((entry) => entry.reference === createdId);
+			expect(entries.map((entry) => entry.type)).toEqual(['debt', 'payment']);
+			expect(
+				entries.every((entry) => entry.from === 'linh' && entry.to === ACTOR && entry.amount === 55000)
+			).toBe(true);
+			await page.getByRole('button', { name: /^Giao dịch \(/ }).click();
+			const ledgerRows = page.locator('.ledger-table tbody tr').filter({ hasText: 'Cơm trưa đã thanh toán' });
+			await expect(ledgerRows).toHaveCount(2);
+			await expect(ledgerRows.locator('.status-pill.danger')).toHaveText('Nợ');
+			await expect(ledgerRows.locator('.status-pill.success')).toHaveText('Trả');
+			await page.getByRole('button', { name: /^Hóa đơn \(/ }).click();
+			await billRow.locator('.table-title-button').click();
+			const detail = page.getByRole('dialog', { name: 'Cơm trưa đã thanh toán', exact: true });
+			await expect(detail.getByRole('status')).toContainText('Mọi người đã thanh toán đầy đủ');
+			await detail.getByRole('button', { name: 'Hoàn tác hóa đơn', exact: true }).click();
+			await expect(detail.getByRole('alert')).toContainText('cả khoản nợ và khoản trả');
+			await detail.getByRole('button', { name: 'Xác nhận hoàn tác', exact: true }).click();
+			await expect(detail.getByRole('status')).toContainText('Đã hoàn tác');
+			expect(state.members.map((member) => pairBalance(state.ledger, ACTOR, member.id))).toEqual(
+				balancesBefore
+			);
 		});
 
 		test('bill confirmation previews the receipt and opens a correctly positioned fullscreen viewer', async ({

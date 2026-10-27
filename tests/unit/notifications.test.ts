@@ -101,6 +101,22 @@ describe('bill Discord notifications', () => {
 		expect(description).toContain('**Bạn phải trả: 55.000 ₫** cho Phở\n\n**Link trả tiền:**');
 		expect(description).toContain('/balances?group=local&to=' + LINH);
 	});
+	it('sends an already-paid receipt without requesting another payment or linking to a QR', () => {
+		const message = billNotificationMessage(
+			{ ...bill, alreadyPaid: true },
+			{ id: 'local', name: 'Lunch' },
+			AN,
+			env.FRONTEND_ORIGIN
+		);
+		const description = message.embeds[0].description!;
+		expect(description).toContain('**Đã thanh toán: 55.000 ₫**');
+		expect(description).toContain('Thảo Linh đã thanh toán 45.000 ₫');
+		expect(description).toContain('Mọi người đã thanh toán đầy đủ');
+		expect(description).toContain('/activity?group=local&bill=bill-1');
+		expect(description).not.toContain('Bạn phải trả');
+		expect(description).not.toContain('Link trả tiền');
+		expect(description).not.toContain('/balances');
+	});
 	it('places an attached image between the group heading and the bill details', () => {
 		const message = billNotificationMessage(
 			bill,

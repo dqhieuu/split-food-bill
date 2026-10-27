@@ -21,6 +21,7 @@ import { Discord, DiscordRateLimitError } from './discord';
 import { BILL_IMAGE_ID, DomainError } from '../../src/lib/domain/ledger';
 import type { GlobalUser } from '../../src/lib/domain/types';
 import { deliverBillNotifications } from './notifications';
+import { saveUserPreferences } from './preferences';
 export { AuthSessions } from './sessions';
 
 async function route(request: Request, env: Env): Promise<Response> {
@@ -64,6 +65,8 @@ async function route(request: Request, env: Env): Promise<Response> {
 	const user = await authenticatedUser(request, env, store);
 	if (url.pathname === '/api/session' && request.method === 'GET')
 		return Response.json(await session(store, user));
+	if (url.pathname === '/api/preferences' && request.method === 'POST')
+		return Response.json({ preferences: await saveUserPreferences(store, user.id, await request.json()) });
 	if (url.pathname === '/api/groups' && request.method === 'POST') {
 		const data = z
 			.object({ name: z.string().trim().min(1).max(100), discordGuildId: z.string().regex(/^\d{17,20}$/) })

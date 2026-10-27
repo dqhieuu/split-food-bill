@@ -110,6 +110,14 @@ export async function getSession(): Promise<Session> {
 export async function selectGroup(id: string) {
 	return requestJson(`/api/groups/${id}/select`, { method: 'POST', body: '{}' });
 }
+export async function saveDiscordNotificationPreference(
+	enabled: boolean
+): Promise<{ preferences: { discordBillNotifications: boolean } }> {
+	return requestJson('/api/preferences', {
+		method: 'POST',
+		body: JSON.stringify({ discordBillNotifications: enabled })
+	});
+}
 export type GroupState = { state: AppState; actor: string; group: Group };
 export async function fetchState(groupId: string): Promise<GroupState>;
 export async function fetchState(

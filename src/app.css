@@ -1272,6 +1272,27 @@ footer {
 .receipt-toggle strong {
 	font-size: 14px;
 }
+.paid-bill-option {
+	grid-column: 1 / -1;
+	margin-bottom: 20px;
+}
+.paid-bill-option .receipt-toggle {
+	margin-bottom: 6px;
+}
+.paid-bill-option .fine-print {
+	margin: 0;
+}
+.paid-bill-status {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 13px;
+	color: light-dark(#49744e, #85b38a);
+}
+.paid-bill-status svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+}
 .fine-print {
 	font-size: 13px;
 	color: light-dark(#6e7865, #a3ab9c);
@@ -1393,6 +1414,24 @@ footer {
 .counterpart {
 	padding: 0 25px;
 	border-bottom: 1px solid light-dark(#eef0e6, #22241e);
+}
+.balances-heading {
+	flex-wrap: wrap;
+}
+.balances-heading > div {
+	flex: 1 1 260px;
+}
+.balance-account-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font-size: 13px;
+	color: light-dark(#6e7865, #a3ab9c);
+	max-width: 100%;
+}
+.balance-account-picker select {
+	min-width: min(240px, 100%);
+	max-width: 100%;
 }
 .counterpart:last-child {
 	border-bottom: 0;
@@ -1748,7 +1787,8 @@ footer {
 	background: light-dark(#edf4e6, #1f231b);
 	color: light-dark(#217346, #7fd3a2) !important;
 }
-.undone-label {
+.undone-label,
+.paid-bill-label {
 	margin-inline-start: 8px;
 }
 .status-pill.danger {

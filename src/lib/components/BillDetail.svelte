@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Undo2 } from '@lucide/svelte';
+	import { Undo2, Check } from '@lucide/svelte';
 	import Modal from './Modal.svelte';
 	import BillImage from './BillImage.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -50,6 +50,9 @@
 	wide
 >
 	{#if bill}
+		{#if bill.alreadyPaid && !bill.undoneAt}<p class="paid-bill-status" role="status">
+				<Check size={16} />Mọi người đã thanh toán đầy đủ. Hóa đơn không phát sinh nợ mới.
+			</p>{/if}
 		{#if bill.undoneAt}<p class="notice warm" role="status">
 				<Undo2 size={16} />Đã hoàn tác bởi {name(bill.undoneBy ?? '')} lúc {dateTimeLabel(bill.undoneAt)}. Các
 				khoản nợ đã được bù trừ trong ledger; hóa đơn này không thể hoàn tác lại.
@@ -70,9 +73,11 @@
 		<div class="summary-total"><span>Tổng hóa đơn</span><strong>{currency(bill.total)}</strong></div>
 		{#if canUndo}
 			{#if confirming}<p class="fine-print" role="alert">
-					Hoàn tác sẽ thêm vào ledger các khoản nợ nghịch đảo của hoá đơn này. VD A nợ B 100 nghìn, thì sau
-					khi hoàn tác sẽ có thêm B nợ A 100 nghìn -&gt; không ai nợ nhau. Bạn sẽ không thể đảo ngược hành
-					động này.
+					{#if bill.alreadyPaid}Hoàn tác sẽ bù trừ cả khoản nợ và khoản trả của hóa đơn này. Số dư nợ hiện tại
+						không thay đổi. Bạn sẽ không thể đảo ngược hành động này.
+					{:else}Hoàn tác sẽ thêm vào ledger các khoản nợ nghịch đảo của hoá đơn này. VD A nợ B 100 nghìn, thì
+						sau khi hoàn tác sẽ có thêm B nợ A 100 nghìn -&gt; không ai nợ nhau. Bạn sẽ không thể đảo ngược
+						hành động này.{/if}
 				</p>
 				<div class="modal-actions">
 					<Button variant="outline" disabled={busy} onclick={() => (confirming = false)}>Giữ hóa đơn</Button

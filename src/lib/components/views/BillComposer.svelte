@@ -38,6 +38,8 @@
 		busy,
 		groupId,
 		groupName,
+		discordNotificationPreference,
+		onDiscordNotificationPreferenceChange,
 		aiEnabled = false
 	}: {
 		appState: AppState;
@@ -46,6 +48,8 @@
 		busy: boolean;
 		groupId: string;
 		groupName: string;
+		discordNotificationPreference: boolean;
+		onDiscordNotificationPreferenceChange: (enabled: boolean) => Promise<void>;
 		aiEnabled?: boolean;
 	} = $props();
 	let description = $state('');
@@ -59,6 +63,9 @@
 	let rounding = $state(DEFAULT_ROUNDING);
 	let unit = $state(1000);
 	let discordNotification = $state(true);
+	let savingNotificationPreference = $state(false);
+	let notificationPreferenceError = $state('');
+	let alreadyPaid = $state(false);
 	let confirmOpen = $state(false);
 	let previewOpen = $state(false);
 	let previewRecipient = $state('');
@@ -110,6 +117,7 @@
 						lines,
 						total,
 						discordNotification,
+						alreadyPaid,
 						memberNames: Object.fromEntries(appState.members.map((member) => [member.id, member.name]))
 					},
 					{ id: groupId, name: groupName },
@@ -131,8 +139,12 @@
 		mode === 'manual' &&
 		(Number(amounts[id]) < 0 || (attempted && (listed[index] <= 0 || shares[index] <= 0)));
 	const formatStep = (digits: number) => currency(10 ** digits);
+	$effect(() => {
+		if (!savingNotificationPreference) discordNotification = discordNotificationPreference;
+	});
 	onMount(() => {
 		selected = [actor];
+		discordNotification = discordNotificationPreference;
 		try {
 			const saved = localStorage.getItem(`lunchroom-draft-${groupId}-${actor}`);
 			if (saved) {
@@ -147,7 +159,7 @@
 				discountInput = draft.discountInput ?? null;
 				rounding = draft.rounding ?? DEFAULT_ROUNDING;
 				unit = draft.unit ?? 1000;
-				discordNotification = draft.discordNotification ?? true;
+				alreadyPaid = draft.alreadyPaid === true;
 				imageId = draft.imageId ?? '';
 				submissionId = draft.submissionId || crypto.randomUUID();
 			}
@@ -174,7 +186,7 @@
 					discountInput,
 					rounding,
 					unit,
-					discordNotification,
+					alreadyPaid,
 					imageId,
 					submissionId
 				})
@@ -182,6 +194,21 @@
 	});
 	function toggleMember(id: string) {
 		selected = selected.includes(id) ? selected.filter((v) => v !== id) : [...selected, id];
+	}
+	async function changeNotificationPreference(enabled: boolean) {
+		if (savingNotificationPreference || busy) return;
+		const previous = discordNotification;
+		discordNotification = enabled;
+		savingNotificationPreference = true;
+		notificationPreferenceError = '';
+		try {
+			await onDiscordNotificationPreferenceChange(enabled);
+		} catch {
+			discordNotification = previous;
+			notificationPreferenceError = 'Không lưu được tùy chọn Discord. Vui lòng thử lại.';
+		} finally {
+			savingNotificationPreference = false;
+		}
 	}
 	function changeUnit(next: number) {
 		const factor = unit / next;
@@ -251,6 +278,7 @@
 		}
 	}
 	function review() {
+		if (savingNotificationPreference) return;
 		attempted = true;
 		validation = '';
 		if (!description.trim()) validation = 'Hãy đặt tên cho hóa đơn.';
@@ -264,6 +292,7 @@
 		else confirmOpen = true;
 	}
 	async function submit() {
+		if (savingNotificationPreference) return;
 		try {
 			await run(
 				'createBill',
@@ -273,9 +302,12 @@
 					date: new Date(`${date}T12:00:00+07:00`).toISOString(),
 					lines,
 					discordNotification,
+					alreadyPaid,
 					...(imageId ? { image: imageId } : {})
 				},
-				'Đã ghi hóa đơn và cập nhật nợ.'
+				alreadyPaid
+					? 'Đã lưu hóa đơn đã thanh toán; số dư nợ không thay đổi.'
+					: 'Đã ghi hóa đơn và cập nhật nợ.'
 			);
 			localStorage.removeItem(`lunchroom-draft-${groupId}-${actor}`);
 			draftReady = false;
@@ -476,16 +508,38 @@
 					<span>Làm tròn</span><strong>+{currency(roundingExtra)}</strong>
 				</div>{/if}
 			<div class="summary-total"><span>Tổng hóa đơn</span><strong>{currency(total)}</strong></div>
+			<div class="paid-bill-option">
+				<div class="receipt-toggle">
+					<button type="button" tabindex="-1" onclick={() => (alreadyPaid = !alreadyPaid)}
+						><Check size={17} /><strong>Mọi người đã thanh toán</strong></button
+					>
+					<Switch aria-label="Mọi người đã thanh toán" bind:checked={alreadyPaid} />
+				</div>
+				<p class="fine-print">Chỉ lưu hóa đơn vào lịch sử, không phát sinh nợ mới.</p>
+			</div>
 			<div class="receipt-toggle">
-				<button type="button" tabindex="-1" onclick={() => (discordNotification = !discordNotification)}
+				<button
+					type="button"
+					tabindex="-1"
+					disabled={savingNotificationPreference || busy}
+					onclick={() => void changeNotificationPreference(!discordNotification)}
 					><MessageCircle size={17} /><strong>Gửi thông báo qua Discord</strong></button
 				>
-				<Switch aria-label="Gửi thông báo qua Discord" bind:checked={discordNotification} />
+				<Switch
+					aria-label="Gửi thông báo qua Discord"
+					checked={discordNotification}
+					onCheckedChange={(enabled) => void changeNotificationPreference(enabled)}
+					disabled={savingNotificationPreference || busy}
+				/>
 			</div>
+			{#if notificationPreferenceError}<p class="validation-error" role="alert">
+					{notificationPreferenceError}
+				</p>{/if}
 			{#if validation}<p class="validation-error" role="alert">{validation}</p>{/if}<Button
 				class="full-width"
 				onclick={review}
-				disabled={busy || imageBusy}>Xem lại hóa đơn <ArrowRight size={16} /></Button
+				disabled={busy || imageBusy || savingNotificationPreference}
+				>Xem lại hóa đơn <ArrowRight size={16} /></Button
 			>
 		</section>
 	</div>
@@ -495,6 +549,9 @@
 		<h3>{description}</h3>
 		<p>Ăn vào {billDateLabel(date)} · {payer.name} thanh toán</p>
 	</div>
+	{#if alreadyPaid}<p class="paid-bill-status" role="status">
+			<Check size={16} />Mọi người đã thanh toán đầy đủ. Không phát sinh nợ mới.
+		</p>{/if}
 	{#if imageId && confirmOpen}<div class="bill-detail-image">
 			<BillImage {groupId} {imageId} />
 		</div>{/if}

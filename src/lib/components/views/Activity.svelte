@@ -192,7 +192,10 @@
 									><span class="bill-symbol tone-0"><ReceiptText size={18} /></span><span
 										><strong
 											>{bill.description}{#if bill.undoneAt}
-												<span class="status-pill undone-label">Đã hoàn tác</span>{/if}</strong
+												<span class="status-pill undone-label">Đã hoàn tác</span
+												>{:else if bill.alreadyPaid}<span class="status-pill success paid-bill-label"
+													>Đã thanh toán</span
+												>{/if}</strong
 										><small>Ăn vào {billDateLabel(bill.date)}</small></span
 									></button
 								></td

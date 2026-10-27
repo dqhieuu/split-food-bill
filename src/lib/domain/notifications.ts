@@ -36,13 +36,17 @@ export function billNotificationMessage(
 	const heading = [
 		`**Hoá đơn:** ${text(bill.description, 160)} ngày ${billDateLabel(bill.date)}`,
 		'',
-		`**Bạn phải trả: ${currency(line.amount)}**${line.description ? ` cho ${text(line.description, 120)}` : ''}`,
+		`**${bill.alreadyPaid ? 'Đã thanh toán' : 'Bạn phải trả'}: ${currency(line.amount)}**${line.description ? ` cho ${text(line.description, 120)}` : ''}`,
 		...(others.length ? ['', '**Người khác:**'] : [])
 	].join('\n');
-	const ending = `${others.length ? `\n\n**Tổng cộng: ${currency(bill.total)}**` : ''}\n\n**Link trả tiền:** [Mở mã QR](<${paymentUrl.href}>)`;
+	const ending = `${others.length ? `\n\n**Tổng cộng: ${currency(bill.total)}**` : ''}${
+		bill.alreadyPaid
+			? `\n\n**Trạng thái:** Mọi người đã thanh toán đầy đủ.\n\n[Xem hóa đơn](<${billUrl.href}>)`
+			: `\n\n**Link trả tiền:** [Mở mã QR](<${paymentUrl.href}>)`
+	}`;
 	const rows: string[] = [];
 	for (const other of others) {
-		const row = `- ${text(bill.memberNames?.[other.memberId] ?? other.memberId, 60)} trả ${currency(other.amount)}${other.description ? ` cho ${text(other.description, 100)}` : ''}`;
+		const row = `- ${text(bill.memberNames?.[other.memberId] ?? other.memberId, 60)} ${bill.alreadyPaid ? 'đã thanh toán' : 'trả'} ${currency(other.amount)}${other.description ? ` cho ${text(other.description, 100)}` : ''}`;
 		const remaining = others.length - rows.length - 1;
 		const overflow = remaining ? `\n- … và ${remaining} người khác ([xem hóa đơn](<${billUrl.href}>)).` : '';
 		if (`${heading}\n${[...rows, row].join('\n')}${overflow}${ending}`.length > 4096) break;

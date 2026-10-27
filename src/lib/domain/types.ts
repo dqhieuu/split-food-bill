@@ -18,6 +18,7 @@ export type GlobalUser = {
 	avatarUrl: string;
 	email: string;
 	lastActiveGroupId?: string;
+	preferences?: { discordBillNotifications?: boolean };
 	createdAt: string;
 	updatedAt: string;
 };
@@ -61,6 +62,8 @@ export type Bill = {
 	lines: BillLine[];
 	total: number;
 	discordNotification: boolean;
+	/** Logged after every participant has paid; bill debts have matching repayments. */
+	alreadyPaid?: boolean;
 	memberNames?: Record<string, string>;
 	/** Object-storage id of the receipt photo, stored under the group's prefix. */
 	image?: string;

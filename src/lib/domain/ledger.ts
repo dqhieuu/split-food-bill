@@ -116,7 +116,7 @@ export function discountShares(amounts: number[], discountedTotal: number): numb
 	shares[shares.length - 1] = discountedTotal - shares.slice(0, -1).reduce((a, b) => a + b, 0);
 	return shares;
 }
-/** Bill debts cancelled by an undo, together with the reversal entries that cancel them. */
+/** Bill entries cancelled by an undo, together with their reversal entries. */
 export function cancelledEntryIds(ledger: LedgerEntry[]): Set<string> {
 	const ids = new Set<string>();
 	for (const entry of ledger)
@@ -230,6 +230,7 @@ export function applyCommand(
 				description: text,
 				date: z.iso.datetime(),
 				discordNotification: z.boolean(),
+				alreadyPaid: z.boolean().optional().default(false),
 				image: z.string().regex(BILL_IMAGE_ID).optional(),
 				lines: z
 					.array(
@@ -247,6 +248,8 @@ export function applyCommand(
 		const existing = state.bills.find((b) => b.id === data.id);
 		if (existing) {
 			if (existing.organizer !== actor) throw new DomainError('Mã hóa đơn đã được sử dụng.', 409);
+			if (!!existing.alreadyPaid !== data.alreadyPaid)
+				throw new DomainError('Hóa đơn đã được ghi với trạng thái thanh toán khác. Vui lòng tải lại.', 409);
 			return { reference: existing.id };
 		}
 		if (new Set(data.lines.map((l) => l.memberId)).size !== data.lines.length)
@@ -264,11 +267,15 @@ export function applyCommand(
 			throw new DomainError('Tổng hóa đơn quá lớn.');
 		requireAvailableEntryIds(
 			state,
-			bill.lines.flatMap((line, index) => (line.memberId === actor ? [] : [`${bill.id}-${index}`]))
+			bill.lines.flatMap((line, index) =>
+				line.memberId === actor
+					? []
+					: [`${bill.id}-${index}`, ...(bill.alreadyPaid ? [`${bill.id}-${index}-paid`] : [])]
+			)
 		);
 		state.bills.push(bill);
 		bill.lines.forEach((line, i) => {
-			if (line.memberId !== actor)
+			if (line.memberId !== actor) {
 				state.ledger.push({
 					id: `${bill.id}-${i}`,
 					from: line.memberId,
@@ -283,6 +290,22 @@ export function applyCommand(
 					source: 'bill',
 					reference: bill.id
 				});
+				if (bill.alreadyPaid)
+					state.ledger.push({
+						id: `${bill.id}-${i}-paid`,
+						from: line.memberId,
+						to: actor,
+						type: 'payment',
+						amount: line.amount,
+						date: bill.date,
+						createdAt: now,
+						description: `Đã thanh toán: ${line.description}`,
+						note: '',
+						creator: actor,
+						source: 'bill',
+						reference: bill.id
+					});
+			}
 		});
 		if (bill.discordNotification)
 			state.receipts.push({
@@ -303,18 +326,18 @@ export function applyCommand(
 		if (bill.organizer !== actor && requireMember(state, actor, true).role !== 'admin')
 			throw new DomainError('Chỉ người trả hóa đơn hoặc quản trị viên được hoàn tác.', 403);
 		if (bill.undoneAt) throw new DomainError('Hóa đơn đã được hoàn tác và không thể hoàn tác lại.', 409);
-		const debts = state.ledger.filter((entry) => entry.source === 'bill' && entry.reference === bill.id);
+		const entries = state.ledger.filter((entry) => entry.source === 'bill' && entry.reference === bill.id);
 		requireAvailableEntryIds(
 			state,
-			debts.map((entry) => `${entry.id}-undo`)
+			entries.map((entry) => `${entry.id}-undo`)
 		);
-		// Append-only: each bill debt is cancelled by an equal debt in the opposite direction.
-		for (const entry of debts)
+		// Reverse debts and any already-paid repayments together without changing the original entries.
+		for (const entry of entries)
 			state.ledger.push({
 				id: `${entry.id}-undo`,
 				from: entry.to,
 				to: entry.from,
-				type: 'debt',
+				type: entry.type,
 				amount: entry.amount,
 				date: now,
 				createdAt: now,
@@ -394,13 +417,17 @@ export function applyCommand(
 		});
 		reference = data.id;
 	} else if (command === 'confirmQrPayment') {
-		const data = z.object({ id: identifier, to: identifier, amount }).parse(input);
+		const data = z
+			.object({ id: identifier, to: identifier, from: identifier.optional(), amount })
+			.parse(input);
+		const payer = data.from ?? actor;
+		if (payer !== actor) requireAdmin(state, actor);
 		const entryId = `qr-${data.id}`;
 		const existing = state.ledger.find((entry) => entry.id === entryId);
 		if (existing) {
 			if (
 				existing.creator !== actor ||
-				existing.from !== actor ||
+				existing.from !== payer ||
 				existing.to !== data.to ||
 				existing.amount !== data.amount ||
 				existing.source !== 'qr'
@@ -408,17 +435,18 @@ export function applyCommand(
 				throw new DomainError('Mã thanh toán đã được sử dụng cho một giao dịch khác.', 409);
 			return { reference: data.id };
 		}
+		requireMember(state, payer);
 		requireMember(state, data.to);
-		if (data.to === actor) throw new DomainError('Không thể thanh toán cho chính mình.');
+		if (data.to === payer) throw new DomainError('Không thể thanh toán cho chính mình.');
 		state.ledger.push({
 			id: entryId,
-			from: actor,
+			from: payer,
 			to: data.to,
 			type: 'payment',
 			amount: data.amount,
 			date: now,
 			createdAt: now,
-			description: 'Auto trả tiền bằng QR',
+			description: payer === actor ? 'Auto trả tiền bằng QR' : 'Quản trị viên xác nhận thanh toán bằng QR',
 			note: '',
 			creator: actor,
 			source: 'qr',

@@ -28,7 +28,8 @@ export function profileUser(profile: DiscordProfile, existing: GlobalUser | null
 		email: profile.email ?? existing?.email ?? '',
 		createdAt: existing?.createdAt ?? now,
 		updatedAt: now,
-		...(existing?.lastActiveGroupId ? { lastActiveGroupId: existing.lastActiveGroupId } : {})
+		...(existing?.lastActiveGroupId ? { lastActiveGroupId: existing.lastActiveGroupId } : {}),
+		...(existing?.preferences ? { preferences: existing.preferences } : {})
 	};
 }
 export function groupMember(profile: DiscordProfile, env: Env): Member {
