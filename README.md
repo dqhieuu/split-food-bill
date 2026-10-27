@@ -1,4 +1,4 @@
-# Chia tiền ăn
+# Chia tiền ăn 
 
 A Vietnamese group expense SPA using SvelteKit, Svelte 5, TypeScript, shadcn-svelte, Tailwind, Firebase Authentication/Firestore and a Cloudflare Worker. Code and documentation are English; UI is Vietnamese.
 
