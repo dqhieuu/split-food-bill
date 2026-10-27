@@ -40,7 +40,7 @@
 	);
 	const visible = $derived(
 		pairs
-			.filter((p) => filter === 'all' || (filter === 'owe' ? p.balance > 0 : p.balance < 0))
+			.filter((p) => (filter === 'all' ? p.member.active : filter === 'owe' ? p.balance > 0 : p.balance < 0))
 			.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
 	);
 	const owed = $derived(pairs.reduce((s, p) => s + Math.max(0, -p.balance), 0));

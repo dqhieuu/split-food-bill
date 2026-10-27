@@ -39,7 +39,7 @@
 		}}><img src={url} alt="Ảnh hóa đơn" /></button
 	>
 	<Dialog.Root bind:open>
-		<Dialog.Content class="bill-image-lightbox">
+		<Dialog.Content class="bill-image-lightbox" fullscreen>
 			<Dialog.Title class="sr-only">Ảnh hóa đơn toàn màn hình</Dialog.Title>
 			<Dialog.Description class="sr-only"
 				>Nhấn vào ảnh để phóng to hoặc thu nhỏ. Nhấn Escape để đóng.</Dialog.Description

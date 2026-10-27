@@ -3883,14 +3883,10 @@ select[aria-invalid='true'] {
 	transform: scale(1.02);
 }
 .bill-image-lightbox[data-slot='dialog-content'] {
-	top: 0;
-	left: 0;
 	width: 100vw;
 	max-width: none;
 	height: 100dvh;
 	max-height: none;
-	transform: none;
-	translate: none;
 	border-radius: 0;
 	padding: 52px 12px 12px;
 	gap: 0;

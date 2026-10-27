@@ -495,7 +495,10 @@
 		<h3>{description}</h3>
 		<p>Ăn vào {billDateLabel(date)} · {payer.name} thanh toán</p>
 	</div>
-	<div class="review-lines">
+	{#if imageId && confirmOpen}<div class="bill-detail-image">
+			<BillImage {groupId} {imageId} />
+		</div>{/if}
+	<div class="review-lines bill-detail-lines">
 		{#each lines as line}<div>
 				<span
 					><strong>{appState.members.find((m) => m.id === line.memberId)?.name}</strong><small
@@ -505,7 +508,6 @@
 			</div>{/each}
 	</div>
 	<div class="summary-total"><span>Tổng cộng</span><strong>{currency(total)}</strong></div>
-	{#if imageId}<p class="fine-print">Kèm ảnh hóa đơn.</p>{/if}
 	<div class="modal-actions">
 		{#if discordNotification}<Button
 				variant="outline"

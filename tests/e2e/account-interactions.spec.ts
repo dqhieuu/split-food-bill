@@ -58,6 +58,15 @@ async function openFixture(page: Page, path = '/balances', configure?: (state: A
 		createdAt: now,
 		version: 1
 	};
+	await page.route('**/config', (route) =>
+		route.fulfill({
+			json: {
+				mode: 'local',
+				firebase: { apiKey: 'demo-lunchroom-key', projectId: 'demo-lunchroom', authDomain: 'localhost' },
+				authEmulatorUrl: 'http://127.0.0.1:9099'
+			}
+		})
+	);
 	await page.route('**/api/session', (route) =>
 		route.fulfill({
 			json: {
@@ -108,13 +117,14 @@ async function openFixture(page: Page, path = '/balances', configure?: (state: A
 	await page.goto(`${path}#auth_code=${'a'.repeat(43)}`);
 	await expect(page.locator('.account-button')).toContainText('Minh An');
 	await expect(page.locator('.loading-panel')).toHaveCount(0);
+	return { image: Buffer.from(image, 'base64') };
 }
 
 for (const width of [1280, 390]) {
 	test.describe(`viewport ${width}px`, () => {
 		test.use({ viewport: { width, height: 844 } });
 
-		test('account filters use net debts and include zero balances and inactive people in all', async ({
+		test('account filters use net debts and all shows only active people including zero balances', async ({
 			page
 		}) => {
 			await openFixture(page);
@@ -125,7 +135,8 @@ for (const width of [1280, 390]) {
 			await expect(page.locator('.stat-card').nth(2)).toContainText('Nợ - bị nợ');
 			await expect(page.locator('.stat-card').nth(2)).toContainText('90.000 ₫');
 			await expect(page.getByRole('button', { name: 'Tất cả', exact: true })).toBeVisible();
-			await expect(page.locator('.counterpart')).toHaveCount(8);
+			await expect(page.locator('.counterpart')).toHaveCount(7);
+			await expect(page.locator('.counterpart').filter({ hasText: 'Thành viên cũ' })).toHaveCount(0);
 			await page.getByRole('button', { name: 'Nợ (3)', exact: true }).click();
 			await expect(page.locator('.counterpart')).toHaveCount(3);
 			await expect(
@@ -174,9 +185,11 @@ for (const width of [1280, 390]) {
 			await page.mouse.move(0, 0);
 			await linh.locator('.qr-button-with-tooltip').focus();
 			await expect(linh.getByRole('tooltip')).toBeVisible();
+			await page.getByRole('button', { name: 'Nợ (3)', exact: true }).click();
 			const former = page.locator('.counterpart').filter({ hasText: 'Thành viên cũ' });
 			await former.locator('.qr-button-with-tooltip').hover();
 			await expect(former.getByRole('tooltip')).toContainText('chưa được kích hoạt');
+			await page.getByRole('button', { name: 'Tất cả', exact: true }).click();
 			await page
 				.locator('.counterpart')
 				.filter({ hasText: 'Hoàng Nam' })
@@ -231,12 +244,57 @@ for (const width of [1280, 390]) {
 				lightbox.getByRole('button', { name: 'Thu nhỏ ảnh hóa đơn', exact: true })
 			).toHaveAttribute('aria-pressed', 'true');
 			expect((await lightbox.locator('img').boundingBox())!.width).toBeGreaterThan(fitted!.width);
+			const zoomedBounds = await lightbox.boundingBox();
+			expect(zoomedBounds?.x).toBe(0);
+			expect(zoomedBounds?.y).toBe(0);
+			const viewport = lightbox.locator('.bill-image-viewport');
+			await viewport.evaluate((element) =>
+				element.scrollTo({ left: element.scrollWidth, top: element.scrollHeight })
+			);
+			const bottomRight = await lightbox.locator('img').boundingBox();
+			const viewBounds = (await viewport.boundingBox())!;
+			expect(bottomRight!.x + bottomRight!.width).toBeLessThanOrEqual(viewBounds.x + viewBounds.width + 1);
+			expect(bottomRight!.y + bottomRight!.height).toBeLessThanOrEqual(viewBounds.y + viewBounds.height + 1);
+			await viewport.evaluate((element) => element.scrollTo(0, 0));
+			const topLeft = await lightbox.locator('img').boundingBox();
+			expect(topLeft!.x).toBeGreaterThanOrEqual(viewBounds.x);
+			expect(topLeft!.y).toBeGreaterThanOrEqual(viewBounds.y);
+			await page.screenshot({ path: `artifacts/receipt-zoom-${width}.png` });
 			await page.keyboard.press('Escape');
 			await expect(lightbox).toHaveCount(0);
 			await expect(page.getByRole('dialog', { name: 'Hóa đơn mẫu', exact: true })).toBeVisible();
 			await expect(
 				page.getByRole('button', { name: 'Xem ảnh hóa đơn toàn màn hình', exact: true })
 			).toBeFocused();
+		});
+
+		test('bill confirmation previews the receipt and opens a correctly positioned fullscreen viewer', async ({
+			page
+		}) => {
+			const { image } = await openFixture(page, '/new-bill');
+			await page.route('**/api/groups/local/images', (route) =>
+				route.fulfill({ json: { imageId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301.png' } })
+			);
+			await page.getByLabel('Tên hóa đơn', { exact: true }).fill('Cơm trưa có ảnh');
+			await page.getByLabel('Số tiền của Minh An', { exact: true }).fill('55');
+			await page
+				.getByLabel('Chọn ảnh hóa đơn', { exact: true })
+				.setInputFiles({ name: 'receipt.png', mimeType: 'image/png', buffer: image });
+			await expect(page.locator('.bill-image-attached img')).toHaveJSProperty('naturalWidth', 1200);
+			await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
+			const confirmation = page.getByRole('dialog', { name: 'Xác nhận hóa đơn', exact: true });
+			await expect(confirmation.locator('.bill-detail-image img')).toHaveJSProperty('naturalWidth', 1200);
+			await expect(confirmation).not.toContainText('Kèm ảnh hóa đơn.');
+			await confirmation.getByRole('button', { name: 'Xem ảnh hóa đơn toàn màn hình', exact: true }).click();
+			const lightbox = page.getByRole('dialog', { name: 'Ảnh hóa đơn toàn màn hình', exact: true });
+			await expect(lightbox).toBeVisible();
+			expect(await lightbox.boundingBox()).toEqual({ x: 0, y: 0, width, height: 844 });
+			await lightbox.getByRole('button', { name: 'Phóng to ảnh hóa đơn', exact: true }).click();
+			expect(await lightbox.boundingBox()).toEqual({ x: 0, y: 0, width, height: 844 });
+			await page.keyboard.press('Escape');
+			await expect(confirmation).toBeVisible();
+			await expect(confirmation.getByRole('button', { name: 'Xác nhận', exact: true })).toBeEnabled();
+			await confirmation.screenshot({ path: `artifacts/confirmation-receipt-${width}.png` });
 		});
 
 		test('compact payment history opens only bills and long bill details have one scroll area', async ({
