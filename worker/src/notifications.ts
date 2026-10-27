@@ -97,7 +97,7 @@ export async function deliverBillNotifications(
 					const nonce = [...digest.slice(0, 12)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 					({ status } = await discord.dm(
 						uid.slice(8),
-						billNotificationMessage(batch.bill, batch.group, uid, env.FRONTEND_ORIGIN),
+						billNotificationMessage(batch.bill, batch.group, uid, env.FRONTEND_ORIGIN, attachment?.name),
 						nonce,
 						attachment
 					));

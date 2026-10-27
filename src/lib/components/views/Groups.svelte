@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Plus, Users, RefreshCw, Trash2 } from '@lucide/svelte';
+	import { Plus, Users, RefreshCw, Trash2, ChevronRight } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import type { Group, GroupSummary, Session } from '$lib/domain/types';
@@ -73,6 +73,7 @@
 		<h2>Nhóm của bạn</h2>
 		{#each session.groups as group}<button
 				class="group-choice"
+				aria-haspopup="dialog"
 				onclick={() => {
 					configGroup = group;
 					configOpen = true;
@@ -81,6 +82,7 @@
 					><strong>{group.name}</strong><small
 						>{group.role === 'admin' ? 'Quản trị viên nhóm' : 'Thành viên'} · {group.discordGuildId}</small
 					></span
+				><ChevronRight size={18} />
 				></button
 			>
 		{:else}<p class="inline-empty">

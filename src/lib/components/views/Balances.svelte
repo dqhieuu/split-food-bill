@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { page } from '$app/state';
+	import { untrack } from 'svelte';
 	import QRCode from 'qrcode';
 	import { Wallet, ArrowUpRight, ArrowDownLeft, QrCode, History } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -20,6 +22,17 @@
 	let confirmed = $state(false);
 	let qrImage = $state('');
 	let qrError = $state('');
+	let openedRecipient = '';
+	$effect(() => {
+		const to = page.url.searchParams.get('to');
+		if (to && to !== openedRecipient) {
+			openedRecipient = to;
+			expanded = to;
+			untrack(() => {
+				void openQr(to);
+			});
+		}
+	});
 	const pairs = $derived(
 		appState.members
 			.filter((m) => m.id !== actor && m.active)
@@ -37,7 +50,7 @@
 	async function openQr(to: string) {
 		const person = appState.members.find((member) => member.id === to);
 		const amount = pairBalance(appState.ledger, actor, to);
-		if (!person?.bankCode || !person.bankAccount || amount <= 0) return;
+		if (!person?.active || !person.bankCode || !person.bankAccount || amount <= 0) return;
 		const payment = { id: crypto.randomUUID(), amount, recipient: structuredClone($state.snapshot(person)) };
 		qrPayment = payment;
 		confirmed = false;

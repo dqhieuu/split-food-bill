@@ -139,4 +139,22 @@ describe('Discord DM attachments', () => {
 		await discord.dm('100000000000000002', 'Hóa đơn');
 		expect(typeof (api.mock.calls[1][1] as RequestInit).body).toBe('string');
 	});
+	it('preserves rich embeds and their private attachment references in multipart messages', async () => {
+		const discord = new Discord({ APP_ENV: 'production' } as Env);
+		const api = vi.spyOn(discord, 'api').mockResolvedValueOnce({ id: 'channel' }).mockResolvedValueOnce({});
+		const message = {
+			embeds: [{ title: 'Nhóm: Ăn trưa', color: 0x315e47, image: { url: 'attachment://hoa-don.webp' } }]
+		};
+		await discord.dm('100000000000000002', message, 'nonce', {
+			name: 'hoa-don.webp',
+			data: new Blob([webp], { type: 'image/webp' })
+		});
+		const form = (api.mock.calls[1][1] as RequestInit).body as FormData;
+		expect(JSON.parse(form.get('payload_json') as string)).toMatchObject({
+			embeds: message.embeds,
+			nonce: 'nonce',
+			allowed_mentions: { parse: [] }
+		});
+		expect(JSON.parse(form.get('payload_json') as string)).not.toHaveProperty('content');
+	});
 });

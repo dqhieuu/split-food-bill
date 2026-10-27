@@ -2,6 +2,7 @@ import type { Env } from './env';
 import { isLocal } from './env';
 import { DomainError } from '../../src/lib/domain/ledger';
 import { sessionOperation } from './identity';
+import type { DiscordMessage } from '../../src/lib/domain/notifications';
 
 export class DiscordRateLimitError extends DomainError {
 	constructor(readonly retryAfterSeconds: number) {
@@ -180,14 +181,19 @@ export class Discord {
 			refresh
 		);
 	}
-	async dm(id: string, message: string, nonce?: string, attachment?: DiscordAttachment | null) {
+	async dm(
+		id: string,
+		message: string | DiscordMessage,
+		nonce?: string,
+		attachment?: DiscordAttachment | null
+	) {
 		if (isLocal(this.env)) return { status: 'simulated' as const };
 		const channel = await this.api<{ id: string }>('/users/@me/channels', {
 			method: 'POST',
 			body: JSON.stringify({ recipient_id: id })
 		});
 		const payload = {
-			content: message,
+			...(typeof message === 'string' ? { content: message } : message),
 			allowed_mentions: { parse: [] },
 			...(nonce ? { nonce, enforce_nonce: true } : {}),
 			...(attachment ? { attachments: [{ id: 0, filename: attachment.name }] } : {})

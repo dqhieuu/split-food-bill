@@ -71,27 +71,73 @@ function fixture() {
 }
 afterEach(() => vi.restoreAllMocks());
 describe('bill Discord notifications', () => {
-	it('uses frozen payer names, personalized shares and bounded Vietnamese message content', () => {
-		const content = billNotificationMessage(bill, { name: 'Hội ăn trưa' }, AN, env.FRONTEND_ORIGIN);
-		expect(content).toContain('**Hóa đơn: Bữa trưa**\nHội ăn trưa · Ăn vào');
-		expect(content).toContain('Người đã thanh toán: **Thảo Linh**');
-		expect(content).toContain('\n\n**Phần của bạn: 55.000 ₫**');
-		expect(content).toContain('Tổng hóa đơn: **100.000 ₫**');
-		expect(content).toContain('• Món ăn: Phở\n• Ghi chú: Ít cay');
-		expect(content).toContain('[Mở Chia tiền ăn](<http://127.0.0.1:5173>)');
-		expect(content).toContain('Thứ Hai');
-		expect(content).toContain('Ít cay');
+	it('formats personal shares, other participants and a group-specific repayment link', () => {
+		const message = billNotificationMessage(
+			bill,
+			{ id: 'local', name: 'Hội ăn trưa' },
+			AN,
+			env.FRONTEND_ORIGIN
+		);
+		expect(message.embeds).toHaveLength(1);
+		const embed = message.embeds[0];
+		expect(embed.title).toBe('Nhóm: Hội ăn trưa');
+		expect(embed.description).toContain('**Hoá đơn:** Bữa trưa ngày Thứ Hai');
+		expect(embed.description).toContain('**Bạn phải trả: 55.000 ₫** cho Phở');
+		expect(embed.description).toContain('**Người khác:**\n- Thảo Linh trả 45.000 ₫ cho Cơm');
+		expect(embed.description).not.toContain('Minh An trả');
+		expect(embed.description).toContain('**Tổng cộng: 100.000 ₫**');
+		expect(embed.description).toContain('/balances?group=local&to=' + LINH);
+		expect(() =>
+			billNotificationMessage(bill, { id: 'local', name: 'Lunch' }, 'outsider', env.FRONTEND_ORIGIN)
+		).toThrow();
+	});
+	it('omits the other-participants section for a one-person bill', () => {
+		const single = { ...bill, lines: [bill.lines[1]], total: 55000 };
+		const message = billNotificationMessage(single, { id: 'local', name: 'Lunch' }, AN, env.FRONTEND_ORIGIN);
+		const description = message.embeds[0].description!;
+		expect(description).not.toContain('Người khác');
+		expect(description).not.toContain('Không có.');
+		expect(description).toContain('cho Phở\n\n**Tổng cộng: 55.000 ₫**');
+	});
+	it('places an attached image between the group heading and the bill details', () => {
+		const message = billNotificationMessage(
+			bill,
+			{ id: 'local', name: 'Lunch' },
+			AN,
+			env.FRONTEND_ORIGIN,
+			'hoa-don.webp'
+		);
+		expect(message.embeds).toHaveLength(2);
+		expect(message.embeds[0]).toMatchObject({
+			title: 'Nhóm: Lunch',
+			image: { url: 'attachment://hoa-don.webp' }
+		});
+		expect(message.embeds[1].description).toContain('**Bạn phải trả:');
+	});
+	it('keeps large participant lists inside Discord limits without losing totals or payment links', () => {
 		const long = {
 			...bill,
 			description: '*'.repeat(300),
-			lines: bill.lines.map((line) => ({ ...line, note: '*'.repeat(500), description: '*'.repeat(300) }))
+			lines: Array.from({ length: 200 }, (_, i) => ({
+				memberId: i === 0 ? AN : `discord_${100000000000001000n + BigInt(i)}`,
+				amount: 45000,
+				description: '*'.repeat(300),
+				note: ''
+			}))
 		};
-		const shortened = billNotificationMessage(long, { name: '*'.repeat(100) }, AN, env.FRONTEND_ORIGIN);
-		expect(shortened.length).toBeLessThanOrEqual(2000);
-		expect(shortened).toContain('Tổng hóa đơn: **100.000 ₫**');
-		expect(shortened).toContain('\\*');
-		expect(shortened).toContain('[Mở Chia tiền ăn]');
-		expect(() => billNotificationMessage(bill, { name: 'Lunch' }, 'outsider', env.FRONTEND_ORIGIN)).toThrow();
+		const message = billNotificationMessage(
+			long,
+			{ id: 'local', name: '*'.repeat(100) },
+			AN,
+			env.FRONTEND_ORIGIN
+		);
+		const embed = message.embeds[0];
+		expect(embed.title!.length).toBeLessThanOrEqual(256);
+		expect(embed.description!.length).toBeLessThanOrEqual(4096);
+		expect(embed.description).toContain('**Tổng cộng: 100.000 ₫**');
+		expect(embed.description).toContain('**Link trả tiền:**');
+		expect(embed.description).toContain('người khác ([xem hóa đơn]');
+		expect(embed.description).toContain('\\*');
 	});
 	it('persists partial failures and retries only failed recipients without changing the bill', async () => {
 		const f = fixture();

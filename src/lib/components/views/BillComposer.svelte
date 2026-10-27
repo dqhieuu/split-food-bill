@@ -22,6 +22,8 @@
 	import MoneyInput from '../MoneyInput.svelte';
 	import BillDateInput from '../BillDateInput.svelte';
 	import BillImage from '../BillImage.svelte';
+	import DiscordPreview from '../DiscordPreview.svelte';
+	import { billNotificationMessage } from '$lib/domain/notifications';
 	import { scanBillImage, uploadBillImage } from '$lib/client/api';
 	import { compressImage } from '$lib/client/images';
 	import type { AppState, BillLine } from '$lib/domain/types';
@@ -35,6 +37,7 @@
 		run,
 		busy,
 		groupId,
+		groupName,
 		aiEnabled = false
 	}: {
 		appState: AppState;
@@ -42,6 +45,7 @@
 		run: RunCommand;
 		busy: boolean;
 		groupId: string;
+		groupName: string;
 		aiEnabled?: boolean;
 	} = $props();
 	let description = $state('');
@@ -56,6 +60,8 @@
 	let unit = $state(1000);
 	let discordNotification = $state(true);
 	let confirmOpen = $state(false);
+	let previewOpen = $state(false);
+	let previewRecipient = $state('');
 	let attempted = $state(false);
 	let validation = $state('');
 	let draftReady = $state(false);
@@ -90,6 +96,26 @@
 	const total = $derived(lines.reduce((s, l) => s + l.amount, 0));
 	const roundingExtra = $derived(mode === 'equal' ? Math.max(0, total - toDong(totalInput)) : 0);
 	const payer = $derived(appState.members.find((m) => m.id === actor)!);
+	const previewMessage = $derived(
+		previewOpen && lines.some((line) => line.memberId === previewRecipient)
+			? billNotificationMessage(
+					{
+						id: submissionId,
+						organizer: actor,
+						description,
+						date,
+						lines,
+						total,
+						discordNotification,
+						memberNames: Object.fromEntries(appState.members.map((member) => [member.id, member.name]))
+					},
+					{ id: groupId, name: groupName },
+					previewRecipient,
+					window.location.origin,
+					imageId ? `hoa-don.${imageId.split('.').pop()}` : undefined
+				)
+			: null
+	);
 	const nameInvalid = $derived(attempted && !description.trim());
 	const dateInvalid = $derived(!date || Number.isNaN(new Date(date).getTime()));
 	const totalInvalid = $derived(
@@ -430,14 +456,10 @@
 		</section>
 	</div>
 </div>
-<Modal
-	bind:open={confirmOpen}
-	title="Kiểm tra trước khi ghi hóa đơn"
-	description="Nợ sẽ được cập nhật cho các thành viên dưới đây."
-	wide
+<Modal bind:open={confirmOpen} title="Xác nhận hóa đơn" wide compact
 	><div class="confirm-bill-title">
-		<ReceiptText size={23} />
 		<h3>{description}</h3>
+		<p>Ăn vào {billDateLabel(date)} · {payer.name} đã thanh toán</p>
 	</div>
 	<div class="review-lines">
 		{#each lines as line}<div>
@@ -449,12 +471,30 @@
 			</div>{/each}
 	</div>
 	<div class="summary-total"><span>Tổng cộng</span><strong>{currency(total)}</strong></div>
-	<p class="fine-print">
-		Người thanh toán: {payer.name} · {billDateLabel(date)}.{imageId
-			? ' Kèm ảnh hóa đơn.'
-			: ''}{discordNotification ? '' : ' Không gửi thông báo Discord.'}
-	</p>
+	{#if imageId || !discordNotification}<p class="fine-print">
+			{imageId ? 'Kèm ảnh hóa đơn.' : ''}{discordNotification ? '' : ' Không gửi thông báo Discord.'}
+		</p>{/if}
 	<div class="modal-actions">
+		{#if discordNotification}<Button
+				variant="outline"
+				disabled={busy}
+				onclick={() => {
+					previewRecipient = selected.find((id) => id !== actor) ?? selected[0];
+					previewOpen = true;
+				}}
+			>
+				<MessageCircle size={16} />Xem trước Discord</Button
+			>{/if}
 		<Button onclick={submit} disabled={busy}><Check size={16} />{busy ? 'Đang ghi…' : 'Xác nhận'}</Button>
 	</div></Modal
 >
+<Modal bind:open={previewOpen} title="Xem trước Discord" wide>
+	<label class="field"
+		>Người nhận<select bind:value={previewRecipient}
+			>{#each lines as line}<option value={line.memberId}
+					>{appState.members.find((member) => member.id === line.memberId)?.name}</option
+				>{/each}</select
+		></label
+	>
+	{#if previewMessage}<DiscordPreview message={previewMessage} {groupId} {imageId} />{/if}
+</Modal>

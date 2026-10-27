@@ -124,7 +124,11 @@
 	async function restoreSession() {
 		sessionData = await getSession();
 		actor = sessionData.user.id;
-		if (sessionData.selectedGroupId) await changeGroup(sessionData.selectedGroupId);
+		const requestedGroup = page.url.searchParams.get('group');
+		if (requestedGroup && !sessionData.groups.some((item) => item.id === requestedGroup))
+			throw new Error('Bạn chưa được kích hoạt trong nhóm của liên kết này.');
+		const initialGroup = requestedGroup || sessionData.selectedGroupId;
+		if (initialGroup) await changeGroup(initialGroup);
 		else {
 			selectedGroupId = '';
 			appState = null;
@@ -355,6 +359,7 @@
 									{busy}
 									groupId={selectedGroupId}
 									aiEnabled={!!group?.aiEnabled}
+									groupName={group?.name ?? ''}
 								/>{/key}
 						{:else if section === '/balances'}{#key actor}<Balances {appState} {actor} {run} {busy} />{/key}
 						{:else if section === '/activity'}<Activity

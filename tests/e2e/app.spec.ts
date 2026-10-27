@@ -252,6 +252,13 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		await page.getByRole('textbox', { name: 'Tổng tiền cần chia', exact: true }).fill('100.001');
 		await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
 		await expect(page.getByRole('dialog')).toContainText('51.000');
+		await page.getByRole('button', { name: 'Xem trước Discord', exact: true }).click();
+		await expect(page.getByRole('dialog', { name: 'Xem trước Discord', exact: true })).toContainText(
+			'Bạn phải trả: 51.000 ₫'
+		);
+		await expect(page.locator('.discord-preview')).toContainText('Người khác:');
+		await expect(page.locator('.discord-preview a')).toHaveAttribute('href', /\/balances\?group=local&to=/);
+		await page.keyboard.press('Escape');
 		await page.getByRole('button', { name: 'Xác nhận', exact: true }).click();
 		const row = page.getByRole('row').filter({ hasText: title });
 		await row.locator('td').nth(3).click();
@@ -380,4 +387,53 @@ test('ordinary bill creators notify participants once; opt-out and notification 
 		await activate(page, admin.token, false);
 		await context.close();
 	}
+});
+
+test('repayment links survive login and the mobile skip link only appears with keyboard focus', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	const target = 'discord_100000000000000003';
+	let payments = 0;
+	page.on('request', (request) => {
+		if (request.url().includes('/commands/confirmQrPayment')) payments++;
+	});
+	// Isolate the repayment preview from the demo group's changing debt and activation state.
+	await page.route('**/api/groups/local/state*', async (route) => {
+		const response = await route.fetch();
+		const data = await response.json();
+		if (data.state) {
+			data.state.members.find((member: { id: string }) => member.id === target).active = true;
+			data.state.ledger = [
+				{
+					id: 'preview-debt',
+					from: AN,
+					to: target,
+					type: 'debt',
+					amount: 55000,
+					date: '2026-10-27T05:00:00Z',
+					description: 'Preview',
+					note: '',
+					creator: target,
+					source: 'bill',
+					reference: 'preview-bill'
+				}
+			];
+		}
+		await route.fulfill({ response, json: data });
+	});
+	await page.goto(`/balances?group=local&to=${target}`);
+	await page.getByRole('button', { name: 'Đăng nhập bằng Discord', exact: true }).click();
+	await page.getByRole('button', { name: 'Minh An', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: 'Chuyển tiền bằng QR', exact: true })).toBeVisible();
+	await expect(page.getByRole('dialog')).toContainText('55.000');
+	await expect(page).toHaveURL(`http://127.0.0.1:5173/balances?group=local&to=${target}`);
+	await page.keyboard.press('Escape');
+	const skip = page.locator('.skip-link');
+	const hidden = (await skip.boundingBox())!;
+	expect(hidden.y + hidden.height).toBeLessThanOrEqual(0);
+	await page.keyboard.press('Tab');
+	await skip.focus();
+	expect((await skip.boundingBox())!.y).toBeGreaterThanOrEqual(0);
+	expect(payments).toBe(0);
 });

@@ -72,11 +72,16 @@ export async function initializeAuth() {
 		);
 		sessionStorage.removeItem('discord-login-verifier');
 		await signInWithCustomToken(auth, response.token);
+		const returnTo = sessionStorage.getItem('discord-login-return');
+		sessionStorage.removeItem('discord-login-return');
+		if (returnTo?.startsWith('/') && new URL(returnTo, location.origin).origin === location.origin)
+			await goto(returnTo, { replace: true });
 	}
 	if (auth.currentUser && !/^discord_\d{17,20}$/.test(auth.currentUser.uid)) await signOut(auth);
 	return { signedIn: !!auth.currentUser, local: config.mode === 'local', uid: auth.currentUser?.uid };
 }
 export async function beginDiscordLogin() {
+	sessionStorage.setItem('discord-login-return', location.pathname + location.search);
 	const bytes = crypto.getRandomValues(new Uint8Array(32));
 	const encode = (bytes: Uint8Array) =>
 		btoa(String.fromCharCode(...bytes))
