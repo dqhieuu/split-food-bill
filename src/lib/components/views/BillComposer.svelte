@@ -93,7 +93,7 @@
 		mode === 'equal'
 			? equalShares(toDong(totalInput), selected.length, rounding)
 			: hasDiscount
-				? discountShares(listed, discounted)
+				? discountShares(listed, discounted, rounding)
 				: listed
 	);
 	const lines = $derived<BillLine[]>(
@@ -105,7 +105,13 @@
 		}))
 	);
 	const total = $derived(lines.reduce((s, l) => s + l.amount, 0));
-	const roundingExtra = $derived(mode === 'equal' ? Math.max(0, total - toDong(totalInput)) : 0);
+	const roundingExtra = $derived(
+		mode === 'equal'
+			? Math.max(0, total - toDong(totalInput))
+			: hasDiscount
+				? Math.max(0, total - discounted)
+				: 0
+	);
 	const editor = $derived(appState.members.find((member) => member.id === actor)!);
 	const isAdmin = $derived(editor.active && editor.role === 'admin');
 	const payer = $derived((isAdmin && people.find((member) => member.id === payerId)) || editor);
@@ -454,7 +460,8 @@
 					></label
 				>
 			</div>
-			{#if mode === 'equal'}<div class="form-two-columns split-totals">
+			<div class="split-totals" class:form-two-columns={mode === 'equal' || hasDiscount}>
+				{#if mode === 'equal'}
 					<label class="field total-entry" class:ai-updated={aiChanges.total}
 						>Tổng tiền cần chia<MoneyInput
 							label="Tổng tiền cần chia"
@@ -463,22 +470,23 @@
 							bind:value={totalInput}
 						/></label
 					>
-					<label class="field"
+				{:else}<label class="field total-entry"
+						><span>Giá sau khi giảm giá <span class="optional-label">(không bắt buộc)</span></span><MoneyInput
+							label="Giá sau khi giảm giá"
+							{unit}
+							invalid={discountInvalid}
+							placeholder={listedTotal ? String(listedTotal / unit) : '0'}
+							bind:value={discountInput}
+						/></label
+					>{/if}
+				{#if mode === 'equal' || hasDiscount}<label class="field"
 						>Làm tròn lên mỗi phần<select bind:value={rounding}
 							>{#each ROUNDING_OPTIONS as digits}<option value={digits}
 									>{digits === 0 ? 'Không làm tròn' : formatStep(digits)}</option
 								>{/each}</select
 						></label
-					>
-				</div>{:else}<label class="field total-entry"
-					><span>Giá sau khi giảm giá <span class="optional-label">(không bắt buộc)</span></span><MoneyInput
-						label="Giá sau khi giảm giá"
-						{unit}
-						invalid={discountInvalid}
-						placeholder={listedTotal ? String(listedTotal / unit) : '0'}
-						bind:value={discountInput}
-					/></label
-				>{/if}
+					>{/if}
+			</div>
 			<div class="participant-lines">
 				{#each selected as id, i}{@const person = people.find((m) => m.id === id)!}
 					<div class="participant-line participant-split-row">

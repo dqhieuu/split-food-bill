@@ -28,9 +28,24 @@ describe('bill splitting', () => {
 	it('scales listed prices to the discounted total with the last person absorbing rounding', () => {
 		expect(discountShares([45000, 35000, 20000], 80000)).toEqual([36000, 28000, 16000]);
 		const uneven = discountShares([33333, 33333, 33334], 70001);
+		expect(uneven).toEqual([23333, 23333, 23335]);
 		expect(uneven.reduce((a, b) => a + b, 0)).toBe(70001);
 		expect(uneven.every(Number.isInteger)).toBe(true);
 		expect(discountShares([10000, 20000], 0)).toEqual([10000, 20000]);
+	});
+
+	it('rounds discounted shares up independently at the selected step', () => {
+		expect(discountShares([45000, 35000, 20000], 80001, 3)).toEqual([37000, 29000, 17000]);
+		expect(discountShares([45000, 35000, 20000], 80001, 2)).toEqual([36100, 28100, 16100]);
+		expect(discountShares([45000, 35000, 20000], 80000, 3)).toEqual([36000, 28000, 16000]);
+		expect(discountShares([45000, 35000, 20000], 80001, 0)).toEqual([36000, 28000, 16001]);
+	});
+
+	it('keeps no-round equal splits exact by assigning the remainder to the last person', () => {
+		expect(equalShares(100000, 3, 0)).toEqual([33333, 33333, 33334]);
+		expect(equalShares(100001, 3, 0)).toEqual([33334, 33334, 33333]);
+		expect(equalShares(100002, 3, 0)).toEqual([33334, 33334, 33334]);
+		expect(equalShares(100001, 1, 0)).toEqual([100001]);
 	});
 
 	it('formats compact amounts without decimals', () => {

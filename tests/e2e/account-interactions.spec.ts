@@ -513,6 +513,87 @@ for (const width of [1280, 390]) {
 			expect(userPreferences.discordBillNotifications).toBe(true);
 		});
 
+		for (const mode of ['manual', 'equal']) {
+			test(`${mode} splits round up when selected and put the no-round remainder on the last person`, async ({
+				page
+			}) => {
+				const { state } = await openFixture(page, '/new-bill');
+				let createdId = '';
+				await page.route('**/api/groups/local/commands/createBill', async (route) => {
+					const input = route.request().postDataJSON();
+					createdId = input.id;
+					const result = applyCommand(state, ACTOR, 'createBill', input, now);
+					await route.fulfill({ json: { state, result } });
+				});
+				await page.getByLabel('Tên hóa đơn', { exact: true }).fill(`Chia tiền ${mode}`);
+				for (const name of ['Thảo Linh', 'Quang Huy'])
+					await page.locator('.member-picker').getByRole('button', { name, exact: true }).click();
+				const rounding = page.getByRole('combobox', { name: 'Làm tròn lên mỗi phần', exact: true });
+				if (mode === 'manual') {
+					await expect(rounding).toHaveCount(0);
+					for (const [name, value] of [
+						['Minh An', '45'],
+						['Thảo Linh', '35'],
+						['Quang Huy', '20']
+					])
+						await page.getByLabel(`Số tiền của ${name}`, { exact: true }).fill(value);
+					await page.getByLabel('Giá sau khi giảm giá', { exact: true }).fill('80.001');
+				} else {
+					await page.getByRole('button', { name: 'Chia đều', exact: true }).click();
+					await page.getByLabel('Tổng tiền cần chia', { exact: true }).fill('100.001');
+				}
+				const amounts = page.locator(
+					mode === 'manual' ? '.discounted-share' : '.participant-line .amount-input strong'
+				);
+				await expect(rounding).toHaveValue('3');
+				await expect(amounts).toHaveText(
+					mode === 'manual'
+						? ['→ 37.000 ₫', '→ 29.000 ₫', '→ 17.000 ₫']
+						: ['34.000 ₫', '34.000 ₫', '34.000 ₫']
+				);
+				await expect(page.locator('.summary-total strong')).toHaveText(
+					mode === 'manual' ? '83.000 ₫' : '102.000 ₫'
+				);
+				await expect(page.locator('.summary-pair').filter({ hasText: 'Làm tròn' })).toContainText(
+					mode === 'manual' ? '+2.999 ₫' : '+1.999 ₫'
+				);
+				await rounding.selectOption('0');
+				const exactAmounts =
+					mode === 'manual'
+						? ['→ 36.000 ₫', '→ 28.000 ₫', '→ 16.001 ₫']
+						: ['33.334 ₫', '33.334 ₫', '33.333 ₫'];
+				await expect(amounts).toHaveText(exactAmounts);
+				await expect(page.locator('.summary-pair').filter({ hasText: 'Làm tròn' })).toHaveCount(0);
+				await page.reload();
+				await expect(rounding).toHaveValue('0');
+				await expect(amounts).toHaveText(exactAmounts);
+				if (mode === 'manual') {
+					await page.getByLabel('Giá sau khi giảm giá', { exact: true }).fill('');
+					await expect(rounding).toHaveCount(0);
+					await expect(page.locator('.summary-total strong')).toHaveText('100.000 ₫');
+					await page.getByLabel('Giá sau khi giảm giá', { exact: true }).fill('80.001');
+				}
+				await page
+					.locator('.form-panel')
+					.filter({ hasText: 'Chia hóa đơn' })
+					.screenshot({ path: `artifacts/split-${mode}-${width}.png` });
+				await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
+				await page
+					.getByRole('dialog', { name: 'Xác nhận hóa đơn', exact: true })
+					.getByRole('button', { name: 'Xác nhận', exact: true })
+					.click();
+				await expect(page).toHaveURL(/\/activity$/);
+				const bill = state.bills.find((bill) => bill.id === createdId)!;
+				expect(bill.lines.map((line) => line.amount)).toEqual(
+					mode === 'manual' ? [36000, 28000, 16001] : [33334, 33334, 33333]
+				);
+				expect(bill.total).toBe(mode === 'manual' ? 80001 : 100001);
+				expect(
+					state.ledger.filter((entry) => entry.reference === createdId).map((entry) => entry.amount)
+				).toEqual(mode === 'manual' ? [28000, 16001] : [33334, 33333]);
+			});
+		}
+
 		test('already-paid toggle persists in drafts and logs debt plus repayment without changing balances', async ({
 			page
 		}) => {

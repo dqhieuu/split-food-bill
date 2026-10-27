@@ -102,16 +102,18 @@ export function roundUpTo(value: number, digits: number): number {
 }
 export function equalShares(total: number, count: number, digits: number): number[] {
 	if (!Number.isSafeInteger(total) || total <= 0 || count <= 0) return Array(Math.max(0, count)).fill(0);
+	if (digits === 0) return discountShares(Array(count).fill(1), total);
 	return Array(count).fill(roundUpTo(total / count, digits));
 }
 /**
- * Scales listed prices to the discounted bill total. Every share but the last is rounded to the
- * nearest đồng; the last absorbs the difference so the sum always equals the discounted total.
+ * Scales listed prices to the discounted bill total. With no rounding step, the last person
+ * absorbs the difference in whole đồng; otherwise every share rounds up independently.
  */
-export function discountShares(amounts: number[], discountedTotal: number): number[] {
+export function discountShares(amounts: number[], discountedTotal: number, digits = 0): number[] {
 	const sum = amounts.reduce((a, b) => a + b, 0);
 	if (!amounts.length || sum <= 0 || !Number.isSafeInteger(discountedTotal) || discountedTotal <= 0)
 		return amounts;
+	if (digits > 0) return amounts.map((amount) => roundUpTo((amount * discountedTotal) / sum, digits));
 	const shares = amounts.map((amount) => Math.round((amount * discountedTotal) / sum));
 	shares[shares.length - 1] = discountedTotal - shares.slice(0, -1).reduce((a, b) => a + b, 0);
 	return shares;
