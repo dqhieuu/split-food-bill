@@ -1,0 +1,31 @@
+{
+	"name": "Chia tiền ăn",
+	"short_name": "Chia tiền ăn",
+	"description": "Quản lý hóa đơn, thanh toán và nợ nội bộ.",
+	"lang": "vi",
+	"id": "/",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"background_color": "#faf9f6",
+	"theme_color": "#315e47",
+	"icons": [
+		{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+		{ "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+		{ "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+		{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+	],
+	"shortcuts": [
+		{
+			"name": "Tạo hoá đơn",
+			"short_name": "Hoá đơn mới",
+			"url": "/new-bill",
+			"icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+		},
+		{
+			"name": "Ledger",
+			"url": "/activity",
+			"icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+		}
+	]
+}
