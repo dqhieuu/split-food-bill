@@ -56,6 +56,8 @@ export type BillLine = { memberId: string; amount: number; description: string; 
 export type Bill = {
 	id: string;
 	organizer: string;
+	/** Actual user who recorded the bill; organizer is the person who paid it. */
+	creator?: string;
 	description: string;
 	date: string;
 	createdAt?: string;

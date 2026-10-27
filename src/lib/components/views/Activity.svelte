@@ -3,6 +3,7 @@
 	import { Search, Download, ReceiptText, ArrowUpRight } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Switch } from '$lib/components/ui/switch';
 	import BillDetail from '../BillDetail.svelte';
 	import Avatar from '../Avatar.svelte';
 	import EmptyState from '../EmptyState.svelte';
@@ -29,6 +30,8 @@
 	});
 	let search = $state('');
 	let typeFilter = $state('all');
+	let showUndone = $state(false);
+	const billCount = $derived(appState.bills.filter((bill) => showUndone || !bill.undoneAt).length);
 	// svelte-ignore state_referenced_locally
 	let memberFilter = $state(actor);
 	let fromDate = $state('');
@@ -43,12 +46,14 @@
 		[...appState.bills]
 			.filter(
 				(b) =>
-					`${b.description} ${name(b.organizer)} ${b.lines.map((l) => l.description).join(' ')}`
+					(showUndone || !b.undoneAt) &&
+					`${b.description} ${name(b.organizer)} ${name(b.creator ?? b.organizer)} ${b.lines.map((l) => l.description).join(' ')}`
 						.toLocaleLowerCase('vi')
 						.includes(search.toLocaleLowerCase('vi')) &&
 					matchesDate(b.date) &&
 					(memberFilter === 'all' ||
 						b.organizer === memberFilter ||
+						b.creator === memberFilter ||
 						b.lines.some((l) => l.memberId === memberFilter))
 			)
 			.sort(compareBillsByCreatedAt)
@@ -142,13 +147,16 @@
 <section class="panel">
 	<div class="filter-toolbar">
 		<div class="segmented-control">
-			<button class:active={tab === 'bills'} onclick={() => (tab = 'bills')}
-				>Hóa đơn ({appState.bills.length})</button
+			<button class:active={tab === 'bills'} onclick={() => (tab = 'bills')}>Hóa đơn ({billCount})</button
 			><button class:active={tab === 'ledger'} onclick={() => (tab = 'ledger')}
 				>Giao dịch ({appState.ledger.length})</button
 			>
 		</div>
-		<span class="subtle-label">Mới nhất trước</span>
+		<div class="activity-toolbar-options">
+			{#if tab === 'bills'}<label class="activity-undone-toggle"
+					><Switch aria-label="Hiện hóa đơn đã hoàn tác" bind:checked={showUndone} />Hiện hóa đơn đã hoàn tác</label
+				>{/if}
+		</div>
 	</div>
 	<div class="activity-filters">
 		<div class="search-field">

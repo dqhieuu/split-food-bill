@@ -318,6 +318,7 @@ for (const width of [1280, 390]) {
 				await expect(page.getByRole('heading', { name, exact: true }).first()).toBeVisible();
 				expect(await page.evaluate(() => history.length)).toBe(historyLength);
 			}
+			await page.getByRole('switch', { name: 'Hiện hóa đơn đã hoàn tác', exact: true }).click();
 			const title = page.locator('.table-title-button strong').first();
 			expect(
 				await title
@@ -364,6 +365,101 @@ for (const width of [1280, 390]) {
 			await expect(
 				page.getByRole('button', { name: 'Xem ảnh hóa đơn toàn màn hình', exact: true })
 			).toBeFocused();
+		});
+
+		test('undone bills are hidden by default and the switch only changes the Bills tab', async ({ page }) => {
+			await openFixture(page, '/activity', (state) => {
+				const active = { ...state.bills[0], id: 'active-bill', description: 'Hóa đơn đang có hiệu lực' };
+				delete active.undoneAt;
+				delete active.undoneBy;
+				state.bills.push(active);
+			});
+			const toggle = page.getByRole('switch', { name: 'Hiện hóa đơn đã hoàn tác', exact: true });
+			await expect(toggle).not.toBeChecked();
+			await expect(page.locator('.clickable-bill-row')).toHaveCount(1);
+			await expect(page.locator('.clickable-bill-row')).toContainText('Hóa đơn đang có hiệu lực');
+			await expect(page.getByRole('button', { name: 'Hóa đơn (1)', exact: true })).toBeVisible();
+			await toggle.click();
+			await expect(page.locator('.clickable-bill-row')).toHaveCount(2);
+			await expect(page.locator('.undone-label')).toHaveText('Đã hoàn tác');
+			await page.getByLabel('Tìm giao dịch', { exact: true }).fill('Hóa đơn mẫu');
+			await expect(page.locator('.clickable-bill-row')).toHaveCount(1);
+			await toggle.click();
+			await expect(page.locator('.clickable-bill-row')).toHaveCount(0);
+			await page.getByLabel('Tìm giao dịch', { exact: true }).fill('');
+			await page.getByRole('button', { name: /^Giao dịch \(/ }).click();
+			await expect(toggle).toHaveCount(0);
+			await expect(page.locator('.ledger-table tbody tr')).toHaveCount(7);
+			await page.goto('/activity?bill=receipt');
+			await expect(page.getByRole('dialog', { name: 'Hóa đơn mẫu', exact: true })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(toggle).not.toBeChecked();
+			await expect(page.locator('.clickable-bill-row')).toHaveCount(1);
+		});
+
+		test('admin can choose another payer, persist the draft and retain their own creator identity', async ({
+			page
+		}) => {
+			const { state } = await openFixture(page, '/new-bill');
+			let createdId = '';
+			const before = pairBalance(state.ledger, 'huy', 'linh');
+			await page.route('**/api/groups/local/commands/createBill', async (route) => {
+				const input = route.request().postDataJSON();
+				expect(input.payerId).toBe('linh');
+				createdId = input.id;
+				const result = applyCommand(state, ACTOR, 'createBill', input, now);
+				await route.fulfill({ json: { state, result } });
+			});
+			await page.getByRole('combobox', { name: 'Người thanh toán', exact: true }).selectOption('linh');
+			await page.getByLabel('Tên hóa đơn', { exact: true }).fill('Hóa đơn ghi giúp Thảo Linh');
+			await page.locator('.member-picker').getByRole('button', { name: 'Minh An', exact: true }).click();
+			await page.locator('.member-picker').getByRole('button', { name: 'Thảo Linh', exact: true }).click();
+			await page.locator('.member-picker').getByRole('button', { name: 'Quang Huy', exact: true }).click();
+			await page.getByLabel('Số tiền của Thảo Linh', { exact: true }).fill('30');
+			await page.getByLabel('Số tiền của Quang Huy', { exact: true }).fill('55');
+			await page.reload();
+			await expect(page.getByRole('combobox', { name: 'Người thanh toán', exact: true })).toHaveValue('linh');
+			await page.locator('.bill-details-panel').screenshot({ path: `artifacts/bill-payer-${width}.png` });
+			await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
+			const confirmation = page.getByRole('dialog', { name: 'Xác nhận hóa đơn', exact: true });
+			await expect(confirmation).toContainText('Thảo Linh thanh toán');
+			await confirmation.getByRole('button', { name: 'Xem trước Discord', exact: true }).click();
+			const preview = page.getByRole('dialog', { name: 'Xem trước Discord', exact: true });
+			await expect(preview.getByRole('link', { name: 'Mở mã QR', exact: true })).toHaveAttribute(
+				'href',
+				/to=linh$/
+			);
+			await page.keyboard.press('Escape');
+			await confirmation.getByRole('button', { name: 'Xác nhận', exact: true }).click();
+			await expect(page).toHaveURL(/\/activity$/);
+			const row = page.locator('.clickable-bill-row').filter({ hasText: 'Hóa đơn ghi giúp Thảo Linh' });
+			await expect(row).toBeVisible();
+			await expect(row.locator('td').nth(1)).toContainText('Thảo Linh');
+			expect(state.bills.find((bill) => bill.id === createdId)).toMatchObject({
+				organizer: 'linh',
+				creator: ACTOR
+			});
+			expect(state.ledger.filter((entry) => entry.reference === createdId)).toHaveLength(1);
+			expect(state.ledger.at(-1)).toMatchObject({ from: 'huy', to: 'linh', creator: ACTOR, amount: 55000 });
+			expect(pairBalance(state.ledger, 'huy', 'linh')).toBe(before + 55000);
+			await row.locator('.table-title-button').click();
+			await expect(page.getByRole('dialog')).toContainText('Người ghi: Minh An');
+			await page.keyboard.press('Escape');
+			state.members.find((member) => member.id === ACTOR)!.role = 'member';
+			state.version++;
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
+			await page.locator('nav a[href="/new-bill"]').click();
+			await expect(page.getByRole('combobox', { name: 'Người thanh toán', exact: true })).toHaveCount(0);
+			await expect(page.locator('.payer-field')).toContainText('Minh An');
+			await page.evaluate((actor) => {
+				const key = `lunchroom-draft-local-${actor}`;
+				const draft = JSON.parse(localStorage.getItem(key) || '{}');
+				draft.payerId = 'linh';
+				localStorage.setItem(key, JSON.stringify(draft));
+			}, ACTOR);
+			await page.reload();
+			await expect(page.locator('.payer-field')).toContainText('Minh An');
 		});
 
 		test('Discord notification preference survives a saved bill, stale drafts and reloads, with rollback on save failure', async ({

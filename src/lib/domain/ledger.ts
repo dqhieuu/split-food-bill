@@ -229,6 +229,7 @@ export function applyCommand(
 				id: identifier,
 				description: text,
 				date: z.iso.datetime(),
+				payerId: identifier.optional(),
 				discordNotification: z.boolean(),
 				alreadyPaid: z.boolean().optional().default(false),
 				image: z.string().regex(BILL_IMAGE_ID).optional(),
@@ -245,20 +246,26 @@ export function applyCommand(
 					.max(100)
 			})
 			.parse(input);
+		const payerId = data.payerId ?? actor;
+		if (payerId !== actor) requireAdmin(state, actor);
 		const existing = state.bills.find((b) => b.id === data.id);
 		if (existing) {
-			if (existing.organizer !== actor) throw new DomainError('Mã hóa đơn đã được sử dụng.', 409);
+			if ((existing.creator ?? existing.organizer) !== actor || existing.organizer !== payerId)
+				throw new DomainError('Mã hóa đơn đã được sử dụng.', 409);
 			if (!!existing.alreadyPaid !== data.alreadyPaid)
 				throw new DomainError('Hóa đơn đã được ghi với trạng thái thanh toán khác. Vui lòng tải lại.', 409);
 			return { reference: existing.id };
 		}
 		if (new Set(data.lines.map((l) => l.memberId)).size !== data.lines.length)
 			throw new DomainError('Mỗi thành viên chỉ xuất hiện một lần.');
+		requireMember(state, payerId, true);
 		for (const line of data.lines) requireMember(state, line.memberId, true);
+		const { payerId: _payerId, ...billData } = data;
 		const bill: Bill = {
-			...data,
+			...billData,
 			createdAt: now,
-			organizer: actor,
+			organizer: payerId,
+			creator: actor,
 			memberNames: Object.fromEntries(state.members.map((m) => [m.id, m.name])),
 			total: data.lines.reduce((s, l) => s + l.amount, 0),
 			lines: data.lines.map((l) => ({ ...l, description: l.description || data.description }))
@@ -268,18 +275,18 @@ export function applyCommand(
 		requireAvailableEntryIds(
 			state,
 			bill.lines.flatMap((line, index) =>
-				line.memberId === actor
+				line.memberId === payerId
 					? []
 					: [`${bill.id}-${index}`, ...(bill.alreadyPaid ? [`${bill.id}-${index}-paid`] : [])]
 			)
 		);
 		state.bills.push(bill);
 		bill.lines.forEach((line, i) => {
-			if (line.memberId !== actor) {
+			if (line.memberId !== payerId) {
 				state.ledger.push({
 					id: `${bill.id}-${i}`,
 					from: line.memberId,
-					to: actor,
+					to: payerId,
 					type: 'debt',
 					amount: line.amount,
 					date: bill.date,
@@ -294,7 +301,7 @@ export function applyCommand(
 					state.ledger.push({
 						id: `${bill.id}-${i}-paid`,
 						from: line.memberId,
-						to: actor,
+						to: payerId,
 						type: 'payment',
 						amount: line.amount,
 						date: bill.date,

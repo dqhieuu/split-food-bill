@@ -45,7 +45,7 @@
 	bind:open
 	title={bill?.description || 'Chi tiết hóa đơn'}
 	description={bill
-		? `${name(bill.organizer)} thanh toán · ${billDateLabel(bill.date)} · Tạo: ${dateTimeLabel(bill.createdAt)}`
+		? `${name(bill.organizer)} thanh toán · ${billDateLabel(bill.date)} · Tạo: ${dateTimeLabel(bill.createdAt)}${bill.creator && bill.creator !== bill.organizer ? ` · Người ghi: ${name(bill.creator)}` : ''}`
 		: ''}
 	wide
 >

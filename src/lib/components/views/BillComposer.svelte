@@ -55,6 +55,7 @@
 	let description = $state('');
 	let date = $state(localDate(new Date()));
 	let selected = $state<string[]>([]);
+	let payerId = $state('');
 	let amounts = $state<Record<string, number>>({});
 	let descriptions = $state<Record<string, string>>({});
 	let mode = $state('manual');
@@ -105,13 +106,16 @@
 	);
 	const total = $derived(lines.reduce((s, l) => s + l.amount, 0));
 	const roundingExtra = $derived(mode === 'equal' ? Math.max(0, total - toDong(totalInput)) : 0);
-	const payer = $derived(appState.members.find((m) => m.id === actor)!);
+	const editor = $derived(appState.members.find((member) => member.id === actor)!);
+	const isAdmin = $derived(editor.active && editor.role === 'admin');
+	const payer = $derived((isAdmin && people.find((member) => member.id === payerId)) || editor);
 	const previewMessage = $derived(
 		previewOpen && lines.some((line) => line.memberId === previewRecipient)
 			? billNotificationMessage(
 					{
 						id: submissionId,
-						organizer: actor,
+						organizer: payer.id,
+						creator: actor,
 						description,
 						date,
 						lines,
@@ -144,6 +148,7 @@
 	});
 	onMount(() => {
 		selected = [actor];
+		payerId = actor;
 		discordNotification = discordNotificationPreference;
 		try {
 			const saved = localStorage.getItem(`lunchroom-draft-${groupId}-${actor}`);
@@ -152,6 +157,7 @@
 				description = draft.description ?? '';
 				date = draft.date ?? date;
 				selected = (draft.selected ?? [actor]).filter((id: string) => people.some((m) => m.id === id));
+				if (isAdmin && people.some((member) => member.id === draft.payerId)) payerId = draft.payerId;
 				amounts = draft.amounts ?? {};
 				descriptions = draft.descriptions ?? {};
 				mode = draft.mode ?? 'manual';
@@ -179,6 +185,7 @@
 					description,
 					date,
 					selected,
+					payerId: payer.id,
 					amounts,
 					descriptions,
 					mode,
@@ -301,6 +308,7 @@
 					description,
 					date: new Date(`${date}T12:00:00+07:00`).toISOString(),
 					lines,
+					payerId: payer.id,
 					discordNotification,
 					alreadyPaid,
 					...(imageId ? { image: imageId } : {})
@@ -332,12 +340,24 @@
 				<label class="field" class:ai-updated={aiChanges.date}
 					>Ngày thanh toán<BillDateInput bind:value={date} invalid={dateInvalid} /></label
 				>
-				<div class="field">
-					Người thanh toán
-					<div class="payer-field">
-						<Avatar member={payer} size="small" /><strong>{payer.name}</strong><span>Bạn</span>
-					</div>
-				</div>
+				{#if isAdmin}<label class="field"
+						>Người thanh toán
+						<select
+							aria-label="Người thanh toán"
+							value={payer.id}
+							disabled={busy}
+							onchange={(event) => (payerId = event.currentTarget.value)}
+						>
+							{#each people as member}<option value={member.id}
+									>{member.name}{member.id === actor ? ' (Bạn)' : ''}</option
+								>{/each}
+						</select>
+					</label>{:else}<div class="field">
+						Người thanh toán
+						<div class="payer-field">
+							<Avatar member={payer} size="small" /><strong>{payer.name}</strong><span>Bạn</span>
+						</div>
+					</div>{/if}
 			</div>
 			<label class="field" class:ai-updated={aiChanges.name}
 				>Tên hóa đơn<Input
@@ -570,7 +590,7 @@
 				variant="outline"
 				disabled={busy}
 				onclick={() => {
-					previewRecipient = selected.find((id) => id !== actor) ?? selected[0];
+					previewRecipient = selected.find((id) => id !== payer.id) ?? selected[0];
 					previewOpen = true;
 				}}
 			>
