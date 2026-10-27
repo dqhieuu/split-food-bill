@@ -152,10 +152,8 @@
 			disabled={busy}
 			onchange={(event) => void changeAccount(event.currentTarget.value)}
 		>
-			{#each appState.members as member}<option value={member.id}
-					>{member.name}{member.id === actor ? ' (Bạn)' : ''}{member.active
-						? ''
-						: ' (Đã ngừng hoạt động)'}</option
+			{#each appState.members.filter((member) => member.active) as member}<option value={member.id}
+					>{member.name}{member.id === actor ? ' (Bạn)' : ''}</option
 				>{/each}
 		</select>
 	</label>
