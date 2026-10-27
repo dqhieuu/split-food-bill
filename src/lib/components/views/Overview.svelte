@@ -37,7 +37,7 @@
 	const history = $derived(personalPaymentHistory(appState.ledger, actor, activeIds).slice(0, 10));
 	// Undone bills stay in the ledger for history but no longer count as spending.
 	const liveBills = $derived(appState.bills.filter((bill) => !bill.undoneAt));
-	const recentBills = $derived([...liveBills].sort(compareBillsByCreatedAt).slice(0, 8));
+	const recentBills = $derived([...liveBills].sort(compareBillsByCreatedAt).slice(0, 10));
 	const window = $derived(spendingWindow(liveBills, granularity, windowOffset));
 	const max = $derived(Math.max(1, ...window.buckets.map((bucket) => bucket.value)));
 	const shortDate = (key: string) => `${Number(key.slice(8))}/${Number(key.slice(5, 7))}`;
