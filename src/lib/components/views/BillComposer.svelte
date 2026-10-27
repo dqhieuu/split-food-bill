@@ -143,11 +143,13 @@
 		mode === 'equal' && (Number(totalInput) < 0 || (attempted && toDong(totalInput) <= 0))
 	);
 	const discountInvalid = $derived(
-		mode === 'manual' && (Number(discountInput) < 0 || (hasDiscount && shares.some((s) => s <= 0)))
+		mode === 'manual' &&
+			(Number(discountInput) < 0 ||
+				(hasDiscount && listed.every((price) => price > 0) && shares.some((s) => s <= 0)))
 	);
 	const amountInvalid = (id: string, index: number) =>
 		mode === 'manual' &&
-		(Number(amounts[id]) < 0 || (attempted && (listed[index] <= 0 || shares[index] <= 0)));
+		(Number(amounts[id]) < 0 || ((attempted || hasDiscount) && (listed[index] <= 0 || shares[index] <= 0)));
 	const formatStep = (digits: number) => currency(10 ** digits);
 	$effect(() => {
 		if (!savingNotificationPreference) discordNotification = discordNotificationPreference;
@@ -298,6 +300,8 @@
 		else if (dateInvalid) validation = 'Hãy chọn ngày hợp lệ.';
 		else if (!lines.length) validation = 'Chọn ít nhất một thành viên.';
 		else if (totalInvalid) validation = 'Hãy nhập tổng tiền cần chia.';
+		else if (mode === 'manual' && listed.some((price) => price <= 0))
+			validation = 'Mỗi người được chọn cần có số tiền lớn hơn 0.';
 		else if (discountInvalid) validation = 'Giá sau khi giảm giá không hợp lệ.';
 		else if (lines.some((l) => !Number.isSafeInteger(l.amount) || l.amount <= 0))
 			validation = 'Mỗi người được chọn cần có số tiền lớn hơn 0.';

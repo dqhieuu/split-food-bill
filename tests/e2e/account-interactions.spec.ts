@@ -513,6 +513,41 @@ for (const width of [1280, 390]) {
 			expect(userPreferences.discordBillNotifications).toBe(true);
 		});
 
+		test('discounted bills highlight missing participant prices instead of the discounted total', async ({
+			page
+		}) => {
+			await openFixture(page, '/new-bill');
+			await page.getByLabel('Tên hóa đơn', { exact: true }).fill('Hóa đơn thiếu giá');
+			for (const name of ['Thảo Linh', 'Quang Huy', 'Ngọc Mai'])
+				await page.locator('.member-picker').getByRole('button', { name, exact: true }).click();
+			for (const name of ['Minh An', 'Thảo Linh', 'Quang Huy'])
+				await page.getByLabel(`Số tiền của ${name}`, { exact: true }).fill('30');
+			const discount = page.getByLabel('Giá sau khi giảm giá', { exact: true });
+			const missingPrice = page.getByLabel('Số tiền của Ngọc Mai', { exact: true });
+			await discount.fill('70');
+			await expect(discount).toHaveAttribute('aria-invalid', 'false');
+			await expect(missingPrice).toHaveAttribute('aria-invalid', 'true');
+			await page.getByRole('combobox', { name: 'Làm tròn lên mỗi phần', exact: true }).selectOption('0');
+			// A missing last price can still receive a positive remainder; it must not pass validation.
+			await expect(page.locator('.discounted-share').last()).toHaveText('→ 1 ₫');
+			await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+			await expect(page.getByRole('alert')).toHaveText('Mỗi người được chọn cần có số tiền lớn hơn 0.');
+			await expect(discount).toHaveAttribute('aria-invalid', 'false');
+			await missingPrice.fill('30');
+			await expect(missingPrice).toHaveAttribute('aria-invalid', 'false');
+			const middlePrice = page.getByLabel('Số tiền của Thảo Linh', { exact: true });
+			await middlePrice.fill('');
+			await expect(middlePrice).toHaveAttribute('aria-invalid', 'true');
+			await expect(discount).toHaveAttribute('aria-invalid', 'false');
+			await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+			await middlePrice.fill('30');
+			await expect(middlePrice).toHaveAttribute('aria-invalid', 'false');
+			await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
+			await expect(page.getByRole('dialog', { name: 'Xác nhận hóa đơn', exact: true })).toBeVisible();
+		});
+
 		for (const mode of ['manual', 'equal']) {
 			test(`${mode} splits round up when selected and put the no-round remainder on the last person`, async ({
 				page
