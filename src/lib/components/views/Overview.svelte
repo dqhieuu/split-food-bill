@@ -16,7 +16,14 @@
 	import SpendingCalendar from './SpendingCalendar.svelte';
 	import type { AppState, LedgerEntry } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, shortCurrency, dateLabel, billDateLabel, dateTimeLabel } from '$lib/domain/ledger';
+	import {
+		currency,
+		shortCurrency,
+		dateLabel,
+		billDateLabel,
+		dateTimeLabel,
+		compareBillsByCreatedAt
+	} from '$lib/domain/ledger';
 	import { spendingWindow, personalPaymentHistory, type SpendingGranularity } from '$lib/domain/spending';
 	let {
 		appState,
@@ -41,7 +48,7 @@
 	const history = $derived(personalPaymentHistory(appState.ledger, actor, activeIds).slice(0, 5));
 	// Undone bills stay in the ledger for history but no longer count as spending.
 	const liveBills = $derived(appState.bills.filter((bill) => !bill.undoneAt));
-	const recentBills = $derived([...liveBills].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4));
+	const recentBills = $derived([...liveBills].sort(compareBillsByCreatedAt).slice(0, 4));
 	const window = $derived(spendingWindow(liveBills, granularity, windowOffset));
 	const max = $derived(Math.max(1, ...window.buckets.map((bucket) => bucket.value)));
 	const shortDate = (key: string) => `${Number(key.slice(8))}/${Number(key.slice(5, 7))}`;

@@ -1,5 +1,5 @@
 import type { Bill } from './types';
-import { localDate, splitAmount } from './ledger';
+import { localDate, splitAmount, compareBillsByCreatedAt } from './ledger';
 
 export type CalendarBill = {
 	id: string;
@@ -169,12 +169,14 @@ export function calendarMonth(
 	payerId?: string
 ): CalendarMonth {
 	// Bill totals are validated positive integers; skip any corrupt non-finite total defensively.
-	const inMonth = bills.filter(
-		(bill) =>
-			Number.isFinite(bill.total) &&
-			localDate(bill.date).startsWith(monthKey) &&
-			(!payerId || bill.organizer === payerId)
-	);
+	const inMonth = bills
+		.filter(
+			(bill) =>
+				Number.isFinite(bill.total) &&
+				localDate(bill.date).startsWith(monthKey) &&
+				(!payerId || bill.organizer === payerId)
+		)
+		.sort(compareBillsByCreatedAt);
 	const maxBill = Math.max(1, ...inMonth.map((bill) => bill.total));
 	const monthTotal = inMonth.reduce((sum, bill) => sum + bill.total, 0);
 	const monthPersonMeals = inMonth.reduce((sum, bill) => sum + participantCount(bill), 0);
@@ -193,11 +195,6 @@ export function calendarMonth(
 		};
 		days.set(key, [...(days.get(key) ?? []), entry]);
 	}
-	for (const [key, list] of days)
-		days.set(
-			key,
-			[...list].sort((a, b) => b.amount - a.amount)
-		);
 	const totals = new Map([...days].map(([key, list]) => [key, list.reduce((s, b) => s + b.amount, 0)]));
 	const personMeals = new Map<string, number>();
 	for (const bill of inMonth) {

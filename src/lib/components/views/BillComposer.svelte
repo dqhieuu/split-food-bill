@@ -471,9 +471,7 @@
 			</div>{/each}
 	</div>
 	<div class="summary-total"><span>Tổng cộng</span><strong>{currency(total)}</strong></div>
-	{#if imageId || !discordNotification}<p class="fine-print">
-			{imageId ? 'Kèm ảnh hóa đơn.' : ''}{discordNotification ? '' : ' Không gửi thông báo Discord.'}
-		</p>{/if}
+	{#if imageId}<p class="fine-print">Kèm ảnh hóa đơn.</p>{/if}
 	<div class="modal-actions">
 		{#if discordNotification}<Button
 				variant="outline"

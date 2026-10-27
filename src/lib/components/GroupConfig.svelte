@@ -9,13 +9,11 @@
 	let {
 		open = $bindable(true),
 		group,
-		onUpdated,
-		onSelect
+		onUpdated
 	}: {
 		open: boolean;
 		group: GroupSummary;
 		onUpdated: (group: Group) => void;
-		onSelect: () => Promise<void>;
 	} = $props();
 	const groupId = $derived(group.id);
 	const groupName = $derived(group.name);
@@ -29,7 +27,6 @@
 	let aiModel = $state('');
 	let aiKey = $state('');
 	let aiHasKey = $state(false);
-	const aiComplete = $derived(!!aiEndpoint.trim() && !!aiModel.trim() && (!!aiKey.trim() || aiHasKey));
 	async function run(command: string, input: unknown) {
 		const response = await sendCommand(groupId, command, input);
 		if (response.group) onUpdated(response.group);
@@ -112,10 +109,6 @@
 		<label class="field">Máy chủ Discord<Input value={group.discordGuildId} readonly /></label>
 		{#if isAdmin}<div class="group-config-section">
 				<h3><Sparkles size={16} /> Đọc hóa đơn bằng AI</h3>
-				<p class="fine-print">
-					Dùng API tương thích OpenAI có hỗ trợ structured outputs và đọc ảnh. Nút AI chỉ hiện khi điền đủ cả
-					ba mục.
-				</p>
 			</div>
 			<label class="field"
 				>Endpoint<Input
@@ -145,12 +138,8 @@
 				/><small>API key chỉ lưu trên máy chủ và không hiển thị lại.</small></label
 			>
 			{#if aiError}<p class="validation-error" role="alert">{aiError}</p>{/if}
-			<p class="fine-print">
-				{aiComplete ? 'Thành viên sẽ thấy nút đọc hóa đơn bằng AI.' : 'Chưa đủ thông tin: nút AI sẽ bị ẩn.'}
-			</p>
 		{/if}
 		<div class="modal-actions">
-			<Button type="button" variant="outline" disabled={busy} onclick={onSelect}>Mở nhóm</Button>
 			{#if isAdmin}
 				{#if aiHasKey || aiSaved.endpoint || aiSaved.model}<Button
 						type="button"

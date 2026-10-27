@@ -8,7 +8,14 @@
 	import EmptyState from '../EmptyState.svelte';
 	import type { AppState, Bill } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, billDateLabel, dateTimeLabel, localDate } from '$lib/domain/ledger';
+	import {
+		currency,
+		billDateLabel,
+		dateTimeLabel,
+		localDate,
+		compareLedgerEntries,
+		compareBillsByCreatedAt
+	} from '$lib/domain/ledger';
 	let {
 		appState,
 		actor,
@@ -41,7 +48,7 @@
 						b.organizer === memberFilter ||
 						b.lines.some((l) => l.memberId === memberFilter))
 			)
-			.sort((a, b) => b.date.localeCompare(a.date))
+			.sort(compareBillsByCreatedAt)
 	);
 	const entries = $derived(
 		[...appState.ledger]
@@ -54,7 +61,7 @@
 					(memberFilter === 'all' || e.from === memberFilter || e.to === memberFilter) &&
 					(typeFilter === 'all' || e.type === typeFilter)
 			)
-			.sort((a, b) => b.date.localeCompare(a.date))
+			.sort(compareLedgerEntries)
 	);
 	const selectedBill = $derived(appState.bills.find((b) => b.id === selectedBillId));
 	$effect(() => {

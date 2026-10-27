@@ -366,6 +366,10 @@ nav a.active:before {
 	min-width: 0;
 }
 .topbar {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	flex-shrink: 0;
 	height: 77px;
 	display: flex;
 	align-items: center;
@@ -1198,7 +1202,7 @@ footer {
 }
 .composer-side {
 	position: sticky;
-	top: 24px;
+	top: 101px;
 }
 .bill-summary {
 	padding: 25px;
@@ -4057,8 +4061,8 @@ select[aria-invalid='true'] {
 	background: light-dark(#f2f2ef, #242424);
 }
 .simplification-steps {
-	list-style: decimal;
-	padding-left: 20px;
+	list-style: none;
+	padding-left: 0;
 	margin: 12px 0;
 	font-size: 14px;
 	line-height: 1.8;
@@ -4265,26 +4269,19 @@ button.payment-history-row {
 	width: 100%;
 	align-items: center;
 	gap: 14px;
-	padding: 18px 0;
+	padding: 14px 12px;
 	background: none;
 	border: 0;
 	border-bottom: 1px solid var(--border);
 	border-radius: 8px;
-	transition:
-		background-color 0.15s,
-		transform 0.15s;
+	transition: background-color 0.15s;
 }
 .group-choice:hover,
 .group-choice:focus-visible {
 	background: light-dark(#eff2e8, #252e24);
-	transform: translateX(3px);
 }
 .group-choice:active {
 	background: light-dark(#e3eadc, #30402e);
-}
-.group-choice > svg:last-child {
-	margin-left: auto;
-	flex-shrink: 0;
 }
 .group-choice span {
 	display: flex;

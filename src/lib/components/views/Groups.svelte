@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Plus, Users, RefreshCw, Trash2, ChevronRight } from '@lucide/svelte';
+	import { Plus, Users, Trash2 } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import type { Group, GroupSummary, Session } from '$lib/domain/types';
@@ -36,14 +36,13 @@
 			error = (cause as Error).message;
 		}
 	}
-	async function previewMembers(refresh = false) {
+	async function previewMembers() {
 		error = '';
 		preview = [];
 		if (!guildId) return;
 		refreshing = true;
 		try {
-			preview = (await requestJson(`/api/discord/guilds/${guildId}/members${refresh ? '?refresh=true' : ''}`))
-				.members;
+			preview = (await requestJson(`/api/discord/guilds/${guildId}/members`)).members;
 		} catch (cause) {
 			error = (cause as Error).message;
 		} finally {
@@ -82,7 +81,6 @@
 					><strong>{group.name}</strong><small
 						>{group.role === 'admin' ? 'Quản trị viên nhóm' : 'Thành viên'} · {group.discordGuildId}</small
 					></span
-				><ChevronRight size={18} />
 				></button
 			>
 		{:else}<p class="inline-empty">
@@ -103,12 +101,8 @@
 						>{/each}</select
 				></label
 			>
-			<Button variant="outline" disabled={!guildId || refreshing || busy} onclick={() => previewMembers(true)}
-				><RefreshCw size={16} />Làm mới danh sách Discord</Button
-			>
 			{#if preview.length}<p class="fine-print">
-					{preview.length} thành viên trong máy chủ. Thành viên mới sẽ ở trạng thái ngừng hoạt động; người tạo là
-					quản trị viên nhóm.
+					{preview.length} thành viên trong máy chủ.
 				</p>{/if}
 			<Button onclick={create} disabled={busy || refreshing || !name.trim() || !guildId}
 				><Plus size={17} /> Tạo nhóm</Button
@@ -126,5 +120,4 @@
 			if (configGroup) configGroup = { ...configGroup, ...next };
 			onUpdated(next);
 		}}
-		onSelect={() => onSelect(configGroup!.id)}
 	/>{/if}

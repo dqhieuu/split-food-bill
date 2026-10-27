@@ -141,6 +141,32 @@ export function requireAdmin(state: AppState, actor: string) {
 	if (requireMember(state, actor, true).role !== 'admin')
 		throw new DomainError('Chỉ quản trị viên được thực hiện thao tác này.', 403);
 }
+/** Bill lists use recording time; the meal date can refer to an earlier day. */
+export function compareBillsByCreatedAt(a: Bill, b: Bill): number {
+	return (b.createdAt ?? b.date).localeCompare(a.createdAt ?? a.date) || b.id.localeCompare(a.id);
+}
+
+/** Newest batches first, but each simplification reads in execution order within its batch. */
+export function compareLedgerEntries(a: LedgerEntry, b: LedgerEntry): number {
+	const dateOrder = b.date.localeCompare(a.date);
+	if (dateOrder) return dateOrder;
+	const batchKey = (entry: LedgerEntry) =>
+		entry.source === 'settlement' ? `settlement:${entry.reference}` : `entry:${entry.id}`;
+	const batchOrder = batchKey(b).localeCompare(batchKey(a));
+	if (batchOrder) return batchOrder;
+	if (a.source === 'settlement' && b.source === 'settlement') {
+		// Existing batches predate explicit phase metadata; their saved labels retain the phase.
+		const step = (entry: LedgerEntry) =>
+			entry.settlementStep ?? Number(entry.description.match(/Bước ([123]):/)?.[1] ?? 0);
+		const index = (entry: LedgerEntry) => {
+			const suffix = entry.id.slice(entry.reference.length + 1);
+			return /^\d+$/.test(suffix) ? Number(suffix) : Number.MAX_SAFE_INTEGER;
+		};
+		return step(a) - step(b) || index(a) - index(b) || a.id.localeCompare(b.id);
+	}
+	return a.id.localeCompare(b.id);
+}
+
 /**
  * Port of `minimizeTransactions` in lunchsheet.gs (Proof-of-Anti-Stake):
  * 1. every pairwise balance is zeroed with a payment from the debtor to the creditor;
@@ -163,12 +189,13 @@ export function settlementPlan(state: AppState): SettlementPlan {
 					to: balance > 0 ? b : a,
 					amount: Math.abs(balance),
 					type: 'payment',
-					description: 'Tối giản nợ · Bước 1: cân bằng nợ về 0',
+					description: 'Tối giản nợ · Bước 1: Cân bằng nợ nần về 0',
 					note: '',
-					source: 'settlement'
+					source: 'settlement',
+					settlementStep: 1
 				});
 		}
-	for (const position of positions) {
+	for (const position of [...positions.filter((p) => p.net < 0), ...positions.filter((p) => p.net > 0)]) {
 		if (position.id === hub || position.net === 0) continue;
 		entries.push({
 			from: position.net < 0 ? position.id : hub,
@@ -177,10 +204,11 @@ export function settlementPlan(state: AppState): SettlementPlan {
 			type: 'debt',
 			description:
 				position.net < 0
-					? 'Tối giản nợ · Bước 2: nợ người phân phát tiền'
-					: 'Tối giản nợ · Bước 3: người phân phát tiền nợ lại',
+					? 'Tối giản nợ · Bước 2: Người nợ trả tiền cho nợ chúa'
+					: 'Tối giản nợ · Bước 3: Nợ chúa trả tiền cho người bị nợ',
 			note: '',
-			source: 'settlement'
+			source: 'settlement',
+			settlementStep: position.net < 0 ? 2 : 3
 		});
 	}
 	return { version: state.version, hub, entries };

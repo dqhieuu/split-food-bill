@@ -54,7 +54,7 @@
 		<table class="matrix-table">
 			<thead
 				><tr
-					><th>Người nợ ↓ / Chủ nợ →</th>{#each members as member}<th
+					><th>Con nợ ↓ / Chủ nợ →</th>{#each members as member}<th
 							><Avatar {member} size="small" /><span>{member.name.split(' ').slice(-1)[0]}</span></th
 						>{/each}<th>Lãi - lỗ</th></tr
 				></thead
@@ -90,9 +90,9 @@
 			<h2>Cách tối giản hoạt động</h2>
 		</div>
 		<ol class="simplification-steps">
-			<li>Xác định người nào nợ tiền nhiều nhất, gọi là X</li>
-			<li>Những người nợ tiền sẽ chuyển tiền cho X</li>
-			<li>Với số tiền này, X sẽ đi phân phát lại cho những người đang bị nợ tiền</li>
+			<li>Bước 1: Cân bằng nợ nần về 0</li>
+			<li>Bước 2: Người nợ trả tiền cho nợ chúa</li>
+			<li>Bước 3: Nợ chúa trả tiền cho người bị nợ</li>
 		</ol>
 		{#if !isAdmin}<p class="fine-print">Chỉ quản trị viên được tối giản nợ.</p>{/if}
 	</section>
@@ -106,11 +106,12 @@
 			>
 				<span class="stat-icon"><Scale size={17} /></span>
 				<div>
-					<strong>Người phân phát tiền: {appState.members.find((m) => m.id === batch.hub)?.name}</strong
-					><small>{dateTimeLabel(batch.date)} · {batch.entryCount} bản ghi trong Ledger</small>
+					<strong>Nợ chúa: {appState.members.find((m) => m.id === batch.hub)?.name}</strong><small
+						>{dateTimeLabel(batch.date)} · {batch.entryCount} bản ghi trong Ledger</small
+					>
 				</div>
 			</div>{/each}{#if !appState.settlements.length}<div class="inline-empty">
-				Chưa có lần tối giản nào. Các khoản nợ vẫn giữ quan hệ ban đầu.
+				Chưa có lần tối giản nào.
 			</div>{/if}
 	</section>
 </div>
@@ -118,7 +119,7 @@
 	>{#if plan}<div class="notice">
 			<ShieldCheck size={20} />
 			<p>
-				Người phân phát tiền: <strong>{hubName}</strong>. Thêm {plan.entries.length} bản ghi trong Ledger.
+				Nợ chúa: <strong>{hubName}</strong>. Thêm {plan.entries.length} bản ghi trong Ledger.
 			</p>
 		</div>
 		<h3>Các khoản nợ sau tối giản</h3>

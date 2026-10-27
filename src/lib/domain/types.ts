@@ -48,6 +48,8 @@ export type LedgerEntry = {
 	source: 'bill' | 'manual' | 'qr' | 'settlement' | 'import' | 'reversal';
 	reference: string;
 	legacySequence?: string;
+	/** Explicit phase within an atomically committed debt simplification batch. */
+	settlementStep?: 1 | 2 | 3;
 };
 export type BillLine = { memberId: string; amount: number; description: string; note: string };
 export type Bill = {

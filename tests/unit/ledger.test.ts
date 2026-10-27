@@ -4,6 +4,8 @@ import {
 	pairBalance,
 	netBalance,
 	settlementPlan,
+	compareLedgerEntries,
+	compareBillsByCreatedAt,
 	splitAmount,
 	dateTimeLabel,
 	billDateLabel
@@ -42,6 +44,22 @@ describe('creation timestamps', () => {
 		});
 		expect(dateTimeLabel('2026-10-26T13:04:05.000Z')).toContain('20:04:05');
 		expect(dateTimeLabel('2026-10-26T13:04:05.000Z')).toContain('26/10/2026');
+	});
+	it('sorts backdated bills by creation time and falls back to meal dates for older records', () => {
+		const base = fresh().bills[0];
+		const newerRecord = { ...base, id: 'new-record', date: '2026-01-01T05:00:00.000Z', createdAt: now };
+		const newerMeal = {
+			...base,
+			id: 'new-meal',
+			date: '2026-10-25T05:00:00.000Z',
+			createdAt: '2026-10-24T05:00:00.000Z'
+		};
+		const legacy = { ...base, id: 'legacy', date: '2026-10-23T05:00:00.000Z', createdAt: undefined };
+		expect([legacy, newerMeal, newerRecord].sort(compareBillsByCreatedAt).map((bill) => bill.id)).toEqual([
+			'new-record',
+			'new-meal',
+			'legacy'
+		]);
 	});
 	it('timestamps all payment, import and settlement entry creation paths', () => {
 		const state = fresh();
@@ -114,12 +132,40 @@ describe('ledger accounting', () => {
 				state.ledger[i].amount = ((i * sample * 7919) % 200001) - 40000;
 			const before = state.members.map((m) => netBalance(state.ledger, m.id));
 			const plan = settlementPlan(state);
+			const steps = plan.entries.map((entry) => entry.settlementStep!);
+			expect(steps).toEqual([...steps].sort((a, b) => a - b));
 			applyCommand(state, 'an', 'settleDebts', { id: `settle-${sample}`, version: state.version }, now);
+			const saved = state.ledger.filter((entry) => entry.reference === `settle-${sample}`);
+			expect(
+				[...saved]
+					.sort((a, b) => a.id.localeCompare(b.id))
+					.sort(compareLedgerEntries)
+					.map((entry) => entry.id)
+			).toEqual(saved.map((entry) => entry.id));
 			expect(state.members.map((m) => netBalance(state.ledger, m.id))).toEqual(before);
 			expect(before.reduce((s, n) => s + n, 0)).toBe(0);
 			expect(state.ledger.filter((e) => e.source === 'settlement').every((e) => e.from !== e.to)).toBe(true);
 			expect(plan.hub).toBe(state.members[before.indexOf(Math.min(...before))].id);
 		}
+	});
+	it('orders older simplification phases and numeric indexes after an unordered database read', () => {
+		const base = { ...fresh().ledger[0], date: now, source: 'settlement' as const, reference: 'prior' };
+		const entries = [
+			[1, 3],
+			[20, 2],
+			[10, 1],
+			[2, 1]
+		].map(([index, step]) => ({
+			...base,
+			id: `prior-${index}`,
+			description: `Tối giản nợ · Bước ${step}: saved phase`
+		}));
+		expect(entries.sort(compareLedgerEntries).map((entry) => entry.id)).toEqual([
+			'prior-2',
+			'prior-10',
+			'prior-20',
+			'prior-1'
+		]);
 	});
 	it('posts a bill once, includes the payer meal only in the bill, and queues a receipt', () => {
 		const state = fresh();

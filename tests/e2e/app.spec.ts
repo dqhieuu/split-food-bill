@@ -94,12 +94,7 @@ test('group activation, distinct roles, group isolation and last-group selection
 			.getByRole('combobox', { name: 'Máy chủ Discord', exact: true })
 			.selectOption('300000000000000002');
 		await expect(page.getByText('3 thành viên trong máy chủ.', { exact: false })).toBeVisible();
-		const refresh = page.waitForRequest((request) =>
-			request.url().includes('/api/discord/guilds/300000000000000002/members?refresh=true')
-		);
-		await page.getByRole('button', { name: 'Làm mới danh sách Discord', exact: true }).click();
-		await refresh;
-		await expect(page.getByText('3 thành viên trong máy chủ.', { exact: false })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Làm mới danh sách Discord', exact: true })).toHaveCount(0);
 		const creation = page.waitForResponse(
 			(response) => response.url() === API + '/api/groups' && response.request().method() === 'POST'
 		);
@@ -131,7 +126,11 @@ test('group activation, distinct roles, group isolation and last-group selection
 		await expect(page.locator('.group-choice').filter({ hasText: renamed })).toBeVisible();
 		await expect(page.getByRole('combobox', { name: 'Nhóm hiện tại', exact: true })).toHaveValue('local');
 		await page.locator('.group-choice').filter({ hasText: renamed }).click();
-		await page.getByRole('button', { name: 'Mở nhóm', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Mở nhóm', exact: true })).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await page.getByRole('combobox', { name: 'Nhóm hiện tại', exact: true }).selectOption(group.id);
+		await expect(page.locator('.loading-panel')).toHaveCount(0);
+		await page.getByRole('link', { name: 'Tổng quan', exact: true }).click();
 		await expect(page.getByRole('heading', { name: 'Tổng quan', exact: true })).toBeVisible();
 		expect((await call(memberPage, member.token, `/api/groups/${group.id}/state`)).status()).toBe(403);
 		expect(
@@ -260,6 +259,7 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		await expect(page.locator('.discord-preview a')).toHaveAttribute('href', /\/balances\?group=local&to=/);
 		await page.keyboard.press('Escape');
 		await page.getByRole('button', { name: 'Xác nhận', exact: true }).click();
+		await expect(page.locator('.data-table tbody tr').first()).toContainText(title);
 		const row = page.getByRole('row').filter({ hasText: title });
 		await row.locator('td').nth(3).click();
 		await expect(page.getByRole('dialog')).toContainText('102.000');
@@ -267,6 +267,7 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 
 		await page.keyboard.press('Escape');
 		await page.getByRole('link', { name: 'Tổng quan', exact: true }).click();
+		await expect(page.locator('.recent-panel .bill-row').first()).toContainText(title);
 		await page.locator('.recent-panel .bill-row').first().click();
 		await expect(page).toHaveURL('http://127.0.0.1:5173/');
 		await page.keyboard.press('Escape');
