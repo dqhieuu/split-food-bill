@@ -688,6 +688,9 @@ main {
 .bar:hover {
 	background: light-dark(#92ab77, #5a703f);
 }
+button.chart-column:is(:hover, :focus-visible) .bar {
+	background: light-dark(#92ab77, #5a703f);
+}
 .bar-tooltip {
 	display: none;
 	position: absolute;

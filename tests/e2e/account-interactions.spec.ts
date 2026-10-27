@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createDemoState } from '../../src/lib/domain/seed';
 import type { AppState, LedgerEntry } from '../../src/lib/domain/types';
-import { applyCommand, pairBalance } from '../../src/lib/domain/ledger';
+import { applyCommand, localDate, pairBalance } from '../../src/lib/domain/ledger';
 import { customToken } from '../../worker/src/identity';
 import type { Env } from '../../worker/src/env';
 
@@ -771,6 +771,56 @@ for (const width of [1280, 390]) {
 			});
 			await expect(dialog.locator('.summary-total')).toBeInViewport();
 			await expect(dialog.getByRole('button', { name: 'Hoàn tác hóa đơn', exact: true })).toBeInViewport();
+		});
+
+		test('monthly spending bars select the calendar month across windows, including empty months', async ({
+			page
+		}) => {
+			const currentMonth = localDate(new Date()).slice(0, 7);
+			const oldest = new Date(`${currentMonth}-01T00:00:00Z`);
+			oldest.setUTCMonth(oldest.getUTCMonth() - 5);
+			const oldestMonth = oldest.toISOString().slice(0, 7);
+			await openFixture(page, '/', (state) => {
+				const bill = state.bills[0];
+				delete bill.undoneAt;
+				delete bill.undoneBy;
+				bill.date = `${currentMonth}-05T12:00:00Z`;
+				state.bills.push({
+					...bill,
+					id: 'old-month',
+					date: `${oldestMonth}-05T12:00:00Z`,
+					description: 'Hóa đơn tháng cũ'
+				});
+			});
+			const monthLabel = page.locator('.cal-month strong');
+			const bars = page.locator('button.chart-column');
+			const monthText = (key: string) => `Tháng ${Number(key.slice(5, 7))}/${key.slice(0, 4)}`;
+			await expect(bars).toHaveCount(6);
+			await bars.first().locator('.bar').click();
+			await expect(monthLabel).toHaveText(monthText(oldestMonth));
+			await expect(page.locator('.cal-subtitle')).toHaveText('30.000 ₫');
+			await expect(page.locator('.cal-bill')).toContainText('Hóa đơn tháng cũ');
+			await expect(bars.first()).toHaveAttribute('aria-pressed', 'true');
+			await page.getByRole('button', { name: 'Tháng sau', exact: true }).click();
+			await expect(bars.first()).toHaveAttribute('aria-pressed', 'false');
+			await bars.first().focus();
+			await page.keyboard.press('Enter');
+			await expect(monthLabel).toHaveText(monthText(oldestMonth));
+			await bars.nth(1).click();
+			await expect(bars.nth(1)).toHaveAttribute('aria-pressed', 'true');
+			await expect(page.locator('.cal-subtitle')).toHaveText('0 ₫');
+			await expect(page.locator('.cal-bill')).toHaveCount(0);
+			await page.getByRole('button', { name: 'Khoảng trước', exact: true }).click();
+			const earlier = new Date(oldest);
+			earlier.setUTCMonth(earlier.getUTCMonth() - 1);
+			await bars.last().click();
+			await expect(monthLabel).toHaveText(monthText(earlier.toISOString().slice(0, 7)));
+			await page.getByRole('button', { name: 'Khoảng sau', exact: true }).click();
+			await bars.last().click();
+			await expect(monthLabel).toHaveText(monthText(currentMonth));
+			await expect(page.locator('.cal-subtitle')).toHaveText('30.000 ₫');
+			await expect(page.locator('.cal-bill')).toContainText('Hóa đơn mẫu');
+			await page.locator('.spending-panel').screenshot({ path: `artifacts/month-bar-calendar-${width}.png` });
 		});
 
 		test('calendar browses future months and payment history links to the Transactions tab', async ({

@@ -12,6 +12,7 @@
 		dateLabel,
 		billDateLabel,
 		dateTimeLabel,
+		localDate,
 		compareBillsByCreatedAt
 	} from '$lib/domain/ledger';
 	import { spendingWindow, personalPaymentHistory, type SpendingGranularity } from '$lib/domain/spending';
@@ -28,6 +29,7 @@
 	const name = (id: string) => appState.members.find((member) => member.id === id)?.name || id;
 	let granularity = $state<SpendingGranularity>('month');
 	let windowOffset = $state(0);
+	let calendarMonth = $state(localDate(new Date()).slice(0, 7));
 	const names = { day: 'ngày', week: 'tuần', month: 'tháng' };
 	const activeIds = $derived(
 		new Set(appState.members.filter((member) => member.active).map((member) => member.id))
@@ -150,7 +152,7 @@
 		</div>
 		<div
 			class="bar-chart"
-			role="img"
+			role="group"
 			aria-label={`Chi tiêu theo ${names[granularity]} từ ${dateLabel(window.start)} đến ${dateLabel(window.end)}`}
 		>
 			<div class="chart-grid-lines">
@@ -160,7 +162,8 @@
 				class="chart-columns"
 				style:grid-template-columns={`repeat(${window.buckets.length}, minmax(0, 1fr))`}
 			>
-				{#each window.buckets as bucket}<div class="chart-column">
+				{#each window.buckets as bucket}
+					{#snippet columnContent()}
 						<div class="bar-track">
 							<div
 								class="bar"
@@ -172,11 +175,21 @@
 							</div>
 						</div>
 						<span class:today-label={bucket.current}>{bucketLabel(bucket.key)}</span>
-					</div>{/each}
+					{/snippet}
+					{#if granularity === 'month'}
+						<button
+							class="chart-column"
+							aria-label={`Xem lịch chi tiêu tháng ${Number(bucket.key.slice(5, 7))}/${bucket.key.slice(0, 4)}: ${currency(bucket.value)}`}
+							aria-pressed={calendarMonth === bucket.key.slice(0, 7)}
+							onclick={() => (calendarMonth = bucket.key.slice(0, 7))}>{@render columnContent()}</button
+						>
+					{:else}<div class="chart-column">{@render columnContent()}</div>{/if}
+				{/each}
 			</div>
 		</div>
 	</section>
 	<SpendingCalendar
+		bind:monthKey={calendarMonth}
 		bills={liveBills}
 		members={appState.members}
 		onBillClick={(id) => {

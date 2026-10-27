@@ -18,19 +18,24 @@
 	let {
 		bills,
 		members = [],
+		monthKey = $bindable(localDate(new Date()).slice(0, 7)),
 		onBillClick
 	}: {
 		bills: Bill[];
 		members?: Pick<Member, 'id' | 'name' | 'color' | 'active'>[];
+		monthKey?: string;
 		onBillClick: (id: string) => void;
 	} = $props();
 	const today = localDate(new Date());
-	let cursor = $state({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) });
+	const cursor = $derived({ year: Number(monthKey.slice(0, 4)), month: Number(monthKey.slice(5, 7)) });
 	let selectedKey = $state(today);
 	let payerFilter = $state('all');
 	let overflowMode = $state<'compact' | 'scroll'>('compact');
 	let openPopover = $state<string | null>(null);
-	const monthKey = $derived(`${cursor.year}-${String(cursor.month).padStart(2, '0')}`);
+	$effect(() => {
+		selectedKey = monthKey === today.slice(0, 7) ? today : `${monthKey}-01`;
+		openPopover = null;
+	});
 	const memberOf = (id: string) => members.find((m) => m.id === id);
 	const payerName = (bill: Bill) =>
 		bill.memberNames?.[bill.organizer] || memberOf(bill.organizer)?.name || bill.organizer;
@@ -72,9 +77,7 @@
 	const dateLabel = billDateLabel;
 	function shift(step: number) {
 		const index = cursor.year * 12 + cursor.month - 1 + step;
-		cursor = { year: Math.floor(index / 12), month: (index % 12) + 1 };
-		selectedKey = monthKey === today.slice(0, 7) ? today : `${monthKey}-01`;
-		openPopover = null;
+		monthKey = `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
 	}
 	function onCellKey(event: KeyboardEvent, key: string) {
 		if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
