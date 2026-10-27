@@ -39,7 +39,7 @@ export function billNotificationMessage(
 		`**Bạn phải trả: ${currency(line.amount)}**${line.description ? ` cho ${text(line.description, 120)}` : ''}`,
 		...(others.length ? ['', '**Người khác:**'] : [])
 	].join('\n');
-	const ending = `\n\n**Tổng cộng: ${currency(bill.total)}**\n\n**Link trả tiền:** [Mở mã QR](<${paymentUrl.href}>)`;
+	const ending = `${others.length ? `\n\n**Tổng cộng: ${currency(bill.total)}**` : ''}\n\n**Link trả tiền:** [Mở mã QR](<${paymentUrl.href}>)`;
 	const rows: string[] = [];
 	for (const other of others) {
 		const row = `- ${text(bill.memberNames?.[other.memberId] ?? other.memberId, 60)} trả ${currency(other.amount)}${other.description ? ` cho ${text(other.description, 100)}` : ''}`;

@@ -3,9 +3,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import Avatar from '../Avatar.svelte';
 	import BillDetail from '../BillDetail.svelte';
-	import Modal from '../Modal.svelte';
 	import SpendingCalendar from './SpendingCalendar.svelte';
-	import type { AppState, LedgerEntry } from '$lib/domain/types';
+	import type { AppState } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
 	import {
 		currency,
@@ -25,9 +24,6 @@
 	}: { appState: AppState; actor: string; run: RunCommand; busy: boolean; groupId: string } = $props();
 	let detailOpen = $state(false);
 	let selectedBillId = $state('');
-	let paymentOpen = $state(false);
-	let selectedEntryId = $state('');
-	const selectedEntry = $derived(appState.ledger.find((entry) => entry.id === selectedEntryId));
 	const selectedBill = $derived(appState.bills.find((bill) => bill.id === selectedBillId));
 	const name = (id: string) => appState.members.find((member) => member.id === id)?.name || id;
 	let granularity = $state<SpendingGranularity>('month');
@@ -36,7 +32,7 @@
 	const activeIds = $derived(
 		new Set(appState.members.filter((member) => member.active).map((member) => member.id))
 	);
-	const history = $derived(personalPaymentHistory(appState.ledger, actor, activeIds).slice(0, 5));
+	const history = $derived(personalPaymentHistory(appState.ledger, actor, activeIds).slice(0, 10));
 	// Undone bills stay in the ledger for history but no longer count as spending.
 	const liveBills = $derived(appState.bills.filter((bill) => !bill.undoneAt));
 	const recentBills = $derived([...liveBills].sort(compareBillsByCreatedAt).slice(0, 4));
@@ -49,15 +45,9 @@
 		granularity = value;
 		windowOffset = 0;
 	}
-	function openPayment(entry: LedgerEntry) {
-		const bill = entry.source === 'bill' && appState.bills.find((bill) => bill.id === entry.reference);
-		if (bill) {
-			selectedBillId = bill.id;
-			detailOpen = true;
-		} else {
-			selectedEntryId = entry.id;
-			paymentOpen = true;
-		}
+	function openBill(id: string) {
+		selectedBillId = id;
+		detailOpen = true;
 	}
 </script>
 
@@ -110,7 +100,9 @@
 				{@const member = appState.members.find((person) => person.id === item.counterpartyId)}
 				{@const payerId = item.entry.type === 'debt' ? item.entry.to : item.entry.from}
 				{@const recipientId = item.entry.type === 'debt' ? item.entry.from : item.entry.to}
-				<button class="payment-history-row" onclick={() => openPayment(item.entry)}>
+				{@const bill =
+					item.entry.source === 'bill' && appState.bills.find((bill) => bill.id === item.entry.reference)}
+				{#snippet rowContent()}
 					<Avatar {member} size="small" />
 					<div>
 						<strong
@@ -121,10 +113,14 @@
 						<small>{dateTimeLabel(item.entry.createdAt)} · {item.entry.description}</small>
 					</div>
 					<strong class="payment-history-amount">{currency(item.entry.amount)}</strong>
-				</button>
+				{/snippet}
+				{#if bill}<button class="payment-history-row" onclick={() => openBill(bill.id)}>
+						{@render rowContent()}
+					</button>
+				{:else}<div class="payment-history-row">{@render rowContent()}</div>{/if}
 			{:else}<p class="overview-empty">Chưa có thanh toán.</p>{/each}
 		</div>
-		<a href="/activity" class="panel-bottom-link">Xem lịch sử <ArrowRight size={16} /></a>
+		<a href="/activity?tab=ledger" class="panel-bottom-link">Xem lịch sử <ArrowRight size={16} /></a>
 	</section>
 	<section class="panel spending-panel">
 		<div class="panel-heading spending-heading">
@@ -190,26 +186,3 @@
 	/>
 </div>
 <BillDetail bind:open={detailOpen} bill={selectedBill} {appState} {actor} {run} {busy} {groupId} />
-<Modal bind:open={paymentOpen} title="Chi tiết thanh toán" description={selectedEntry?.description || ''}>
-	{#if selectedEntry}
-		<div class="summary-pair">
-			<span>Người thanh toán</span><strong
-				>{name(selectedEntry.type === 'debt' ? selectedEntry.to : selectedEntry.from)}</strong
-			>
-		</div>
-		<div class="summary-pair">
-			<span>Cho</span><strong
-				>{name(selectedEntry.type === 'debt' ? selectedEntry.from : selectedEntry.to)}</strong
-			>
-		</div>
-		<div class="summary-pair">
-			<span>Loại</span><strong>{selectedEntry.type === 'debt' ? 'Nợ' : 'Trả'}</strong>
-		</div>
-		<div class="summary-pair">
-			<span>Ngày thanh toán</span><strong>{billDateLabel(selectedEntry.date)}</strong>
-		</div>
-		<div class="summary-pair"><span>Tạo</span><strong>{dateTimeLabel(selectedEntry.createdAt)}</strong></div>
-		{#if selectedEntry.note}<p class="fine-print">{selectedEntry.note}</p>{/if}
-		<div class="summary-total"><span>Số tiền</span><strong>{currency(selectedEntry.amount)}</strong></div>
-	{/if}
-</Modal>

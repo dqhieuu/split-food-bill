@@ -91,13 +91,15 @@ describe('bill Discord notifications', () => {
 			billNotificationMessage(bill, { id: 'local', name: 'Lunch' }, 'outsider', env.FRONTEND_ORIGIN)
 		).toThrow();
 	});
-	it('omits the other-participants section for a one-person bill', () => {
+	it('omits the other-participants section and repeated total for a one-person bill', () => {
 		const single = { ...bill, lines: [bill.lines[1]], total: 55000 };
 		const message = billNotificationMessage(single, { id: 'local', name: 'Lunch' }, AN, env.FRONTEND_ORIGIN);
 		const description = message.embeds[0].description!;
 		expect(description).not.toContain('Người khác');
 		expect(description).not.toContain('Không có.');
-		expect(description).toContain('cho Phở\n\n**Tổng cộng: 55.000 ₫**');
+		expect(description).not.toContain('Tổng cộng');
+		expect(description).toContain('**Bạn phải trả: 55.000 ₫** cho Phở\n\n**Link trả tiền:**');
+		expect(description).toContain('/balances?group=local&to=' + LINH);
 	});
 	it('places an attached image between the group heading and the bill details', () => {
 		const message = billNotificationMessage(

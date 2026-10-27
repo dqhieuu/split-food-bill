@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
 	import QRCode from 'qrcode';
-	import { Wallet, ArrowUpRight, ArrowDownLeft, QrCode, History } from '@lucide/svelte';
+	import { Wallet, ArrowUpRight, ArrowDownLeft, QrCode, History, ChevronDown } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import Avatar from '../Avatar.svelte';
@@ -10,13 +10,13 @@
 	import EmptyState from '../EmptyState.svelte';
 	import type { AppState, Member } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, billDateLabel, cancelledEntryIds, pairBalance } from '$lib/domain/ledger';
+	import { currency, dateLabel, cancelledEntryIds, pairBalance } from '$lib/domain/ledger';
 	import { vietQrPayload, bankNames } from '$lib/domain/qr';
 	import { preferences } from '$lib/client/preferences.svelte';
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
 		$props();
 	let filter = $state('all');
-	let expanded = $state('');
+	let expanded = $state<string[]>([]);
 	let qrOpen = $state(false);
 	let qrPayment = $state<{ id: string; amount: number; recipient: Member } | null>(null);
 	let confirmed = $state(false);
@@ -27,7 +27,7 @@
 		const to = page.url.searchParams.get('to');
 		if (to && to !== openedRecipient) {
 			openedRecipient = to;
-			expanded = to;
+			expanded = [...new Set([...expanded, to])];
 			untrack(() => {
 				void openQr(to);
 			});
@@ -35,18 +35,27 @@
 	});
 	const pairs = $derived(
 		appState.members
-			.filter((m) => m.id !== actor && m.active)
+			.filter((m) => m.id !== actor)
 			.map((member) => ({ member, balance: pairBalance(appState.ledger, actor, member.id) }))
 	);
-	// A zero balance is shown as "Bạn đang lãi 0 ₫".
 	const visible = $derived(
 		pairs
-			.filter((p) => filter === 'all' || (filter === 'owe' ? p.balance >= 0 : p.balance < 0))
+			.filter((p) => filter === 'all' || (filter === 'owe' ? p.balance > 0 : p.balance < 0))
 			.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance))
 	);
 	const owed = $derived(pairs.reduce((s, p) => s + Math.max(0, -p.balance), 0));
 	const owing = $derived(pairs.reduce((s, p) => s + Math.max(0, p.balance), 0));
 	const recipient = $derived(qrPayment?.recipient);
+	function toggleHistory(id: string) {
+		expanded = expanded.includes(id) ? expanded.filter((item) => item !== id) : [...expanded, id];
+	}
+	function qrDisabledReason(member: Member) {
+		if (busy) return 'Đang xử lý giao dịch. Vui lòng chờ.';
+		if (!member.active) return 'Thành viên chưa được kích hoạt trong nhóm.';
+		if (!member.bankCode || !member.bankAccount)
+			return `${member.name} chưa cập nhật đầy đủ thông tin ngân hàng.`;
+		return '';
+	}
 	async function openQr(to: string) {
 		const person = appState.members.find((member) => member.id === to);
 		const amount = pairBalance(appState.ledger, actor, to);
@@ -89,19 +98,19 @@
 </div>
 <div class="stat-grid">
 	<div class="stat-card">
-		<div class="stat-label">Bạn đang lỗ <ArrowDownLeft size={19} /></div>
-		<strong class="loss-amount">{currency(owed)}</strong><span class="stat-foot"
-			>{pairs.filter((p) => p.balance < 0).length} người cần trả tiền cho bạn</span
-		>
-	</div>
-	<div class="stat-card">
-		<div class="stat-label">Bạn đang lãi <ArrowUpRight size={19} /></div>
+		<div class="stat-label">Bạn đang nợ <ArrowUpRight size={19} /></div>
 		<strong class="gain-amount">{currency(owing)}</strong><span class="stat-foot"
 			>{pairs.filter((p) => p.balance > 0).length} khoản cần thanh toán</span
 		>
 	</div>
 	<div class="stat-card">
-		<div class="stat-label">Lãi - lỗ <Wallet size={19} /></div>
+		<div class="stat-label">Bạn đang bị nợ <ArrowDownLeft size={19} /></div>
+		<strong class="loss-amount">{currency(owed)}</strong><span class="stat-foot"
+			>{pairs.filter((p) => p.balance < 0).length} người cần trả tiền cho bạn</span
+		>
+	</div>
+	<div class="stat-card">
+		<div class="stat-label">Nợ - bị nợ <Wallet size={19} /></div>
 		<strong class:negative={owing - owed < 0} class:positive={owing - owed > 0}
 			>{currency(owing - owed)}</strong
 		>
@@ -110,39 +119,61 @@
 <section class="panel">
 	<div class="filter-toolbar">
 		<div class="segmented-control">
-			<button class:active={filter === 'all'} onclick={() => (filter = 'all')}>Tất cả ({pairs.length})</button
-			><button class:active={filter === 'owe'} onclick={() => (filter = 'owe')}>Lãi</button><button
-				class:active={filter === 'owed'}
-				onclick={() => (filter = 'owed')}>Lỗ</button
+			<button class:active={filter === 'all'} onclick={() => (filter = 'all')}>Tất cả</button><button
+				class:active={filter === 'owe'}
+				onclick={() => (filter = 'owe')}>Nợ ({pairs.filter((p) => p.balance > 0).length})</button
+			><button class:active={filter === 'owed'} onclick={() => (filter = 'owed')}
+				>Bị nợ ({pairs.filter((p) => p.balance < 0).length})</button
 			>
 		</div>
 	</div>
-	{#each visible as pair}<div class="counterpart">
+	{#each visible as pair (pair.member.id)}<div class="counterpart">
 			<div class="counterpart-main">
+				<button
+					type="button"
+					class="counterpart-row-toggle"
+					aria-label={`Xem lịch sử với ${pair.member.name}`}
+					aria-expanded={expanded.includes(pair.member.id)}
+					aria-controls={`history-${pair.member.id}`}
+					onclick={() => toggleHistory(pair.member.id)}
+				></button>
 				<Avatar member={pair.member} />
 				<div class="counterpart-name">
 					<strong>{pair.member.name}</strong>
 				</div>
 				<div class="counterpart-amount">
-					<small>{pair.balance >= 0 ? 'Bạn đang lãi' : 'Bạn đang lỗ'}</small><strong
-						class:gain-amount={pair.balance > 0}
-						class:loss-amount={pair.balance < 0}>{currency(Math.abs(pair.balance))}</strong
+					<small
+						>{pair.balance > 0 ? 'Bạn đang nợ' : pair.balance < 0 ? 'Bạn đang bị nợ' : 'Không còn nợ'}</small
+					><strong class:gain-amount={pair.balance > 0} class:loss-amount={pair.balance < 0}
+						>{currency(Math.abs(pair.balance))}</strong
 					>
 				</div>
 				<div class="counterpart-actions">
-					{#if pair.balance > 0}<Button
-							variant="outline"
-							disabled={busy || !pair.member.bankAccount || !pair.member.bankCode}
-							onclick={() => openQr(pair.member.id)}><QrCode size={16} /> Mã QR</Button
+					{#if pair.balance > 0}{@const reason = qrDisabledReason(pair.member)}
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users need to focus the disabled button's reason.) -->
+						<span
+							class="qr-button-with-tooltip"
+							role="group"
+							tabindex={reason ? 0 : undefined}
+							aria-label={reason ? `Mã QR · ${pair.member.name}` : undefined}
+							aria-describedby={reason ? `qr-reason-${pair.member.id}` : undefined}
+							><Button variant="outline" disabled={!!reason} onclick={() => openQr(pair.member.id)}
+								><QrCode size={16} /> Mã QR</Button
+							>{#if reason}<span class="qr-disabled-tooltip" role="tooltip" id={`qr-reason-${pair.member.id}`}
+									>{reason}</span
+								>{/if}</span
 						>{/if}<Button
 						variant="ghost"
+						class="counterpart-history-trigger"
 						aria-label={`Lịch sử với ${pair.member.name}`}
-						onclick={() => (expanded = expanded === pair.member.id ? '' : pair.member.id)}
-						><History size={17} /></Button
+						aria-expanded={expanded.includes(pair.member.id)}
+						aria-controls={`history-${pair.member.id}`}
+						onclick={() => toggleHistory(pair.member.id)}
+						><History size={17} /><ChevronDown size={14} /></Button
 					>
 				</div>
 			</div>
-			{#if expanded === pair.member.id}{@const cancelled = cancelledEntryIds(
+			{#if expanded.includes(pair.member.id)}{@const cancelled = cancelledEntryIds(
 					appState.ledger
 				)}{@const entries = [...appState.ledger]
 					.filter(
@@ -153,13 +184,25 @@
 							((e.from === actor && e.to === pair.member.id) || (e.to === actor && e.from === pair.member.id))
 					)
 					.sort((a, b) => b.date.localeCompare(a.date))}
-				<div class="counterpart-history">
-					<p>Các khoản nợ gần đây</p>
-					{#each entries as entry}<div>
-							<span>{billDateLabel(entry.date)} · {entry.description}</span><strong
-								>{currency(entry.amount)}</strong
+				<div class="counterpart-history" id={`history-${pair.member.id}`}>
+					<div class="counterpart-history-heading">
+						<span>Các khoản nợ gần đây</span><small>{entries.length} khoản</small>
+					</div>
+					{#each entries as entry}<div class="counterpart-history-entry">
+							<div class="counterpart-history-info">
+								<strong>{entry.description || 'Khoản nợ'}</strong>
+								<small
+									>{dateLabel(entry.date)} · {entry.from === actor
+										? `Bạn nợ ${pair.member.name}`
+										: `${pair.member.name} nợ bạn`}</small
+								>
+							</div>
+							<strong
+								class="counterpart-history-amount"
+								class:gain-amount={entry.from === actor}
+								class:loss-amount={entry.to === actor}>{currency(entry.amount)}</strong
 							>
-						</div>{/each}{#if !entries.length}<p>
+						</div>{/each}{#if !entries.length}<p class="counterpart-history-empty">
 							Chưa có khoản nợ trực tiếp; số dư có thể đến từ tối giản nợ.
 						</p>{/if}
 				</div>{/if}

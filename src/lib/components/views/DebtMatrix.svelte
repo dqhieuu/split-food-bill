@@ -36,7 +36,7 @@
 				await run(
 					'settleDebts',
 					{ id: crypto.randomUUID(), version: plan.version },
-					'Đã tối giản nợ; lãi - lỗ của từng người được giữ nguyên.'
+					'Đã tối giản nợ; nợ - bị nợ của từng người được giữ nguyên.'
 				);
 				confirmOpen = false;
 			} catch {}
@@ -56,7 +56,7 @@
 				><tr
 					><th>Con nợ ↓ / Chủ nợ →</th>{#each members as member}<th
 							><Avatar {member} size="small" /><span>{member.name.split(' ').slice(-1)[0]}</span></th
-						>{/each}<th>Lãi - lỗ</th></tr
+						>{/each}<th>Nợ - bị nợ</th></tr
 				></thead
 			><tbody
 				>{#each members as row}<tr
@@ -71,9 +71,9 @@
 								title={`${row.name} → ${column.name}: ${currency(balance)}`}
 								>{row.id === column.id ? '—' : currency(balance)}</td
 							>{/each}<td
-							class:debt-cell={netBalance(appState.ledger, row.id) > 0}
-							class:credit-cell={netBalance(appState.ledger, row.id) < 0}
-							class="matrix-net">{currency(netBalance(appState.ledger, row.id))}</td
+							class:debt-cell={netBalance(appState.ledger, row.id) < 0}
+							class:credit-cell={netBalance(appState.ledger, row.id) > 0}
+							class="matrix-net">{currency(-netBalance(appState.ledger, row.id))}</td
 						></tr
 					>{/each}</tbody
 			>
@@ -130,7 +130,7 @@
 							>{position.net < 0 ? position.member.name : hubName} → {position.net < 0
 								? hubName
 								: position.member.name}</strong
-						><small>Lãi - lỗ của {position.member.name}: {currency(position.net)}</small></span
+						><small>Nợ - bị nợ của {position.member.name}: {currency(-position.net)}</small></span
 					><strong>{currency(Math.abs(position.net))}</strong>
 				</div>{/each}
 		</div>

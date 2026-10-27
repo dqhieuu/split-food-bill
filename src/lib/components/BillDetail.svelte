@@ -57,10 +57,11 @@
 		{#if bill.image && open}<div class="bill-detail-image">
 				<BillImage {groupId} imageId={bill.image} />
 			</div>{/if}
-		<div class="review-lines">
+		<div class="review-lines bill-detail-lines">
 			{#each bill.lines as line}<div>
 					<span
-						><strong>{name(line.memberId)}{line.memberId === bill.organizer ? ' · Người trả' : ''}</strong
+						><strong
+							>{name(line.memberId)}{line.memberId === bill.organizer ? ' (Trả tiền hoá đơn)' : ''}</strong
 						><small>{line.description}{line.note ? ` · ${line.note}` : ''}</small></span
 					>
 					<strong>{currency(line.amount)}</strong>

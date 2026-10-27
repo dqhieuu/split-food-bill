@@ -31,7 +31,6 @@
 	let overflowMode = $state<'compact' | 'scroll'>('compact');
 	let openPopover = $state<string | null>(null);
 	const monthKey = $derived(`${cursor.year}-${String(cursor.month).padStart(2, '0')}`);
-	const isCurrentMonth = $derived(monthKey === today.slice(0, 7));
 	const memberOf = (id: string) => members.find((m) => m.id === id);
 	const payerName = (bill: Bill) =>
 		bill.memberNames?.[bill.organizer] || memberOf(bill.organizer)?.name || bill.organizer;
@@ -132,7 +131,7 @@
 					><ChevronLeft size={16} /></button
 				>
 				<strong>Tháng {cursor.month}/{cursor.year}</strong>
-				<button class="icon-button" aria-label="Tháng sau" disabled={isCurrentMonth} onclick={() => shift(1)}
+				<button class="icon-button" aria-label="Tháng sau" onclick={() => shift(1)}
 					><ChevronRight size={16} /></button
 				>
 			</div>

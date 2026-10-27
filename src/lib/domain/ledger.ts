@@ -418,8 +418,8 @@ export function applyCommand(
 			amount: data.amount,
 			date: now,
 			createdAt: now,
-			description: 'Xác nhận chuyển khoản bằng QR',
-			note: 'Người trả tự xác nhận',
+			description: 'Auto trả tiền bằng QR',
+			note: '',
 			creator: actor,
 			source: 'qr',
 			reference: data.id

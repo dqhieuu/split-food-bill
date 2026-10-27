@@ -3,4 +3,6 @@
 	let { children } = $props();
 </script>
 
-{@render children()}
+<div data-sveltekit-replacestate>
+	{@render children()}
+</div>

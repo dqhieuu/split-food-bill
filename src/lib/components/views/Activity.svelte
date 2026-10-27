@@ -24,6 +24,9 @@
 		groupId
 	}: { appState: AppState; actor: string; run: RunCommand; busy: boolean; groupId: string } = $props();
 	let tab = $state('bills');
+	$effect(() => {
+		tab = page.url.searchParams.get('tab') === 'ledger' ? 'ledger' : 'bills';
+	});
 	let search = $state('');
 	let typeFilter = $state('all');
 	// svelte-ignore state_referenced_locally
@@ -189,7 +192,7 @@
 									><span class="bill-symbol tone-0"><ReceiptText size={18} /></span><span
 										><strong
 											>{bill.description}{#if bill.undoneAt}
-												<span class="status-pill">Đã hoàn tác</span>{/if}</strong
+												<span class="status-pill undone-label">Đã hoàn tác</span>{/if}</strong
 										><small>Ăn vào {billDateLabel(bill.date)}</small></span
 									></button
 								></td

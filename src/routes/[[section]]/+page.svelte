@@ -346,7 +346,7 @@
 						onUpdated={applyGroup}
 						onSelect={async (id) => {
 							await changeGroup(id);
-							if (!error) await goto('/');
+							if (!error) await goto('/', { replace: true });
 						}}
 					/>
 				{:else if appState && currentMember}

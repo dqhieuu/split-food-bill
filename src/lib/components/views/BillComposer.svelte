@@ -280,7 +280,7 @@
 			localStorage.removeItem(`lunchroom-draft-${groupId}-${actor}`);
 			draftReady = false;
 			confirmOpen = false;
-			await goto('/activity');
+			await goto('/activity', { replace: true });
 		} catch {
 			/* Preserve draft and submission ID for a safe retry. */
 		}
@@ -460,8 +460,10 @@
 	</div>
 	<div class="composer-side">
 		<section class="panel bill-summary">
-			<span class="summary-icon"><ReceiptText size={27} /></span>
-			<h2>Tóm tắt hóa đơn</h2>
+			<div class="bill-summary-heading">
+				<span class="summary-icon"><ReceiptText size={27} /></span>
+				<h2>Tóm tắt hóa đơn</h2>
+			</div>
 			<p>{description || 'Chưa có mô tả'}</p>
 			<div class="summary-pair"><span>Người tham gia</span><strong>{selected.length} người</strong></div>
 			<div class="summary-pair">
