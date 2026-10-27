@@ -9,8 +9,13 @@
 	import type { AppState, Bill } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, billDateLabel, dateTimeLabel, localDate } from '$lib/domain/ledger';
-	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
-		$props();
+	let {
+		appState,
+		actor,
+		run,
+		busy,
+		groupId
+	}: { appState: AppState; actor: string; run: RunCommand; busy: boolean; groupId: string } = $props();
 	let tab = $state('bills');
 	let search = $state('');
 	let typeFilter = $state('all');
@@ -245,4 +250,4 @@
 			>{/if}
 	</div>
 </section>
-<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} {actor} {run} {busy} />
+<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} {actor} {run} {busy} {groupId} />

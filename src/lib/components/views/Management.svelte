@@ -13,8 +13,11 @@
 		History,
 		FileJson,
 		CircleAlert,
-		ChevronRight
+		ChevronRight,
+		Settings,
+		Sparkles
 	} from '@lucide/svelte';
+	import { fetchAiSettings } from '$lib/client/api';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
@@ -31,8 +34,16 @@
 		actor,
 		run,
 		busy,
-		groupId
-	}: { appState: AppState; actor: string; run: RunCommand; busy: boolean; groupId: string } = $props();
+		groupId,
+		groupName
+	}: {
+		appState: AppState;
+		actor: string;
+		run: RunCommand;
+		busy: boolean;
+		groupId: string;
+		groupName: string;
+	} = $props();
 	let tab = $state('members');
 	let search = $state('');
 	let memberOpen = $state(false);
@@ -57,6 +68,16 @@
 	let importing = $state(false);
 	let acknowledged = $state(false);
 	let activationChanges = $state<Record<string, boolean>>({});
+	let configOpen = $state(false);
+	let groupNameDraft = $state('');
+	let aiLoading = $state(false);
+	let aiSaved = $state({ endpoint: '', model: '' });
+	let aiError = $state('');
+	let aiEndpoint = $state('');
+	let aiModel = $state('');
+	let aiKey = $state('');
+	let aiHasKey = $state(false);
+	const aiComplete = $derived(!!aiEndpoint.trim() && !!aiModel.trim() && (!!aiKey.trim() || aiHasKey));
 	const isAdmin = $derived(appState.members.find((m) => m.id === actor)?.role === 'admin');
 	const members = $derived(
 		appState.members
@@ -75,8 +96,58 @@
 		saveArchive: 'Thêm lưu trữ',
 		markReleaseSeen: 'Đã xem cập nhật',
 		importLedger: 'Nhập lịch sử',
-		syncDiscordMembers: 'Đồng bộ thành viên Discord'
+		syncDiscordMembers: 'Đồng bộ thành viên Discord',
+		undoBill: 'Hoàn tác hóa đơn',
+		renameGroup: 'Đổi tên nhóm',
+		saveAiSettings: 'Cập nhật cài đặt AI'
 	};
+	async function openGroupConfig() {
+		groupNameDraft = groupName;
+		configOpen = true;
+		aiLoading = true;
+		aiError = '';
+		aiKey = '';
+		try {
+			const settings = await fetchAiSettings(groupId);
+			aiEndpoint = settings.endpoint;
+			aiModel = settings.model;
+			aiHasKey = settings.hasApiKey;
+			aiSaved = { endpoint: settings.endpoint, model: settings.model };
+		} catch (cause) {
+			aiError = (cause as Error).message;
+		} finally {
+			aiLoading = false;
+		}
+	}
+	/** Sends only the parts that changed, so saving a new name never touches the stored API key. */
+	async function saveGroupConfig() {
+		const name = groupNameDraft.trim();
+		const renamed = !!name && name !== groupName;
+		const aiChanged =
+			aiEndpoint.trim() !== aiSaved.endpoint || aiModel.trim() !== aiSaved.model || !!aiKey.trim();
+		try {
+			if (renamed) await run('renameGroup', { name }, aiChanged ? '' : 'Đã lưu cấu hình nhóm.');
+			if (aiChanged)
+				await run(
+					'saveAiSettings',
+					{ endpoint: aiEndpoint.trim(), model: aiModel.trim(), apiKey: aiKey.trim() },
+					'Đã lưu cấu hình nhóm.'
+				);
+			configOpen = false;
+		} catch {
+			// The shared command handler shows the error; keep the dialog open for a retry.
+		}
+	}
+	async function clearAiSettings() {
+		try {
+			await run('saveAiSettings', { endpoint: '', model: '', clearApiKey: true }, 'Đã xóa cài đặt AI.');
+			aiEndpoint = aiModel = aiKey = '';
+			aiHasKey = false;
+			aiSaved = { endpoint: '', model: '' };
+		} catch {
+			// Shown by the shared command handler.
+		}
+	}
 	function editMember(member: Member) {
 		memberDraft = structuredClone($state.snapshot(member));
 		bankInput = memberDraft.bankLabel ?? bankNames[memberDraft.bankCode] ?? memberDraft.bankCode;
@@ -179,10 +250,14 @@
 	<div>
 		<h1>Thành viên & quản lý</h1>
 	</div>
-	{#if isAdmin}<Button
-			onclick={() => run('syncDiscordMembers', {}, 'Đã đồng bộ thành viên Discord.').catch(() => {})}
-			disabled={busy}><Users size={17} /> Làm mới thành viên Discord</Button
-		>{/if}
+	{#if isAdmin}<div class="button-row">
+			<Button variant="outline" onclick={openGroupConfig} disabled={busy}
+				><Settings size={16} /> Cấu hình nhóm</Button
+			><Button
+				onclick={() => run('syncDiscordMembers', {}, 'Đã đồng bộ thành viên Discord.').catch(() => {})}
+				disabled={busy}><Users size={17} /> Làm mới thành viên Discord</Button
+			>
+		</div>{/if}
 </div>
 <section class="panel">
 	<div class="filter-toolbar">
@@ -375,6 +450,69 @@
 		onclick={saveMember}
 		disabled={busy}>Lưu hồ sơ</Button
 	></Modal
+>
+<Modal
+	bind:open={configOpen}
+	title="Cấu hình nhóm"
+	description="Tên nhóm hiển thị cho mọi thành viên và trong thông báo Discord."
+	wide
+	><form
+		class="group-config-form"
+		onsubmit={(event) => {
+			event.preventDefault();
+			void saveGroupConfig();
+		}}
+	>
+		<label class="field">Tên nhóm<Input bind:value={groupNameDraft} maxlength={100} required /></label>
+		<div class="group-config-section">
+			<h3><Sparkles size={16} /> Đọc hóa đơn bằng AI</h3>
+			<p class="fine-print">
+				Dùng API tương thích OpenAI có hỗ trợ structured outputs và đọc ảnh. Nút AI chỉ hiện khi điền đủ cả ba
+				mục.
+			</p>
+		</div>
+		<label class="field"
+			>Endpoint<Input
+				bind:value={aiEndpoint}
+				type="url"
+				placeholder="https://api.openai.com/v1"
+				maxlength={300}
+				disabled={aiLoading}
+			/></label
+		>
+		<label class="field"
+			>Model<Input
+				bind:value={aiModel}
+				placeholder="gpt-4o-mini"
+				maxlength={100}
+				disabled={aiLoading}
+			/></label
+		>
+		<label class="field"
+			>API key<Input
+				bind:value={aiKey}
+				type="password"
+				autocomplete="off"
+				placeholder={aiHasKey ? 'Đã lưu · để trống để giữ nguyên' : 'sk-…'}
+				maxlength={500}
+				disabled={aiLoading}
+			/><small>API key chỉ lưu trên máy chủ và không hiển thị lại.</small></label
+		>
+		{#if aiError}<p class="validation-error" role="alert">{aiError}</p>{/if}
+		<p class="fine-print">
+			{aiComplete ? 'Thành viên sẽ thấy nút đọc hóa đơn bằng AI.' : 'Chưa đủ thông tin: nút AI sẽ bị ẩn.'}
+		</p>
+		<div class="modal-actions">
+			{#if aiHasKey || aiSaved.endpoint || aiSaved.model}<Button
+					type="button"
+					variant="outline"
+					disabled={busy || aiLoading}
+					onclick={clearAiSettings}>Xóa cài đặt AI</Button
+				>{/if}<Button type="submit" disabled={busy || aiLoading || !groupNameDraft.trim()}
+				>{busy ? 'Đang lưu…' : 'Lưu cấu hình'}</Button
+			>
+		</div>
+	</form></Modal
 >
 <Modal
 	bind:open={archiveOpen}

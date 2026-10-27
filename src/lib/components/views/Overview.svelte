@@ -18,8 +18,13 @@
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, shortCurrency, dateLabel, billDateLabel, dateTimeLabel } from '$lib/domain/ledger';
 	import { spendingWindow, personalPaymentHistory, type SpendingGranularity } from '$lib/domain/spending';
-	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
-		$props();
+	let {
+		appState,
+		actor,
+		run,
+		busy,
+		groupId
+	}: { appState: AppState; actor: string; run: RunCommand; busy: boolean; groupId: string } = $props();
 	let detailOpen = $state(false);
 	let selectedBillId = $state('');
 	let paymentOpen = $state(false);
@@ -188,7 +193,7 @@
 		}}
 	/>
 </div>
-<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} {actor} {run} {busy} />
+<BillDetail bind:open={detailOpen} bill={selectedBill} {appState} {actor} {run} {busy} {groupId} />
 <Modal bind:open={paymentOpen} title="Chi tiết thanh toán" description={selectedEntry?.description || ''}>
 	{#if selectedEntry}
 		<div class="summary-pair">

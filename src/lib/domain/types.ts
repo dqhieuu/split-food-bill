@@ -28,6 +28,8 @@ export type Group = {
 	createdBy: string;
 	createdAt: string;
 	version: number;
+	/** True while the group has a complete AI configuration; the settings themselves stay server-side. */
+	aiEnabled?: boolean;
 };
 export type GroupSummary = Group & { role: 'admin' | 'member' };
 export type Session = { user: GlobalUser; groups: GroupSummary[]; selectedGroupId: string | null };
@@ -58,6 +60,8 @@ export type Bill = {
 	total: number;
 	discordNotification: boolean;
 	memberNames?: Record<string, string>;
+	/** Object-storage id of the receipt photo, stored under the group's prefix. */
+	image?: string;
 	/** Set once when the bill is undone; an undone bill can never be undone or restored again. */
 	undoneAt?: string;
 	undoneBy?: string;

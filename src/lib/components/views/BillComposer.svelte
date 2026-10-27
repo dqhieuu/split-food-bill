@@ -2,7 +2,18 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Plus, ArrowLeft, ArrowRight, Check, MessageCircle, ReceiptText } from '@lucide/svelte';
+	import {
+		Plus,
+		ArrowLeft,
+		ArrowRight,
+		Check,
+		MessageCircle,
+		ReceiptText,
+		ImagePlus,
+		LoaderCircle,
+		Sparkles,
+		X
+	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
@@ -10,6 +21,9 @@
 	import Avatar from '../Avatar.svelte';
 	import MoneyInput from '../MoneyInput.svelte';
 	import BillDateInput from '../BillDateInput.svelte';
+	import BillImage from '../BillImage.svelte';
+	import { scanBillImage, uploadBillImage } from '$lib/client/api';
+	import { compressImage } from '$lib/client/images';
 	import type { AppState, BillLine } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, billDateLabel, discountShares, equalShares, localDate } from '$lib/domain/ledger';
@@ -20,8 +34,16 @@
 		actor,
 		run,
 		busy,
-		groupId
-	}: { appState: AppState; actor: string; run: RunCommand; busy: boolean; groupId: string } = $props();
+		groupId,
+		aiEnabled = false
+	}: {
+		appState: AppState;
+		actor: string;
+		run: RunCommand;
+		busy: boolean;
+		groupId: string;
+		aiEnabled?: boolean;
+	} = $props();
 	let description = $state('');
 	let date = $state(localDate(new Date()));
 	let selected = $state<string[]>([]);
@@ -38,6 +60,12 @@
 	let validation = $state('');
 	let draftReady = $state(false);
 	let submissionId = $state(crypto.randomUUID());
+	let imageId = $state('');
+	let uploadingImage = $state(false);
+	let scanning = $state(false);
+	let imageError = $state('');
+	let scanNotice = $state('');
+	const imageBusy = $derived(uploadingImage || scanning);
 	const people = $derived(appState.members.filter((m) => m.active));
 	const toDong = (value: number | null | undefined) => Math.round((Number(value) || 0) * unit);
 	const listed = $derived(selected.map((id) => toDong(amounts[id])));
@@ -91,6 +119,7 @@
 				rounding = draft.rounding ?? DEFAULT_ROUNDING;
 				unit = draft.unit ?? 1000;
 				discordNotification = draft.discordNotification ?? true;
+				imageId = draft.imageId ?? '';
 				submissionId = draft.submissionId || crypto.randomUUID();
 			}
 		} catch {
@@ -117,6 +146,7 @@
 					rounding,
 					unit,
 					discordNotification,
+					imageId,
 					submissionId
 				})
 			);
@@ -130,6 +160,51 @@
 		if (totalInput) totalInput *= factor;
 		if (discountInput) discountInput *= factor;
 		unit = next;
+	}
+	function pickedFile(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		return file;
+	}
+	/** Uploads as soon as a photo is picked so the draft can keep the stored id across reloads. */
+	async function upload(file: File) {
+		imageError = '';
+		scanNotice = '';
+		uploadingImage = true;
+		try {
+			imageId = await uploadBillImage(groupId, await compressImage(file));
+			return imageId;
+		} catch (cause) {
+			imageError = (cause as Error).message || 'Không tải được ảnh lên.';
+		} finally {
+			uploadingImage = false;
+		}
+	}
+	async function attachImage(event: Event) {
+		const file = pickedFile(event);
+		if (file) await upload(file);
+	}
+	/** Attaches the photo, then fills the name and an equal split of the total read by the AI. */
+	async function scanImage(event: Event) {
+		const file = pickedFile(event);
+		if (!file) return;
+		const uploaded = await upload(file);
+		if (!uploaded) return;
+		scanning = true;
+		try {
+			const scan = await scanBillImage(groupId, uploaded);
+			description = scan.billName.slice(0, 300);
+			mode = 'equal';
+			if (scan.totalCost > 0) {
+				totalInput = scan.totalCost / unit;
+				scanNotice = `AI đã điền tên và tổng ${currency(scan.totalCost)}. Hãy kiểm tra lại.`;
+			} else scanNotice = 'AI đã điền tên nhưng không đọc được tổng tiền. Hãy nhập tổng.';
+		} catch (cause) {
+			imageError = (cause as Error).message || 'AI không đọc được hóa đơn.';
+		} finally {
+			scanning = false;
+		}
 	}
 	function review() {
 		attempted = true;
@@ -153,7 +228,8 @@
 					description,
 					date: new Date(`${date}T12:00:00+07:00`).toISOString(),
 					lines,
-					discordNotification
+					discordNotification,
+					...(imageId ? { image: imageId } : {})
 				},
 				'Đã ghi hóa đơn và cập nhật nợ.'
 			);
@@ -193,6 +269,44 @@
 					maxlength={300}
 				/></label
 			>
+			<div class="field">
+				<span>Ảnh hóa đơn <span class="optional-label">(không bắt buộc)</span></span>
+				<div class="bill-image-field">
+					{#if imageId}<div class="bill-image-attached">
+							<BillImage {groupId} {imageId} /><button
+								type="button"
+								class="bill-image-remove"
+								aria-label="Bỏ ảnh hóa đơn"
+								disabled={imageBusy}
+								onclick={() => (imageId = '')}><X size={14} /></button
+							>
+						</div>{/if}
+					<label class="bill-image-picker" aria-disabled={imageBusy}
+						>{#if uploadingImage && !scanning}<LoaderCircle class="spin" size={17} />Đang tải ảnh…{:else}<ImagePlus
+								size={17}
+							/>{imageId ? 'Đổi ảnh' : 'Đính kèm ảnh'}{/if}<input
+							type="file"
+							accept="image/*"
+							aria-label="Chọn ảnh hóa đơn"
+							disabled={imageBusy}
+							onchange={attachImage}
+						/></label
+					>
+					{#if aiEnabled}<label class="bill-image-picker ai-scan-picker" aria-disabled={imageBusy}
+							>{#if scanning}<LoaderCircle class="spin" size={17} />AI đang đọc…{:else}<Sparkles
+									size={17}
+								/>Đọc hóa đơn bằng AI{/if}<input
+								type="file"
+								accept="image/*"
+								aria-label="Chọn ảnh để AI đọc hóa đơn"
+								disabled={imageBusy}
+								onchange={scanImage}
+							/></label
+						>{/if}
+				</div>
+				{#if imageError}<small class="validation-error" role="alert">{imageError}</small>{/if}
+				{#if scanNotice}<small class="ai-scan-notice" role="status">{scanNotice}</small>{/if}
+			</div>
 			<div class="section-step participant-picker-heading">
 				<h2>Thành viên tham gia</h2>
 				<button
@@ -311,7 +425,7 @@
 			{#if validation}<p class="validation-error" role="alert">{validation}</p>{/if}<Button
 				class="full-width"
 				onclick={review}
-				disabled={busy}>Xem lại hóa đơn <ArrowRight size={16} /></Button
+				disabled={busy || imageBusy}>Xem lại hóa đơn <ArrowRight size={16} /></Button
 			>
 		</section>
 	</div>
@@ -336,9 +450,9 @@
 	</div>
 	<div class="summary-total"><span>Tổng cộng</span><strong>{currency(total)}</strong></div>
 	<p class="fine-print">
-		Người thanh toán: {payer.name} · {billDateLabel(date)}.{discordNotification
-			? ''
-			: ' Không gửi thông báo Discord.'}
+		Người thanh toán: {payer.name} · {billDateLabel(date)}.{imageId
+			? ' Kèm ảnh hóa đơn.'
+			: ''}{discordNotification ? '' : ' Không gửi thông báo Discord.'}
 	</p>
 	<div class="modal-actions">
 		<Button onclick={submit} disabled={busy}><Check size={16} />{busy ? 'Đang ghi…' : 'Xác nhận'}</Button>

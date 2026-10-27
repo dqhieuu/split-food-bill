@@ -6,6 +6,7 @@
 	"compatibility_date": "2026-10-26",
 	"durable_objects": { "bindings": [{ "name": "AUTH_SESSIONS", "class_name": "AuthSessions" }] },
 	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["AuthSessions"] }],
+	"r2_buckets": [{ "binding": "BILL_IMAGES", "bucket_name": "split-food-bill-images" }],
 	"vars": {
 		"APP_ENV": "production",
 		"FRONTEND_ORIGIN": "https://anthitcho.vercel.app",
@@ -17,6 +18,7 @@
 		"local": {
 			"name": "split-food-bill-api-local",
 			"durable_objects": { "bindings": [{ "name": "AUTH_SESSIONS", "class_name": "AuthSessions" }] },
+			"r2_buckets": [{ "binding": "BILL_IMAGES", "bucket_name": "split-food-bill-images-local" }],
 			"vars": {
 				"APP_ENV": "local",
 				"FRONTEND_ORIGIN": "http://127.0.0.1:5173",

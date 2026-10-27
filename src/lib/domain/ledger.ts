@@ -14,6 +14,9 @@ export class DomainError extends Error {
 const identifier = z.string().regex(/^[\w.-]{1,100}$/);
 const text = z.string().trim().min(1).max(300);
 const amount = z.number().int().positive().max(1_000_000_000);
+/** A server-issued upload name: random UUID plus the extension detected from the image bytes. */
+export const BILL_IMAGE_ID =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpg|png|webp)$/;
 export const currency = (value: number) => new Intl.NumberFormat('vi-VN').format(value) + ' ₫';
 // Vietnamese currency has no decimals: compact labels are whole thousands of đồng.
 export const shortCurrency = (value: number) =>
@@ -199,6 +202,7 @@ export function applyCommand(
 				description: text,
 				date: z.iso.datetime(),
 				discordNotification: z.boolean(),
+				image: z.string().regex(BILL_IMAGE_ID).optional(),
 				lines: z
 					.array(
 						z.object({

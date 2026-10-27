@@ -3,6 +3,7 @@ import { billNotificationMessage } from '../../src/lib/domain/notifications';
 import { DomainError } from '../../src/lib/domain/ledger';
 import { requireGroup } from './groups';
 import { Discord } from './discord';
+import { billImageAttachment } from './images';
 import type { Env } from './env';
 import { Store } from './store';
 
@@ -69,6 +70,16 @@ export async function deliverBillNotifications(
 	});
 	if (!batch) return;
 	const discord = new Discord(env);
+	// One read serves every recipient; a missing photo must not block the text notification.
+	const attachment = batch.bill.image
+		? await billImageAttachment(env, groupId, batch.bill.image).catch((cause) => {
+				console.error(
+					'Bill image could not be attached to Discord DMs.',
+					cause instanceof Error ? cause.message : cause
+				);
+				return null;
+			})
+		: null;
 	const pending = [...batch.recipients];
 	const errors: unknown[] = [];
 	let saveTail = Promise.resolve();
@@ -87,7 +98,8 @@ export async function deliverBillNotifications(
 					({ status } = await discord.dm(
 						uid.slice(8),
 						billNotificationMessage(batch.bill, batch.group, uid, env.FRONTEND_ORIGIN),
-						nonce
+						nonce,
+						attachment
 					));
 				} catch {
 					status = 'failed';

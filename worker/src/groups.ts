@@ -7,7 +7,7 @@ import {
 	type GroupSummary,
 	type Member
 } from '../../src/lib/domain/types';
-import { Store, type Write } from './store';
+import { Store } from './store';
 import { isLocal, type Env } from './env';
 import { avatarUrl, Discord, type DiscordProfile } from './discord';
 
@@ -185,6 +185,25 @@ export async function createGroup(store: Store, user: GlobalUser, env: Env, name
 		writes.push(store.write(`users/${user.id}`, { ...current, lastActiveGroupId: group.id }));
 		if (writes.length > 450) throw new DomainError('Có quá nhiều thành viên mới cho một lần tạo nhóm.', 400);
 		return group;
+	});
+}
+/** The group name lives on the group document, outside the ledger state, so it has its own write. */
+export async function renameGroup(store: Store, groupId: string, uid: string, name: string): Promise<Group> {
+	return store.transaction(async (tx, writes) => {
+		const { group } = await requireGroup(store, groupId, uid, true, tx);
+		const renamed = { ...group, name, version: group.version + 1 };
+		const id = crypto.randomUUID();
+		writes.push(
+			store.write(`groups/${groupId}`, renamed),
+			store.write(`groups/${groupId}/audit/${id}`, {
+				id,
+				actor: uid,
+				action: 'renameGroup',
+				reference: groupId,
+				date: new Date().toISOString()
+			})
+		);
+		return renamed;
 	});
 }
 export async function syncMembers(store: Store, env: Env, groupId: string, user: GlobalUser) {

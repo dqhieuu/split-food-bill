@@ -31,6 +31,7 @@ export type DiscordProfile = {
 };
 type GuildMember = { user: DiscordProfile; roles: string[]; nick?: string; pending?: boolean };
 export type DiscordGuild = { id: string; name: string; icon?: string | null };
+export type DiscordAttachment = { name: string; data: Blob };
 export const mockProfiles: DiscordProfile[] = [
 	{ id: '100000000000000001', username: 'minhan', global_name: 'Minh An', email: 'an@example.test' },
 	{ id: '100000000000000002', username: 'thaolinh', global_name: 'Thảo Linh', email: 'linh@example.test' },
@@ -91,7 +92,8 @@ export class Discord {
 				headers: {
 					authorization: `Bot ${this.env.DISCORD_BOT_TOKEN}`,
 					'user-agent': 'DiscordBot (https://github.com/dqhieuu/split-food-bill, 0.1.0)',
-					'content-type': 'application/json',
+					// fetch sets the multipart boundary itself for FormData bodies.
+					...(init.body instanceof FormData ? {} : { 'content-type': 'application/json' }),
 					...init.headers
 				}
 			});
@@ -178,20 +180,26 @@ export class Discord {
 			refresh
 		);
 	}
-	async dm(id: string, message: string, nonce?: string) {
+	async dm(id: string, message: string, nonce?: string, attachment?: DiscordAttachment | null) {
 		if (isLocal(this.env)) return { status: 'simulated' as const };
 		const channel = await this.api<{ id: string }>('/users/@me/channels', {
 			method: 'POST',
 			body: JSON.stringify({ recipient_id: id })
 		});
-		await this.api(`/channels/${channel.id}/messages`, {
-			method: 'POST',
-			body: JSON.stringify({
-				content: message,
-				allowed_mentions: { parse: [] },
-				...(nonce ? { nonce, enforce_nonce: true } : {})
-			})
-		});
+		const payload = {
+			content: message,
+			allowed_mentions: { parse: [] },
+			...(nonce ? { nonce, enforce_nonce: true } : {}),
+			...(attachment ? { attachments: [{ id: 0, filename: attachment.name }] } : {})
+		};
+		let body: string | FormData = JSON.stringify(payload);
+		if (attachment) {
+			const form = new FormData();
+			form.append('payload_json', body);
+			form.append('files[0]', attachment.data, attachment.name);
+			body = form;
+		}
+		await this.api(`/channels/${channel.id}/messages`, { method: 'POST', body });
 		return { status: 'sent' as const };
 	}
 }

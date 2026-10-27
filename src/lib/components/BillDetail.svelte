@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Undo2 } from '@lucide/svelte';
 	import Modal from './Modal.svelte';
+	import BillImage from './BillImage.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import type { AppState, Bill } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
@@ -11,7 +12,8 @@
 		appState,
 		actor,
 		run,
-		busy
+		busy,
+		groupId
 	}: {
 		open: boolean;
 		bill?: Bill;
@@ -19,6 +21,7 @@
 		actor: string;
 		run: RunCommand;
 		busy: boolean;
+		groupId: string;
 	} = $props();
 	let confirming = $state(false);
 	const name = (id: string) => appState.members.find((member) => member.id === id)?.name || id;
@@ -49,6 +52,9 @@
 				<Undo2 size={16} />Đã hoàn tác bởi {name(bill.undoneBy ?? '')} lúc {dateTimeLabel(bill.undoneAt)}. Các
 				khoản nợ đã được bù trừ trong ledger; hóa đơn này không thể hoàn tác lại.
 			</p>{/if}
+		{#if bill.image && open}<div class="bill-detail-image">
+				<BillImage {groupId} imageId={bill.image} />
+			</div>{/if}
 		<div class="review-lines">
 			{#each bill.lines as line}<div>
 					<span

@@ -5,9 +5,19 @@ import { Store } from './store';
 import { authenticatedUser, verifiedUserId } from './identity';
 import { continueDatabaseReset, requireAvailableDatabase, startDatabaseReset } from './database-reset';
 import { oauth } from './oauth';
-import { createGroup, groupCommand, loadGroup, requireGroup, session, syncMembers } from './groups';
+import {
+	createGroup,
+	groupCommand,
+	loadGroup,
+	renameGroup,
+	requireGroup,
+	session,
+	syncMembers
+} from './groups';
+import { MAX_BILL_IMAGE_BYTES, readBillImage, requireUploadedImage, uploadBillImage } from './images';
+import { readAiSettings, saveAiSettings, scanBill } from './ai';
 import { Discord, DiscordRateLimitError } from './discord';
-import { DomainError } from '../../src/lib/domain/ledger';
+import { BILL_IMAGE_ID, DomainError } from '../../src/lib/domain/ledger';
 import type { GlobalUser } from '../../src/lib/domain/types';
 import { deliverBillNotifications } from './notifications';
 export { AuthSessions } from './sessions';
@@ -79,8 +89,44 @@ async function route(request: Request, env: Env): Promise<Response> {
 			await loadGroup(store, state[1], user.id, since === null ? undefined : Number(since))
 		);
 	}
+	const imageUpload = url.pathname.match(/^\/api\/groups\/([\w-]+)\/images$/);
+	if (imageUpload && request.method === 'POST')
+		return Response.json(await uploadBillImage(store, env, imageUpload[1], user.id, request), {
+			status: 201
+		});
+	const image = url.pathname.match(/^\/api\/groups\/([\w-]+)\/images\/([\w.-]+)$/);
+	if (image && request.method === 'GET') return readBillImage(store, env, image[1], user.id, image[2]);
+	const aiSettings = url.pathname.match(/^\/api\/groups\/([\w-]+)\/ai-settings$/);
+	if (aiSettings && request.method === 'GET')
+		return Response.json(await readAiSettings(store, aiSettings[1], user.id));
+	const aiScan = url.pathname.match(/^\/api\/groups\/([\w-]+)\/ai\/scan$/);
+	if (aiScan && request.method === 'POST') {
+		const { imageId } = z
+			.object({ imageId: z.string().regex(BILL_IMAGE_ID) })
+			.strict()
+			.parse(await request.json());
+		return Response.json(await scanBill(store, env, aiScan[1], user.id, imageId));
+	}
 	const command = url.pathname.match(/^\/api\/groups\/([\w-]+)\/commands\/([\w-]+)$/);
 	if (command && request.method === 'POST') {
+		if (command[2] === 'saveAiSettings') {
+			const group = await saveAiSettings(store, env, command[1], user.id, await request.json());
+			return Response.json({
+				...(await loadGroup(store, command[1], user.id)),
+				result: { reference: group.id }
+			});
+		}
+		if (command[2] === 'renameGroup') {
+			const { name } = z
+				.object({ name: z.string().trim().min(1).max(100) })
+				.strict()
+				.parse(await request.json());
+			const group = await renameGroup(store, command[1], user.id, name);
+			return Response.json({
+				...(await loadGroup(store, command[1], user.id)),
+				result: { reference: group.id }
+			});
+		}
 		if (command[2] === 'retryBillNotification') {
 			const { id } = z.object({ id: z.string().regex(/^[\w.-]{1,100}$/) }).parse(await request.json());
 			await deliverBillNotifications(store, env, command[1], user.id, id, true);
@@ -91,7 +137,12 @@ async function route(request: Request, env: Env): Promise<Response> {
 				...(await syncMembers(store, env, command[1], user)),
 				result: { reference: command[1] }
 			});
-		const outcome = await groupCommand(store, command[1], user.id, command[2], await request.json());
+		const input: unknown = await request.json();
+		const billImage = command[2] === 'createBill' ? (input as { image?: unknown } | null)?.image : undefined;
+		// Malformed references are left for the command schema to reject.
+		if (typeof billImage === 'string' && BILL_IMAGE_ID.test(billImage))
+			await requireUploadedImage(env, command[1], user.id, billImage);
+		const outcome = await groupCommand(store, command[1], user.id, command[2], input);
 		if (command[2] === 'createBill' && outcome.result.reference) {
 			try {
 				await deliverBillNotifications(store, env, command[1], user.id, outcome.result.reference);
@@ -143,7 +194,9 @@ export default {
 			assertEnvironment(env, request);
 			if (origin && origin !== env.FRONTEND_ORIGIN && origin !== new URL(request.url).origin)
 				throw new DomainError('Nguồn yêu cầu không được phép.', 403);
-			if (Number(request.headers.get('content-length')) > 1_000_000)
+			const isImageUpload =
+				request.method === 'POST' && /^\/api\/groups\/[\w-]+\/images$/.test(new URL(request.url).pathname);
+			if (Number(request.headers.get('content-length')) > (isImageUpload ? MAX_BILL_IMAGE_BYTES : 1_000_000))
 				throw new DomainError('Dữ liệu quá lớn.', 413);
 			response =
 				request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : await route(request, env);

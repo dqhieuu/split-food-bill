@@ -22,7 +22,7 @@ export class ApiError extends Error {
 const apiBase = () =>
 	import.meta.env.VITE_WORKER_API_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8787' : '');
 let auth: Auth | undefined;
-export async function requestJson(path: string, options: RequestInit = {}, authenticated = true) {
+async function request(path: string, options: RequestInit = {}, authenticated = true) {
 	const base = apiBase();
 	if (!base) throw new Error('Chưa cấu hình địa chỉ Cloudflare Worker.');
 	const token = authenticated ? await auth?.currentUser?.getIdToken() : undefined;
@@ -34,9 +34,14 @@ export async function requestJson(path: string, options: RequestInit = {}, authe
 			...options.headers
 		}
 	});
-	const data = await response.json();
-	if (!response.ok) throw new ApiError(data.message || 'Không xử lý được yêu cầu.', response.status);
-	return data;
+	if (!response.ok) {
+		const data = await response.json().catch(() => ({}));
+		throw new ApiError(data.message || 'Không xử lý được yêu cầu.', response.status);
+	}
+	return response;
+}
+export async function requestJson(path: string, options: RequestInit = {}, authenticated = true) {
+	return (await request(path, options, authenticated)).json();
 }
 export async function initializeAuth() {
 	const config = await requestJson('/config', {}, false);
@@ -113,9 +118,34 @@ export async function sendCommand(
 	groupId: string,
 	command: string,
 	data: unknown
-): Promise<{ state: AppState; result: { reference?: string } }> {
+): Promise<{ state: AppState; group?: Group; result: { reference?: string } }> {
 	return requestJson(`/api/groups/${groupId}/commands/${command}`, {
 		method: 'POST',
 		body: JSON.stringify(data)
 	});
+}
+export async function uploadBillImage(groupId: string, image: Blob): Promise<string> {
+	const { imageId } = await requestJson(`/api/groups/${groupId}/images`, {
+		method: 'POST',
+		headers: { 'content-type': image.type },
+		body: image
+	});
+	return imageId;
+}
+export type AiSettings = { endpoint: string; model: string; hasApiKey: boolean };
+export async function fetchAiSettings(groupId: string): Promise<AiSettings> {
+	return requestJson(`/api/groups/${groupId}/ai-settings`);
+}
+export async function scanBillImage(
+	groupId: string,
+	imageId: string
+): Promise<{ billName: string; totalCost: number }> {
+	return requestJson(`/api/groups/${groupId}/ai/scan`, {
+		method: 'POST',
+		body: JSON.stringify({ imageId })
+	});
+}
+/** Images sit behind the API's bearer auth, so they are fetched as blobs rather than linked directly. */
+export async function fetchBillImage(groupId: string, imageId: string): Promise<Blob> {
+	return (await request(`/api/groups/${groupId}/images/${encodeURIComponent(imageId)}`)).blob();
 }

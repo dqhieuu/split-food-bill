@@ -1,4 +1,4 @@
-import type { DurableObjectNamespace } from '@cloudflare/workers-types';
+import type { DurableObjectNamespace, R2Bucket } from '@cloudflare/workers-types';
 export interface Env {
 	APP_ENV: 'local' | 'production';
 	FRONTEND_ORIGIN: string;
@@ -15,6 +15,8 @@ export interface Env {
 	DISCORD_ADMIN_IDS?: string;
 	DISCORD_GUILD_IDS?: string;
 	AUTH_SESSIONS: DurableObjectNamespace;
+	/** Receipt photos; optional so the ledger keeps working before the bucket is provisioned. */
+	BILL_IMAGES?: R2Bucket;
 }
 export function isLocal(env: Env) {
 	return env.APP_ENV === 'local';

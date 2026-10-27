@@ -77,7 +77,26 @@
 	const section = $derived(page.url.pathname);
 	const currentMember = $derived(appState?.members.find((member) => member.id === actor));
 	const accountMember = $derived(sessionData?.user ?? currentMember);
+	/** First letters of up to two words, e.g. "Hội ăn trưa" → "HĂ". */
+	const groupInitials = $derived(
+		(group?.name ?? '')
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(0, 2)
+			.map((word) => Array.from(word)[0])
+			.join('')
+			.toLocaleUpperCase('vi') || '?'
+	);
 	let toastTimer: ReturnType<typeof setTimeout>;
+	/** Keeps the header and the group picker in step when an admin renames the group. */
+	function applyGroup(next: Group) {
+		group = next;
+		if (sessionData)
+			sessionData = {
+				...sessionData,
+				groups: sessionData.groups.map((item) => (item.id === next.id ? { ...item, name: next.name } : item))
+			};
+	}
 	function notify(message: string, isError = false) {
 		clearTimeout(toastTimer);
 		toast = message;
@@ -118,7 +137,7 @@
 			// Notification deliveries update receipts without bumping the ledger version.
 			const delivering = appState?.receipts.some((receipt) => ['queued', 'sending'].includes(receipt.status));
 			const result = await fetchState(selectedGroupId, delivering ? undefined : appState?.version);
-			group = result.group;
+			applyGroup(result.group);
 			if ('unchanged' in result) return;
 			appState = result.state;
 		} catch (cause) {
@@ -160,6 +179,7 @@
 		try {
 			const response = await sendCommand(selectedGroupId, command, input);
 			appState = response.state;
+			if (response.group) applyGroup(response.group);
 			if (message) notify(message);
 			return response.result.reference || 'ok';
 		} catch (cause) {
@@ -226,7 +246,7 @@
 				onclick={() => (mobileMenu = false)}><X size={20} /></button
 			>
 			<div class="workspace group-selector">
-				<span class="workspace-symbol" aria-hidden="true">CTA</span>
+				<span class="workspace-symbol" aria-hidden="true">{groupInitials}</span>
 				<strong class="workspace-label" aria-hidden="true">{group?.name || 'Chọn nhóm'}</strong>
 				<ChevronDown size={17} aria-hidden="true" />
 				<select
@@ -326,22 +346,30 @@
 					/>
 				{:else if appState && currentMember}
 					{#key selectedGroupId + actor}
-						{#if section === '/'}<Overview {appState} {actor} {run} {busy} />
+						{#if section === '/'}<Overview {appState} {actor} {run} {busy} groupId={selectedGroupId} />
 						{:else if section === '/new-bill'}{#key actor}<BillComposer
 									{appState}
 									{actor}
 									{run}
 									{busy}
 									groupId={selectedGroupId}
+									aiEnabled={!!group?.aiEnabled}
 								/>{/key}
 						{:else if section === '/balances'}{#key actor}<Balances {appState} {actor} {run} {busy} />{/key}
-						{:else if section === '/activity'}<Activity {appState} {actor} {run} {busy} />
+						{:else if section === '/activity'}<Activity
+								{appState}
+								{actor}
+								{run}
+								{busy}
+								groupId={selectedGroupId}
+							/>
 						{:else if section === '/members'}<Management
 								{appState}
 								{actor}
 								{run}
 								{busy}
 								groupId={selectedGroupId}
+								groupName={group?.name ?? ''}
 							/>
 						{:else if section === '/matrix'}<DebtMatrix {appState} {actor} {run} {busy} />
 						{:else}<div class="empty-state">
