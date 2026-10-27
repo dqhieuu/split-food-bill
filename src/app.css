@@ -563,9 +563,8 @@ main {
 .negative {
 	color: light-dark(#6e7865, #a3ab9c) !important;
 }
-.net-card {
-	background: light-dark(#eef2e7, #21231c);
-	border-color: light-dark(#dce3d2, #2c3124);
+.stat-card > strong.negative {
+	color: light-dark(#b42318, #ff8b82) !important;
 }
 .stat-unit {
 	font-size: 15px;
@@ -4276,12 +4275,15 @@ button.payment-history-row {
 	border-radius: 8px;
 	transition: background-color 0.15s;
 }
-.group-choice:hover,
+.group-choice:not(:disabled):hover,
 .group-choice:focus-visible {
 	background: light-dark(#eff2e8, #252e24);
 }
-.group-choice:active {
+.group-choice:not(:disabled):active {
 	background: light-dark(#e3eadc, #30402e);
+}
+.group-choice:disabled {
+	cursor: default;
 }
 .group-choice span {
 	display: flex;
@@ -4443,4 +4445,21 @@ button.payment-history-row {
 	.discord-preview-embeds {
 		margin-left: 0;
 	}
+}
+
+.ai-scan-complete:disabled {
+	opacity: 1;
+	cursor: default;
+	color: light-dark(#216439, #99e5af);
+	border-color: light-dark(#58a56d, #5aac73);
+	background: light-dark(#e4f6e9, #173c25);
+	box-shadow: 0 0 12px rgb(52 168 83 / 0.22);
+}
+.ai-updated > input,
+.ai-updated > .bill-date-control,
+.ai-updated > .money-input > input {
+	border-color: light-dark(#58a56d, #5aac73);
+	box-shadow:
+		0 0 0 2px rgb(52 168 83 / 0.18),
+		0 0 14px rgb(52 168 83 / 0.22);
 }

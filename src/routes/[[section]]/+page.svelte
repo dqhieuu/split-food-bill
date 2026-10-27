@@ -68,7 +68,7 @@
 	const navigation = [
 		{ path: '/', label: 'Tổng quan', icon: LayoutDashboard },
 		{ path: '/new-bill', label: 'Tạo hoá đơn', icon: Plus },
-		{ path: '/balances', label: 'Số dư cá nhân', icon: Wallet },
+		{ path: '/balances', label: 'Tài khoản của bạn', icon: Wallet },
 		{ path: '/matrix', label: 'Ma trận nợ nần', icon: Users },
 		{ path: '/activity', label: 'Ledger', icon: ReceiptText },
 		{ path: '/members', label: 'Thành viên & quản lý', icon: Users },

@@ -3,7 +3,7 @@
 	import { Sparkles } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { fetchAiSettings, sendCommand } from '$lib/client/api';
+	import { fetchAiSettings, requestJson, sendCommand } from '$lib/client/api';
 	import type { Group, GroupSummary } from '$lib/domain/types';
 	import Modal from './Modal.svelte';
 	let {
@@ -20,6 +20,9 @@
 	const isAdmin = $derived(group.role === 'admin');
 	let busy = $state(false);
 	let groupNameDraft = $state('');
+	let guildId = $state('');
+	let guilds = $state<{ id: string; name: string }[]>([]);
+	let guildsLoading = $state(false);
 	let aiLoading = $state(false);
 	let aiSaved = $state({ endpoint: '', model: '' });
 	let aiError = $state('');
@@ -28,13 +31,28 @@
 	let aiKey = $state('');
 	let aiHasKey = $state(false);
 	async function run(command: string, input: unknown) {
+		if (!isAdmin) throw new Error('Chỉ quản trị viên nhóm được cấu hình nhóm.');
 		const response = await sendCommand(groupId, command, input);
 		if (response.group) onUpdated(response.group);
 	}
 	onMount(() => {
 		groupNameDraft = groupName;
-		if (isAdmin) void openGroupConfig();
+		guildId = group.discordGuildId;
+		if (isAdmin) {
+			void openGroupConfig();
+			void loadGuilds();
+		}
 	});
+	async function loadGuilds() {
+		guildsLoading = true;
+		try {
+			guilds = (await requestJson(`/api/discord/guilds?groupId=${groupId}`)).guilds;
+		} catch (cause) {
+			aiError = (cause as Error).message;
+		} finally {
+			guildsLoading = false;
+		}
+	}
 	async function openGroupConfig() {
 		aiLoading = true;
 		aiError = '';
@@ -54,13 +72,13 @@
 	/** Sends only the parts that changed, so saving a new name never touches the stored API key. */
 	async function saveGroupConfig() {
 		const name = groupNameDraft.trim();
-		const renamed = !!name && name !== groupName;
+		const changed = !!name && (name !== groupName || guildId !== group.discordGuildId);
 		const aiChanged =
 			aiEndpoint.trim() !== aiSaved.endpoint || aiModel.trim() !== aiSaved.model || !!aiKey.trim();
 		busy = true;
 		aiError = '';
 		try {
-			if (renamed) await run('renameGroup', { name });
+			if (changed) await run('configureGroup', { name, discordGuildId: guildId });
 			if (aiChanged)
 				await run('saveAiSettings', {
 					endpoint: aiEndpoint.trim(),
@@ -106,7 +124,18 @@
 		<label class="field"
 			>Tên nhóm<Input bind:value={groupNameDraft} maxlength={100} required disabled={!isAdmin} /></label
 		>
-		<label class="field">Máy chủ Discord<Input value={group.discordGuildId} readonly /></label>
+		<label class="field"
+			>Máy chủ Discord<select
+				aria-label="Máy chủ Discord"
+				bind:value={guildId}
+				disabled={busy || guildsLoading || !isAdmin}
+			>
+				{#if !guilds.some((guild) => guild.id === group.discordGuildId)}<option value={group.discordGuildId}
+						>Máy chủ hiện tại</option
+					>{/if}
+				{#each guilds as guild}<option value={guild.id}>{guild.name}</option>{/each}
+			</select></label
+		>
 		{#if isAdmin}<div class="group-config-section">
 				<h3><Sparkles size={16} /> Đọc hóa đơn bằng AI</h3>
 			</div>
@@ -146,7 +175,9 @@
 						variant="outline"
 						disabled={busy || aiLoading}
 						onclick={clearAiSettings}>Xóa cài đặt AI</Button
-					>{/if}<Button type="submit" disabled={busy || aiLoading || !groupNameDraft.trim()}
+					>{/if}<Button
+					type="submit"
+					disabled={!isAdmin || busy || aiLoading || guildsLoading || !groupNameDraft.trim() || !guildId}
 					>{busy ? 'Đang lưu…' : 'Lưu cấu hình'}</Button
 				>
 			{/if}

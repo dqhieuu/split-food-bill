@@ -7,6 +7,7 @@ import { continueDatabaseReset, requireAvailableDatabase, startDatabaseReset } f
 import { oauth } from './oauth';
 import {
 	createGroup,
+	configureGroup,
 	groupCommand,
 	loadGroup,
 	renameGroup,
@@ -109,6 +110,17 @@ async function route(request: Request, env: Env): Promise<Response> {
 	}
 	const command = url.pathname.match(/^\/api\/groups\/([\w-]+)\/commands\/([\w-]+)$/);
 	if (command && request.method === 'POST') {
+		if (command[2] === 'configureGroup') {
+			const input = z
+				.object({ name: z.string().trim().min(1).max(100), discordGuildId: z.string().regex(/^\d{17,20}$/) })
+				.strict()
+				.parse(await request.json());
+			await configureGroup(store, env, command[1], user.id, input.name, input.discordGuildId);
+			return Response.json({
+				...(await loadGroup(store, command[1], user.id)),
+				result: { reference: command[1] }
+			});
+		}
 		if (command[2] === 'saveAiSettings') {
 			const group = await saveAiSettings(store, env, command[1], user.id, await request.json());
 			return Response.json({
@@ -154,7 +166,9 @@ async function route(request: Request, env: Env): Promise<Response> {
 		return Response.json(outcome);
 	}
 	if (url.pathname === '/api/discord/guilds' && request.method === 'GET') {
-		if (user.role !== 'admin')
+		const groupId = url.searchParams.get('groupId');
+		if (groupId) await requireGroup(store, groupId, user.id, true);
+		else if (user.role !== 'admin')
 			throw new DomainError('Chỉ quản trị viên hệ thống được xem các máy chủ của bot.', 403);
 		return Response.json({
 			guilds: (await new Discord(env).guilds()).map(({ id, name, icon }) => ({ id, name, icon }))

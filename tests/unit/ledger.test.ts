@@ -141,7 +141,7 @@ describe('ledger accounting', () => {
 					.sort((a, b) => a.id.localeCompare(b.id))
 					.sort(compareLedgerEntries)
 					.map((entry) => entry.id)
-			).toEqual(saved.map((entry) => entry.id));
+			).toEqual([...saved].reverse().map((entry) => entry.id));
 			expect(state.members.map((m) => netBalance(state.ledger, m.id))).toEqual(before);
 			expect(before.reduce((s, n) => s + n, 0)).toBe(0);
 			expect(state.ledger.filter((e) => e.source === 'settlement').every((e) => e.from !== e.to)).toBe(true);
@@ -161,10 +161,10 @@ describe('ledger accounting', () => {
 			description: `Tối giản nợ · Bước ${step}: saved phase`
 		}));
 		expect(entries.sort(compareLedgerEntries).map((entry) => entry.id)).toEqual([
-			'prior-2',
-			'prior-10',
+			'prior-1',
 			'prior-20',
-			'prior-1'
+			'prior-10',
+			'prior-2'
 		]);
 	});
 	it('posts a bill once, includes the payer meal only in the bill, and queues a receipt', () => {

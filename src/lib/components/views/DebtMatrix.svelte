@@ -107,7 +107,7 @@
 				<span class="stat-icon"><Scale size={17} /></span>
 				<div>
 					<strong>Nợ chúa: {appState.members.find((m) => m.id === batch.hub)?.name}</strong><small
-						>{dateTimeLabel(batch.date)} · {batch.entryCount} bản ghi trong Ledger</small
+						>{dateTimeLabel(batch.date)} · {batch.entryCount} bản ghi được thêm vào Ledger</small
 					>
 				</div>
 			</div>{/each}{#if !appState.settlements.length}<div class="inline-empty">
@@ -119,7 +119,7 @@
 	>{#if plan}<div class="notice">
 			<ShieldCheck size={20} />
 			<p>
-				Nợ chúa: <strong>{hubName}</strong>. Thêm {plan.entries.length} bản ghi trong Ledger.
+				Nợ chúa: <strong>{hubName}</strong>. Sau khi tối giản, {plan.entries.length} bản ghi sẽ được thêm vào Ledger.
 			</p>
 		</div>
 		<h3>Các khoản nợ sau tối giản</h3>

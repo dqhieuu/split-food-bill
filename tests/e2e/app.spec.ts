@@ -119,6 +119,12 @@ test('group activation, distinct roles, group isolation and last-group selection
 		await expect(page.getByRole('dialog').getByLabel('Máy chủ Discord', { exact: true })).toHaveValue(
 			group.discordGuildId
 		);
+		await expect(
+			page.getByRole('dialog').getByRole('combobox', { name: 'Máy chủ Discord', exact: true })
+		).toBeEnabled();
+		await expect(page.locator('.group-choice').filter({ hasText: group.name })).not.toContainText(
+			group.discordGuildId
+		);
 		const renamed = group.name + ' renamed';
 		await page.getByRole('dialog').getByLabel('Tên nhóm', { exact: true }).fill(renamed);
 		await page.getByRole('button', { name: 'Lưu cấu hình', exact: true }).click();
@@ -151,6 +157,9 @@ test('group activation, distinct roles, group isolation and last-group selection
 		).toBe(true);
 		const active = await call(memberPage, member.token, `/api/groups/${group.id}/state`);
 		expect(active.ok()).toBe(true);
+		expect((await call(memberPage, member.token, `/api/discord/guilds?groupId=${group.id}`)).status()).toBe(
+			200
+		);
 		// Group admin is still an ordinary global user and cannot create groups.
 		expect(
 			(
@@ -336,6 +345,17 @@ test('ordinary bill creators notify participants once; opt-out and notification 
 	try {
 		await activate(page, admin.token, true);
 		const member = await login(memberPage, 'Thảo Linh');
+		await memberPage.getByRole('link', { name: 'Nhóm', exact: true }).click();
+		await expect(memberPage.locator('.group-choice').first()).toBeDisabled();
+		expect((await call(memberPage, member.token, '/api/discord/guilds?groupId=local')).status()).toBe(403);
+		expect(
+			(
+				await call(memberPage, member.token, '/api/groups/local/commands/configureGroup', {
+					name: 'Forbidden edit',
+					discordGuildId: '300000000000000002'
+				})
+			).status()
+		).toBe(403);
 		const input = {
 			id: `e2e-notification-${Date.now()}`,
 			description: `Bữa trưa kiểm thử ${Date.now()}`,
@@ -349,6 +369,19 @@ test('ordinary bill creators notify participants once; opt-out and notification 
 		const response = await call(memberPage, member.token, '/api/groups/local/commands/createBill', input);
 		expect(response.ok()).toBe(true);
 		const first = await response.json();
+		await memberPage.goto(`/activity?bill=${input.id}`);
+		await expect(memberPage.getByRole('button', { name: 'Hoàn tác hóa đơn', exact: true })).toBeVisible();
+		await page.goto(`/activity?bill=${input.id}`);
+		await expect(page.getByRole('button', { name: 'Hoàn tác hóa đơn', exact: true })).toBeVisible();
+		const otherBill = first.state.bills.find((bill: { organizer: string }) => bill.organizer === AN);
+		await memberPage.goto(`/activity?bill=${otherBill.id}`);
+		await expect(memberPage.getByRole('dialog')).toBeVisible();
+		await expect(memberPage.getByRole('button', { name: 'Hoàn tác hóa đơn', exact: true })).toHaveCount(0);
+		expect(
+			(
+				await call(memberPage, member.token, '/api/groups/local/commands/undoBill', { id: otherBill.id })
+			).status()
+		).toBe(403);
 		const receipt = first.state.receipts.find((receipt: { id: string }) => receipt.id === input.id);
 		expect(receipt).toMatchObject({ recipients: [LINH, AN], status: 'simulated', attempts: 1 });
 		expect(receipt.deliveries).toHaveLength(2);
@@ -437,4 +470,69 @@ test('repayment links survive login and the mobile skip link only appears with k
 	await skip.focus();
 	expect((await skip.boundingBox())!.y).toBeGreaterThanOrEqual(0);
 	expect(payments).toBe(0);
+});
+
+test('AI scans an existing attachment once, highlights changes, and preserves the date when absent', async ({
+	page
+}) => {
+	await page.route('**/api/groups/*/state*', async (route) => {
+		const response = await route.fetch();
+		const data = await response.json();
+		data.group.aiEnabled = true;
+		await route.fulfill({ response, json: data });
+	});
+	let uploads = 0;
+	let scans = 0;
+	await page.route('**/api/groups/*/images', (route) => {
+		uploads++;
+		return route.fulfill({ json: { imageId: `3f2504e0-4f89-41d3-9a0c-0305e82c330${uploads}.png` } });
+	});
+	const image = await page.screenshot({ type: 'png' });
+	await page.route('**/api/groups/*/images/*', (route) =>
+		route.fulfill({ contentType: 'image/png', body: image })
+	);
+	await page.route('**/api/groups/*/ai/scan', (route) => {
+		scans++;
+		return route.fulfill({
+			json: { billName: 'Cơm trưa AI', totalCost: 165000, billDate: scans === 1 ? '2026-10-25' : null }
+		});
+	});
+	await login(page);
+	await page.getByRole('link', { name: 'Tạo hoá đơn', exact: true }).first().click();
+	await page.getByLabel('Ngày thanh toán', { exact: true }).fill('2026-10-27');
+	await page.getByLabel('Tên hóa đơn', { exact: true }).fill('Original');
+	const attach = () =>
+		page
+			.getByLabel('Chọn ảnh hóa đơn', { exact: true })
+			.setInputFiles({ name: 'receipt.png', mimeType: 'image/png', buffer: image });
+	await attach();
+	await page.getByRole('button', { name: 'Đọc hóa đơn bằng AI', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'AI đã đọc hóa đơn', exact: true })).toBeDisabled();
+	await expect(page.locator('.ai-scan-complete')).toBeVisible();
+	await expect(page.getByLabel('Tên hóa đơn', { exact: true })).toHaveValue('Cơm trưa AI');
+	await expect(page.getByLabel('Ngày thanh toán', { exact: true })).toHaveValue('2026-10-25');
+	await expect(page.getByLabel('Tổng tiền cần chia', { exact: true })).toHaveValue('165');
+	await expect(page.locator('.ai-updated')).toHaveCount(3);
+	for (const field of await page.locator('.ai-updated').all()) {
+		const shadow = await field
+			.locator(':scope > input, :scope > .bill-date-control, :scope > .money-input > input')
+			.evaluate((element) => getComputedStyle(element).boxShadow);
+		expect(shadow).not.toBe('none');
+	}
+	await page.screenshot({ path: 'artifacts/ai-bill-scan.png', fullPage: true });
+	expect(uploads).toBe(1);
+	expect(scans).toBe(1);
+	await page.getByLabel('Ngày thanh toán', { exact: true }).fill('2026-10-26');
+	await attach();
+	await expect(page.locator('.ai-updated')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Đọc hóa đơn bằng AI', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'AI đã đọc hóa đơn', exact: true })).toBeDisabled();
+	await expect(page.getByLabel('Ngày thanh toán', { exact: true })).toHaveValue('2026-10-26');
+	expect(uploads).toBe(2);
+	expect(scans).toBe(2);
+	await page.evaluate(() =>
+		Object.keys(localStorage)
+			.filter((key) => key.startsWith('lunchroom-draft-'))
+			.forEach((key) => localStorage.removeItem(key))
+	);
 });

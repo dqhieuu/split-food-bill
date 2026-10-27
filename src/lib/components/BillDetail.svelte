@@ -25,10 +25,12 @@
 	} = $props();
 	let confirming = $state(false);
 	const name = (id: string) => appState.members.find((member) => member.id === id)?.name || id;
+	const currentMember = $derived(appState.members.find((member) => member.id === actor));
 	const canUndo = $derived(
 		!!bill &&
 			!bill.undoneAt &&
-			(bill.organizer === actor || appState.members.find((member) => member.id === actor)?.role === 'admin')
+			currentMember?.active &&
+			(bill.organizer === actor || currentMember.role === 'admin')
 	);
 	$effect(() => {
 		if (!open || bill?.undoneAt) confirming = false;
@@ -43,7 +45,7 @@
 	bind:open
 	title={bill?.description || 'Chi tiết hóa đơn'}
 	description={bill
-		? `${name(bill.organizer)} đã thanh toán · ${billDateLabel(bill.date)} · Tạo: ${dateTimeLabel(bill.createdAt)}`
+		? `${name(bill.organizer)} thanh toán · ${billDateLabel(bill.date)} · Tạo: ${dateTimeLabel(bill.createdAt)}`
 		: ''}
 	wide
 >
@@ -67,8 +69,9 @@
 		<div class="summary-total"><span>Tổng hóa đơn</span><strong>{currency(bill.total)}</strong></div>
 		{#if canUndo}
 			{#if confirming}<p class="fine-print" role="alert">
-					Hoàn tác sẽ ghi các bút toán bù trừ để xóa mọi khoản nợ của hóa đơn này. Thao tác chỉ thực hiện được
-					một lần và không thể khôi phục.
+					Hoàn tác sẽ thêm vào ledger các khoản nợ nghịch đảo của hoá đơn này. VD A nợ B 100 nghìn, thì sau
+					khi hoàn tác sẽ có thêm B nợ A 100 nghìn -&gt; không ai nợ nhau. Bạn sẽ không thể đảo ngược hành
+					động này.
 				</p>
 				<div class="modal-actions">
 					<Button variant="outline" disabled={busy} onclick={() => (confirming = false)}>Giữ hóa đơn</Button

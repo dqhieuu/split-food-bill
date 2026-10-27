@@ -146,7 +146,7 @@ export function compareBillsByCreatedAt(a: Bill, b: Bill): number {
 	return (b.createdAt ?? b.date).localeCompare(a.createdAt ?? a.date) || b.id.localeCompare(a.id);
 }
 
-/** Newest batches first, but each simplification reads in execution order within its batch. */
+/** Newest entries first, including the last executed phase within each simplification batch. */
 export function compareLedgerEntries(a: LedgerEntry, b: LedgerEntry): number {
 	const dateOrder = b.date.localeCompare(a.date);
 	if (dateOrder) return dateOrder;
@@ -162,7 +162,7 @@ export function compareLedgerEntries(a: LedgerEntry, b: LedgerEntry): number {
 			const suffix = entry.id.slice(entry.reference.length + 1);
 			return /^\d+$/.test(suffix) ? Number(suffix) : Number.MAX_SAFE_INTEGER;
 		};
-		return step(a) - step(b) || index(a) - index(b) || a.id.localeCompare(b.id);
+		return step(b) - step(a) || index(b) - index(a) || b.id.localeCompare(a.id);
 	}
 	return a.id.localeCompare(b.id);
 }

@@ -84,7 +84,7 @@
 
 <div class="page-heading">
 	<div>
-		<h1>Số dư cá nhân</h1>
+		<h1>Tài khoản của bạn</h1>
 	</div>
 </div>
 <div class="stat-grid">
@@ -100,9 +100,11 @@
 			>{pairs.filter((p) => p.balance > 0).length} khoản cần thanh toán</span
 		>
 	</div>
-	<div class="stat-card net-card">
+	<div class="stat-card">
 		<div class="stat-label">Lãi - lỗ <Wallet size={19} /></div>
-		<strong>{currency(owing - owed)}</strong>
+		<strong class:negative={owing - owed < 0} class:positive={owing - owed > 0}
+			>{currency(owing - owed)}</strong
+		>
 	</div>
 </div>
 <section class="panel">

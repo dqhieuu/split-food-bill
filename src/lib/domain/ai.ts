@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type BillScan = { billName: string; totalCost: number };
+export type BillScan = { billName: string; totalCost: number; billDate: string | null };
 
 /** Structured-output schema; strict mode requires every property listed and no extras. */
 export const BILL_SCAN_SCHEMA = {
@@ -10,16 +10,22 @@ export const BILL_SCAN_SCHEMA = {
 			type: 'string',
 			description: 'Tên hóa đơn ngắn gọn bằng tiếng Việt, ví dụ "Thịt chó ở Hoàn Béo" hoặc "Thịt chó".'
 		},
+		billDate: {
+			type: ['string', 'null'],
+			description:
+				'Bill date in YYYY-MM-DD format. Return null if no complete, legible date is printed; never guess.'
+		},
 		totalCost: {
 			type: 'integer',
 			description: 'Tổng số tiền cuối cùng phải trả, tính bằng đồng (VND), là số nguyên; 0 nếu không thấy.'
 		}
 	},
-	required: ['billName', 'totalCost'],
+	required: ['billName', 'totalCost', 'billDate'],
 	additionalProperties: false
 } as const;
 
 export const BILL_SCAN_PROMPT = [
+	'billDate: read the date printed on the bill as YYYY-MM-DD. Return null if the date is absent, incomplete, ambiguous, or unreadable. Never infer a missing year or use today.',
 	'Bạn đọc ảnh hóa đơn, biên lai hoặc ảnh chụp màn hình đơn đồ ăn ở Việt Nam.',
 	'totalCost: tổng số tiền cuối cùng khách phải trả, bằng đồng, là số nguyên — đã trừ giảm giá và cộng thuế, phí giao hàng, phí dịch vụ. Hiểu "45k" hoặc "45.000" là 45000. Trả 0 nếu không thấy tổng tiền.',
 	'billName: tên món ăn chung, kèm tên quán nếu đọc được, theo mẫu "<món> ở <tên quán>", ví dụ "Thịt chó ở Hoàn Béo".',
@@ -36,7 +42,8 @@ export function chatCompletionsUrl(endpoint: string): string {
 
 const billScanSchema = z.object({
 	billName: z.string().trim().min(1).max(300),
-	totalCost: z.number().nonnegative().max(1_000_000_000).transform(Math.round)
+	totalCost: z.number().nonnegative().max(1_000_000_000).transform(Math.round),
+	billDate: z.iso.date().nullable()
 });
 
 /** Validates model output; some compatible providers wrap JSON in a markdown fence despite the schema. */

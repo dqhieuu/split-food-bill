@@ -144,7 +144,7 @@ export async function fetchAiSettings(groupId: string): Promise<AiSettings> {
 export async function scanBillImage(
 	groupId: string,
 	imageId: string
-): Promise<{ billName: string; totalCost: number }> {
+): Promise<import('$lib/domain/ai').BillScan> {
 	return requestJson(`/api/groups/${groupId}/ai/scan`, {
 		method: 'POST',
 		body: JSON.stringify({ imageId })

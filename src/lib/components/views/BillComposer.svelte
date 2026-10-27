@@ -71,6 +71,9 @@
 	let scanning = $state(false);
 	let imageError = $state('');
 	let scanNotice = $state('');
+	let scannedImageId = $state('');
+	let aiChanges = $state({ name: false, date: false, total: false });
+	const scanComplete = $derived(!!imageId && scannedImageId === imageId);
 	const imageBusy = $derived(uploadingImage || scanning);
 	const people = $derived(appState.members.filter((m) => m.active));
 	const toDong = (value: number | null | undefined) => Math.round((Number(value) || 0) * unit);
@@ -200,6 +203,8 @@
 		uploadingImage = true;
 		try {
 			imageId = await uploadBillImage(groupId, await compressImage(file));
+			scannedImageId = '';
+			aiChanges = { name: false, date: false, total: false };
 			return imageId;
 		} catch (cause) {
 			imageError = (cause as Error).message || 'Không tải được ảnh lên.';
@@ -211,21 +216,34 @@
 		const file = pickedFile(event);
 		if (file) await upload(file);
 	}
-	/** Attaches the photo, then fills the name and an equal split of the total read by the AI. */
+	/** A newly selected photo shares the same scan action as an existing attachment. */
 	async function scanImage(event: Event) {
 		const file = pickedFile(event);
 		if (!file) return;
 		const uploaded = await upload(file);
 		if (!uploaded) return;
+		await scanAttachedImage();
+	}
+	async function scanAttachedImage() {
+		if (!imageId || imageBusy || scanComplete) return;
+		const uploaded = imageId;
+		imageError = '';
 		scanning = true;
 		try {
 			const scan = await scanBillImage(groupId, uploaded);
+			aiChanges = {
+				name: description !== scan.billName.slice(0, 300),
+				date: scan.billDate !== null && date !== scan.billDate,
+				total: scan.totalCost > 0 && (mode !== 'equal' || toDong(totalInput) !== scan.totalCost)
+			};
 			description = scan.billName.slice(0, 300);
+			if (scan.billDate !== null) date = scan.billDate;
 			mode = 'equal';
 			if (scan.totalCost > 0) {
 				totalInput = scan.totalCost / unit;
 				scanNotice = `AI đã điền tên và tổng ${currency(scan.totalCost)}. Hãy kiểm tra lại.`;
 			} else scanNotice = 'AI đã điền tên nhưng không đọc được tổng tiền. Hãy nhập tổng.';
+			scannedImageId = uploaded;
 		} catch (cause) {
 			imageError = (cause as Error).message || 'AI không đọc được hóa đơn.';
 		} finally {
@@ -279,15 +297,17 @@
 	<div class="composer-main">
 		<section class="panel form-panel bill-details-panel" aria-label="Thông tin hóa đơn và thành viên">
 			<div class="form-two-columns">
-				<label class="field">Ngày thanh toán<BillDateInput bind:value={date} invalid={dateInvalid} /></label>
+				<label class="field" class:ai-updated={aiChanges.date}
+					>Ngày thanh toán<BillDateInput bind:value={date} invalid={dateInvalid} /></label
+				>
 				<div class="field">
-					Người đã thanh toán
+					Người thanh toán
 					<div class="payer-field">
 						<Avatar member={payer} size="small" /><strong>{payer.name}</strong><span>Bạn</span>
 					</div>
 				</div>
 			</div>
-			<label class="field"
+			<label class="field" class:ai-updated={aiChanges.name}
 				>Tên hóa đơn<Input
 					placeholder="Ví dụ: Cơm trưa thứ hai, cà phê chiều…"
 					bind:value={description}
@@ -318,7 +338,19 @@
 							onchange={attachImage}
 						/></label
 					>
-					{#if aiEnabled}<label class="bill-image-picker ai-scan-picker" aria-disabled={imageBusy}
+					{#if aiEnabled && imageId}
+						<button
+							type="button"
+							class="bill-image-picker ai-scan-picker"
+							class:ai-scan-complete={scanComplete}
+							disabled={imageBusy || scanComplete}
+							onclick={scanAttachedImage}
+						>
+							{#if scanning}<LoaderCircle class="spin" size={17} />AI đang đọc…{:else if scanComplete}<Check
+									size={17}
+								/>AI đã đọc hóa đơn{:else}<Sparkles size={17} />Đọc hóa đơn bằng AI{/if}
+						</button>
+					{:else if aiEnabled}<label class="bill-image-picker ai-scan-picker" aria-disabled={imageBusy}
 							>{#if scanning}<LoaderCircle class="spin" size={17} />AI đang đọc…{:else}<Sparkles
 									size={17}
 								/>Đọc hóa đơn bằng AI{/if}<input
@@ -371,7 +403,7 @@
 				>
 			</div>
 			{#if mode === 'equal'}<div class="form-two-columns split-totals">
-					<label class="field total-entry"
+					<label class="field total-entry" class:ai-updated={aiChanges.total}
 						>Tổng tiền cần chia<MoneyInput
 							label="Tổng tiền cần chia"
 							{unit}
@@ -459,7 +491,7 @@
 <Modal bind:open={confirmOpen} title="Xác nhận hóa đơn" wide compact
 	><div class="confirm-bill-title">
 		<h3>{description}</h3>
-		<p>Ăn vào {billDateLabel(date)} · {payer.name} đã thanh toán</p>
+		<p>Ăn vào {billDateLabel(date)} · {payer.name} thanh toán</p>
 	</div>
 	<div class="review-lines">
 		{#each lines as line}<div>

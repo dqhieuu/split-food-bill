@@ -134,7 +134,7 @@
 	<div>
 		<h1>Ledger</h1>
 	</div>
-	<Button variant="outline" onclick={downloadCsv}><Download size={16} /> Xuất sổ đã lọc</Button>
+	<Button variant="outline" onclick={downloadCsv}><Download size={16} /> Xuất file CSV</Button>
 </div>
 <section class="panel">
 	<div class="filter-toolbar">
@@ -177,7 +177,7 @@
 			<table class="data-table">
 				<thead
 					><tr
-						><th>Hóa đơn</th><th>Người đã trả</th><th>Thành viên</th><th class="align-right">Tổng tiền</th><th
+						><th>Hóa đơn</th><th>Người trả</th><th>Thành viên</th><th class="align-right">Tổng tiền</th><th
 						></th></tr
 					></thead
 				><tbody

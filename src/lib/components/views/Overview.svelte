@@ -1,14 +1,5 @@
 <script lang="ts">
-	import {
-		Plus,
-		ArrowRight,
-		Wallet,
-		ReceiptText,
-		Utensils,
-		ChevronRight,
-		ChevronLeft,
-		Coffee
-	} from '@lucide/svelte';
+	import { Plus, ArrowRight, Wallet, Utensils, ChevronRight, ChevronLeft } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Avatar from '../Avatar.svelte';
 	import BillDetail from '../BillDetail.svelte';
@@ -81,21 +72,17 @@
 			<a class="text-link" href="/activity">Xem tất cả <ArrowRight size={15} /></a>
 		</div>
 		<div class="bill-list">
-			{#each recentBills as bill, i}<button
+			{#each recentBills as bill}<button
 					class="bill-row"
 					onclick={() => {
 						selectedBillId = bill.id;
 						detailOpen = true;
 					}}
 				>
-					<span class="bill-symbol tone-{i % 3}"
-						>{#if i % 3 === 0}<Utensils size={21} />{:else if i % 3 === 1}<Coffee
-								size={21}
-							/>{:else}<ReceiptText size={21} />{/if}</span
-					>
+					<span class="bill-symbol tone-0"><Utensils size={21} /></span>
 					<div class="bill-info">
 						<strong>{bill.description}</strong><span
-							>{appState.members.find((member) => member.id === bill.organizer)?.name} đã trả
+							>{appState.members.find((member) => member.id === bill.organizer)?.name} trả
 							<span class="middot">·</span>
 							Ăn vào {billDateLabel(bill.date)}</span
 						>
@@ -115,19 +102,21 @@
 	</section>
 	<section class="panel payment-history-panel">
 		<div class="panel-heading">
-			<h2>Lịch sử thanh toán của bạn</h2>
+			<h2>Các khoản tiền liên quan đến bạn</h2>
 			<Wallet size={19} />
 		</div>
 		<div class="payment-history-list">
 			{#each history as item}
 				{@const member = appState.members.find((person) => person.id === item.counterpartyId)}
+				{@const payerId = item.entry.type === 'debt' ? item.entry.to : item.entry.from}
+				{@const recipientId = item.entry.type === 'debt' ? item.entry.from : item.entry.to}
 				<button class="payment-history-row" onclick={() => openPayment(item.entry)}>
 					<Avatar {member} size="small" />
 					<div>
 						<strong
-							>{name(item.entry.type === 'debt' ? item.entry.to : item.entry.from)} đã trả tiền cho {name(
-								item.entry.type === 'debt' ? item.entry.from : item.entry.to
-							)}</strong
+							>{payerId === actor ? 'Bạn' : name(payerId)} trả tiền cho {recipientId === actor
+								? 'bạn'
+								: name(recipientId)}</strong
 						>
 						<small>{dateTimeLabel(item.entry.createdAt)} · {item.entry.description}</small>
 					</div>

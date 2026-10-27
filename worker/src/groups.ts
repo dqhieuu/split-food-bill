@@ -206,6 +206,49 @@ export async function renameGroup(store: Store, groupId: string, uid: string, na
 		return renamed;
 	});
 }
+/** Changes group metadata and the unique Discord-server association in one transaction. */
+export async function configureGroup(
+	store: Store,
+	env: Env,
+	groupId: string,
+	uid: string,
+	name: string,
+	guildId: string
+): Promise<Group> {
+	const { group: before } = await requireGroup(store, groupId, uid, true);
+	if (
+		guildId !== before.discordGuildId &&
+		!(await new Discord(env).guilds()).some((guild) => guild.id === guildId)
+	)
+		throw new DomainError('Máy chủ Discord không hợp lệ.', 400);
+	return store.transaction(async (tx, writes) => {
+		const { group } = await requireGroup(store, groupId, uid, true, tx);
+		if (group.discordGuildId !== before.discordGuildId)
+			throw new DomainError('Cấu hình nhóm đã thay đổi. Vui lòng mở lại.', 409);
+		if (guildId !== group.discordGuildId) {
+			const destination = await store.get<{ groupId: string }>(`discordGuilds/${guildId}`, tx);
+			const previous = await store.get<{ groupId: string }>(`discordGuilds/${group.discordGuildId}`, tx);
+			if (destination && destination.groupId !== groupId)
+				throw new DomainError('Máy chủ này đã liên kết với một nhóm.', 409);
+			if (previous?.groupId === groupId) writes.push(store.delete(`discordGuilds/${group.discordGuildId}`));
+			writes.push(store.write(`discordGuilds/${guildId}`, { guildId, groupId }, !destination));
+		}
+		const updated = { ...group, name, discordGuildId: guildId, version: group.version + 1 };
+		const id = crypto.randomUUID();
+		writes.push(
+			store.write(`groups/${groupId}`, updated),
+			store.write(`groups/${groupId}/audit/${id}`, {
+				id,
+				actor: uid,
+				action: 'configureGroup',
+				reference: groupId,
+				date: new Date().toISOString()
+			})
+		);
+		return updated;
+	});
+}
+
 export async function syncMembers(store: Store, env: Env, groupId: string, user: GlobalUser) {
 	const { group } = await requireGroup(store, groupId, user.id, true);
 	const profiles = await new Discord(env).members(group.discordGuildId, true);

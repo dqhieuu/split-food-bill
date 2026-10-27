@@ -90,6 +90,7 @@
 		syncDiscordMembers: 'Đồng bộ thành viên Discord',
 		undoBill: 'Hoàn tác hóa đơn',
 		renameGroup: 'Đổi tên nhóm',
+		configureGroup: 'Cập nhật cấu hình nhóm',
 		saveAiSettings: 'Cập nhật cài đặt AI'
 	};
 	function editMember(member: Member) {

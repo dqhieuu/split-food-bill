@@ -50,10 +50,10 @@ const completion = (content: string) =>
 afterEach(() => vi.unstubAllGlobals());
 
 describe('bill scan contract', () => {
-	it('requests exactly a bill name and an integer total', () => {
+	it('requests a bill name, integer total, and nullable date', () => {
 		expect(BILL_SCAN_SCHEMA).toMatchObject({
 			type: 'object',
-			required: ['billName', 'totalCost'],
+			required: ['billName', 'totalCost', 'billDate'],
 			additionalProperties: false,
 			properties: { billName: { type: 'string' }, totalCost: { type: 'integer' } }
 		});
@@ -66,17 +66,24 @@ describe('bill scan contract', () => {
 		expect(chatCompletionsUrl(endpoint)).toBe(url);
 	});
 	it('parses structured output, including fenced JSON from lenient providers', () => {
-		expect(parseBillScan('{"billName":" Thịt chó ở Hoàn Béo ","totalCost":450000}')).toEqual({
+		expect(
+			parseBillScan('{"billName":" Thịt chó ở Hoàn Béo ","totalCost":450000,"billDate":"2026-10-25"}')
+		).toEqual({
 			billName: 'Thịt chó ở Hoàn Béo',
-			totalCost: 450000
+			totalCost: 450000,
+			billDate: '2026-10-25'
 		});
-		expect(parseBillScan('```json\n{"billName":"Bún","totalCost":120000.4}\n```')).toEqual({
+		expect(parseBillScan('```json\n{"billName":"Bún","totalCost":120000.4,"billDate":null}\n```')).toEqual({
 			billName: 'Bún',
-			totalCost: 120000
+			totalCost: 120000,
+			billDate: null
 		});
 	});
 	it.each([
 		'not json',
+		'{"billName":"Bún","totalCost":100,"billDate":"2026-02-30"}',
+		'{"billName":"Bún","totalCost":100,"billDate":"25/10/2026"}',
+		'{"billName":"Bún","totalCost":100}',
 		'{"billName":"Bún"}',
 		'{"billName":"Bún","totalCost":-5}',
 		'{"billName":"","totalCost":1}'
@@ -154,12 +161,15 @@ describe('scanning a bill', () => {
 	const env = (claimed = true) =>
 		({ APP_ENV: 'production', BILL_IMAGES: bucket(), AUTH_SESSIONS: sessions(claimed) }) as unknown as Env;
 	it('sends the photo with a strict JSON schema and returns the parsed result', async () => {
-		const fetch = vi.fn(async () => completion('{"billName":"Bún ở Bún Chả Hương Liên","totalCost":250000}'));
+		const fetch = vi.fn(async () =>
+			completion('{"billName":"Bún ở Bún Chả Hương Liên","totalCost":250000,"billDate":"2026-10-25"}')
+		);
 		vi.stubGlobal('fetch', fetch);
 		const { store } = fakeStore(groupDocs(configured));
 		await expect(scanBill(store, env(), 'group', member, imageId)).resolves.toEqual({
 			billName: 'Bún ở Bún Chả Hương Liên',
-			totalCost: 250000
+			totalCost: 250000,
+			billDate: '2026-10-25'
 		});
 		const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
 		expect(url).toBe('https://ai.example/v1/chat/completions');

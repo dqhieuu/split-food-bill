@@ -72,14 +72,16 @@
 		<h2>Nhóm của bạn</h2>
 		{#each session.groups as group}<button
 				class="group-choice"
-				aria-haspopup="dialog"
+				disabled={group.role !== 'admin'}
+				aria-haspopup={group.role === 'admin' ? 'dialog' : undefined}
 				onclick={() => {
+					if (group.role !== 'admin') return;
 					configGroup = group;
 					configOpen = true;
 				}}
 				><Users size={20} /><span
 					><strong>{group.name}</strong><small
-						>{group.role === 'admin' ? 'Quản trị viên nhóm' : 'Thành viên'} · {group.discordGuildId}</small
+						>{group.role === 'admin' ? 'Quản trị viên nhóm' : 'Thành viên'}</small
 					></span
 				></button
 			>
@@ -113,7 +115,7 @@
 		<Button variant="destructive" onclick={onReset}><Trash2 size={16} />Xóa toàn bộ cơ sở dữ liệu</Button>
 	</div>{/if}
 {#if error}<p class="validation-error" role="alert">{error}</p>{/if}
-{#if configOpen && configGroup}<GroupConfig
+{#if configOpen && configGroup?.role === 'admin'}<GroupConfig
 		bind:open={configOpen}
 		group={configGroup}
 		onUpdated={(next) => {

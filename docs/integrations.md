@@ -238,6 +238,8 @@ Vercel's Git integration can independently build the frontend on pushes. Worker 
 
 ## API permissions
 
+Group configuration is restricted to active group admins, independently of the global admin role. Its server selector uses `GET /api/discord/guilds?groupId=GROUP_ID`. The `configureGroup` command accepts `{name, discordGuildId}` and atomically updates the name, server association, uniqueness index and audit record. A server already linked to another group is rejected. Reassignment preserves the group ID, financial history and member activation; the member refresh action can import new users from the newly linked server.
+
 All `/api/*` routes require `Authorization: Bearer <Firebase ID token>`. Inputs use backend validation; an actor supplied in JSON does not override the authenticated UID.
 
 | Method / path                                                    | Access                                                                    |
@@ -250,7 +252,7 @@ All `/api/*` routes require `Authorization: Bearer <Firebase ID token>`. Inputs 
 | `POST /api/groups/{id}/select`                                   | Active group member; remembers selection                                  |
 | `GET /api/groups/{id}/state`                                     | Active group member                                                       |
 | `POST /api/groups/{id}/commands/{command}`                       | Active membership plus command-specific group role                        |
-| `GET /api/discord/guilds`                                        | Global admin                                                              |
+| `GET /api/discord/guilds`                                        | Global admin; `?groupId=` also permits an active admin of that group      |
 | `GET /api/discord/guilds/{guildId}/members`                      | Global admin, or active group admin with matching `?groupId=`             |
 | `POST /api/discord/dm`                                           | Bill organizer or active group admin; recipients come from the saved bill |
 
