@@ -148,9 +148,9 @@ export function compareBillsByCreatedAt(a: Bill, b: Bill): number {
 	return (b.createdAt ?? b.date).localeCompare(a.createdAt ?? a.date) || b.id.localeCompare(a.id);
 }
 
-/** Newest entries first, including the last executed phase within each simplification batch. */
+/** Newest creation first (legacy entries fall back to date), then the last simplification phase. */
 export function compareLedgerEntries(a: LedgerEntry, b: LedgerEntry): number {
-	const dateOrder = b.date.localeCompare(a.date);
+	const dateOrder = (b.createdAt ?? b.date).localeCompare(a.createdAt ?? a.date);
 	if (dateOrder) return dateOrder;
 	const batchKey = (entry: LedgerEntry) =>
 		entry.source === 'settlement' ? `settlement:${entry.reference}` : `entry:${entry.id}`;

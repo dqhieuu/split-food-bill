@@ -61,6 +61,53 @@ describe('creation timestamps', () => {
 			'legacy'
 		]);
 	});
+	it('sorts transactions by creation time even when payment dates differ, with a legacy fallback', () => {
+		const base = fresh().ledger[0];
+		const newest = {
+			...base,
+			id: 'new-record',
+			date: '2020-01-01T00:00:00.000Z',
+			createdAt: '2026-10-29T05:00:00.000Z'
+		};
+		const older = {
+			...base,
+			id: 'new-payment-date',
+			date: '2030-01-01T00:00:00.000Z',
+			createdAt: '2026-10-27T05:00:00.000Z'
+		};
+		const legacy = { ...base, id: 'legacy', date: '2026-10-28T05:00:00.000Z', createdAt: undefined };
+		expect([older, legacy, newest].sort(compareLedgerEntries).map((entry) => entry.id)).toEqual([
+			'new-record',
+			'legacy',
+			'new-payment-date'
+		]);
+	});
+
+	it('keeps settlement phase order when creation timestamps tie instead of using payment dates', () => {
+		const base = {
+			...fresh().ledger[0],
+			source: 'settlement' as const,
+			reference: 'same-batch',
+			createdAt: now
+		};
+		const phase1 = {
+			...base,
+			id: 'same-batch-1',
+			settlementStep: 1 as const,
+			date: '2030-01-01T00:00:00.000Z'
+		};
+		const phase3 = {
+			...base,
+			id: 'same-batch-3',
+			settlementStep: 3 as const,
+			date: '2020-01-01T00:00:00.000Z'
+		};
+		expect([phase1, phase3].sort(compareLedgerEntries).map((entry) => entry.id)).toEqual([
+			'same-batch-3',
+			'same-batch-1'
+		]);
+	});
+
 	it('timestamps all payment, import and settlement entry creation paths', () => {
 		const state = fresh();
 		const originalIds = new Set(state.ledger.map((entry) => entry.id));
