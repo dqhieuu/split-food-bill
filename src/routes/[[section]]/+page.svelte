@@ -457,17 +457,19 @@
 			onchange={capturedBillPhoto}
 			oncancel={() => (cameraContext = null)}
 		/>
-		<button
-			type="button"
-			class="mobile-bill-camera"
-			aria-label="Chụp ảnh hóa đơn"
-			title="Chụp ảnh hóa đơn"
-			aria-busy={cameraBusy}
-			disabled={busy || cameraBusy || (section === '/new-bill' && !!billComposer?.isProcessingImage())}
-			onclick={openBillCamera}
-		>
-			{#if cameraBusy}<LoaderCircle class="spin" size={26} />{:else}<Camera size={26} />{/if}
-		</button>
+		<div class="mobile-camera-bar">
+			<button
+				type="button"
+				class="mobile-bill-camera"
+				aria-label="Chụp ảnh hóa đơn"
+				title="Chụp ảnh hóa đơn"
+				aria-busy={cameraBusy}
+				disabled={busy || cameraBusy || (section === '/new-bill' && !!billComposer?.isProcessingImage())}
+				onclick={openBillCamera}
+			>
+				{#if cameraBusy}<LoaderCircle class="spin" size={26} />{:else}<Camera size={26} />{/if}
+			</button>
+		</div>
 	{/if}
 	{#if toast}<div
 			class:error-toast={toastIsError}

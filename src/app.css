@@ -2300,6 +2300,7 @@ footer {
 .mobile-backdrop {
 	display: none;
 }
+.mobile-camera-bar,
 .mobile-bill-camera {
 	display: none;
 }
@@ -2571,12 +2572,23 @@ footer {
 	}
 }
 @media (max-width: 760px) {
-	.mobile-bill-camera {
+	.mobile-camera-bar {
 		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 20;
+		display: block;
+		height: calc(60px + env(safe-area-inset-bottom, 0px));
+		background: light-dark(#fffefa, #1c211d);
+		border-top: 1px solid light-dark(#dfe5d8, #30392b);
+		box-shadow: 0 -3px 16px light-dark(#203a3112, #00000030);
+	}
+	.mobile-bill-camera {
+		position: absolute;
 		left: 50%;
 		bottom: calc(20px + env(safe-area-inset-bottom, 0px));
 		transform: translateX(-50%);
-		z-index: 20;
 		display: flex;
 		align-items: center;
 		justify-content: center;
