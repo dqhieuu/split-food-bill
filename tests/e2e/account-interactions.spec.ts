@@ -502,6 +502,48 @@ for (const width of [1280, 390]) {
 			).toBeFocused();
 		});
 
+		test('receipt images and fullscreen zoom stay stable across polling refreshes', async ({ page }) => {
+			let imageRequests = 0;
+			page.on('request', (request) => {
+				if (request.url().includes('/api/groups/local/images/')) imageRequests++;
+			});
+			const { state } = await openFixture(page, '/activity?bill=receipt');
+			const thumbnail = page.locator('.bill-detail-image img');
+			await expect(thumbnail).toHaveJSProperty('naturalWidth', 1200);
+			const originalUrl = await thumbnail.getAttribute('src');
+			const refresh = async () => {
+				state.ledger.push({ ...state.ledger[0], id: `refresh-${state.version}` });
+				state.version++;
+				const response = page.waitForResponse((response) =>
+					response.url().includes('/api/groups/local/state')
+				);
+				await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+				await response;
+				await expect(page.locator('.filter-toolbar')).toContainText(`Giao dịch (${state.ledger.length})`);
+			};
+			await refresh();
+			await expect(thumbnail).toHaveAttribute('src', originalUrl!);
+			expect(imageRequests).toBe(1);
+			await page.getByRole('button', { name: 'Xem ảnh hóa đơn toàn màn hình', exact: true }).click();
+			const lightbox = page.getByRole('dialog', { name: 'Ảnh hóa đơn toàn màn hình', exact: true });
+			await lightbox.getByRole('button', { name: 'Phóng to ảnh hóa đơn', exact: true }).click();
+			for (let i = 0; i < 2; i++) {
+				await refresh();
+				await expect(lightbox).toBeVisible();
+				await expect(
+					lightbox.getByRole('button', { name: 'Thu nhỏ ảnh hóa đơn', exact: true })
+				).toHaveAttribute('aria-pressed', 'true');
+				await expect(lightbox.locator('img')).toHaveAttribute('src', originalUrl!);
+			}
+			expect(imageRequests).toBe(1);
+			state.bills[0].image = '4f2504e0-4f89-41d3-9a0c-0305e82c3302.png';
+			await refresh();
+			await expect(lightbox).toHaveCount(0);
+			await expect(thumbnail).toHaveJSProperty('naturalWidth', 1200);
+			await expect(thumbnail).not.toHaveAttribute('src', originalUrl!);
+			expect(imageRequests).toBe(2);
+		});
+
 		test('undone bills are hidden by default and the switch only changes the Bills tab', async ({ page }) => {
 			await openFixture(page, '/activity', (state) => {
 				const active = { ...state.bills[0], id: 'active-bill', description: 'Hóa đơn đang có hiệu lực' };

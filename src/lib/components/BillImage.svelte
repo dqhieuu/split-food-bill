@@ -3,6 +3,9 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { fetchBillImage } from '$lib/client/api';
 	let { groupId, imageId }: { groupId: string; imageId: string } = $props();
+	// Polling replaces bill objects; primitive derived values keep an unchanged image loaded.
+	const imageGroupId = $derived(groupId);
+	const receiptImageId = $derived(imageId);
 	let url = $state('');
 	let failed = $state(false);
 	let open = $state(false);
@@ -13,7 +16,7 @@
 		url = '';
 		failed = false;
 		open = false;
-		fetchBillImage(groupId, imageId)
+		fetchBillImage(imageGroupId, receiptImageId)
 			.then((blob) => {
 				if (cancelled) return;
 				objectUrl = URL.createObjectURL(blob);
