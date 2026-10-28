@@ -158,13 +158,28 @@ for (const width of [1280, 390]) {
 			);
 			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
 			await page.locator('nav a[href="/matrix"]').click();
-			await expect(page.getByRole('columnheader', { name: 'Nợ - bị nợ', exact: true })).toBeVisible();
+			const header = page.getByRole('columnheader', { name: 'Minh An, Nợ - bị nợ: 90.000 ₫', exact: true });
+			await expect(header).toBeVisible();
+			await expect(header.locator('.matrix-net')).toHaveText('90.000 ₫');
+			await expect(
+				page.getByRole('columnheader', { name: 'Ngọc Mai, Nợ - bị nợ: 0 ₫', exact: true })
+			).toBeAttached();
+			await expect(
+				page.locator('.matrix-net-row').getByRole('rowheader', { name: 'Nợ - bị nợ', exact: true })
+			).toBeVisible();
+			await expect(page.locator('.matrix-table thead tr').first().locator('.matrix-net')).toHaveCount(0);
+			await expect(page.locator('.matrix-table thead .matrix-net')).toHaveCount(8);
+			await expect(page.locator('.matrix-corner')).toContainText('Chủ nợ');
+			await expect(page.locator('.matrix-corner')).toContainText('Con nợ');
+			await expect(page.locator('.matrix-corner')).not.toContainText(/[↓→]/);
 			await expect(
 				page
 					.locator('.matrix-table tbody tr')
 					.filter({ has: page.getByRole('rowheader', { name: 'Minh An', exact: true }) })
-					.locator('.matrix-net')
-			).toHaveText('90.000 ₫');
+					.locator('td')
+			).toHaveCount(8);
+			await expect(page.locator('.matrix-table tbody .matrix-net')).toHaveCount(0);
+			await page.locator('.matrix-panel').screenshot({ path: `artifacts/matrix-column-totals-${width}.png` });
 		});
 
 		test('rows toggle independent histories and disabled QR explains its reason on hover and focus', async ({

@@ -1870,10 +1870,31 @@ footer {
 	text-align: center;
 	min-width: 75px;
 }
-.matrix-table thead th > span {
-	display: block;
+.matrix-member-heading {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 5px;
+}
+.matrix-member-name {
 	font-size: 12px;
-	margin-top: 5px;
+}
+.matrix-table thead .matrix-net-row th {
+	border-top: 1px solid light-dark(#e0e6d7, #30372b);
+	border-bottom: 1px solid light-dark(#e0e6d7, #30372b);
+	background: light-dark(#f1f5e9, #20261c);
+	padding-top: 12px;
+	padding-bottom: 12px;
+}
+.matrix-net {
+	font-size: 18px;
+	font-weight: 700;
+}
+.matrix-net.net-owing {
+	color: light-dark(#2f7a52, #7fd3a2);
+}
+.matrix-net.net-owed {
+	color: light-dark(#b42318, #ff8b82);
 }
 .matrix-table th:first-child {
 	text-align: left;
@@ -1886,6 +1907,29 @@ footer {
 }
 .matrix-table thead th:first-child {
 	background: light-dark(#f8f9f2, #1c1c18);
+}
+.matrix-corner::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		to top right,
+		transparent calc(50% - 0.5px),
+		light-dark(#dfe4d6, #3b4034) calc(50% - 0.5px),
+		light-dark(#dfe4d6, #3b4034) calc(50% + 0.5px),
+		transparent calc(50% + 0.5px)
+	);
+	pointer-events: none;
+}
+.matrix-column-label {
+	position: absolute;
+	top: 18px;
+	right: 14px;
+}
+.matrix-row-label {
+	position: absolute;
+	bottom: 18px;
+	left: 24px;
 }
 .matrix-table tbody th {
 	border-top: 1px solid light-dark(#e9eddf, #25271f);
@@ -1908,11 +1952,6 @@ footer {
 	background: light-dark(#eff4e7, #1f221a);
 	color: light-dark(#2f7a52, #7fd3a2);
 	font-weight: 600;
-}
-.matrix-table td.matrix-net {
-	font-weight: 600;
-	background: light-dark(#fafbf5, #1a1a17);
-	padding-inline: 20px;
 }
 .settlement-history {
 	display: flex;

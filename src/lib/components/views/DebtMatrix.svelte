@@ -52,13 +52,34 @@
 <section class="panel matrix-panel">
 	<div class="table-scroll">
 		<table class="matrix-table">
-			<thead
-				><tr
-					><th>Con nợ ↓ / Chủ nợ →</th>{#each members as member}<th
-							><Avatar {member} size="small" /><span>{member.name.split(' ').slice(-1)[0]}</span></th
-						>{/each}<th>Nợ - bị nợ</th></tr
-				></thead
-			><tbody
+			<thead>
+				<tr>
+					<th class="matrix-corner" aria-label="Hàng: Con nợ. Cột: Chủ nợ.">
+						<span class="matrix-column-label">Chủ nợ</span>
+						<span class="matrix-row-label">Con nợ</span>
+					</th>
+					{#each members as member}
+						<th scope="col" title={member.name} aria-label={member.name}>
+							<div class="matrix-member-heading">
+								<Avatar {member} size="small" />
+								<span class="matrix-member-name">{member.name.split(' ').slice(-1)[0]}</span>
+							</div>
+						</th>
+					{/each}
+				</tr>
+				<tr class="matrix-net-row">
+					<th scope="row">Nợ - bị nợ</th>
+					{#each members as member}
+						{@const net = 0 - netBalance(appState.ledger, member.id)}
+						<th scope="col" aria-label={`${member.name}, Nợ - bị nợ: ${currency(net)}`}>
+							<strong class="matrix-net" class:net-owing={net > 0} class:net-owed={net < 0}
+								>{currency(net)}</strong
+							>
+						</th>
+					{/each}
+				</tr>
+			</thead>
+			<tbody
 				>{#each members as row}<tr
 						><th><span>{row.name}</span></th>{#each members as column}{@const balance = pairBalance(
 								appState.ledger,
@@ -70,11 +91,7 @@
 								class:credit-cell={balance < 0}
 								title={`${row.name} → ${column.name}: ${currency(balance)}`}
 								>{row.id === column.id ? '—' : currency(balance)}</td
-							>{/each}<td
-							class:debt-cell={netBalance(appState.ledger, row.id) < 0}
-							class:credit-cell={netBalance(appState.ledger, row.id) > 0}
-							class="matrix-net">{currency(-netBalance(appState.ledger, row.id))}</td
-						></tr
+							>{/each}</tr
 					>{/each}</tbody
 			>
 		</table>
