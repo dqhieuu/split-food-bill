@@ -81,11 +81,8 @@
 			</thead>
 			<tbody
 				>{#each members as row}<tr
-						><th><span>{row.name}</span></th>{#each members as column}{@const balance = pairBalance(
-								appState.ledger,
-								row.id,
-								column.id
-							)}<td
+						><th scope="row" title={row.name}><span>{row.name}</span></th
+						>{#each members as column}{@const balance = pairBalance(appState.ledger, row.id, column.id)}<td
 								class:self-cell={row.id === column.id}
 								class:debt-cell={balance > 0}
 								class:credit-cell={balance < 0}

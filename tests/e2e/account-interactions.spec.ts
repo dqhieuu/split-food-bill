@@ -302,6 +302,39 @@ for (const width of [1280, 390]) {
 			await page.locator('.matrix-panel').screenshot({ path: `artifacts/matrix-column-totals-${width}.png` });
 		});
 
+		if (width === 390) {
+			test('long matrix names leave room for horizontal scrolling on an iPhone 6 viewport', async ({
+				page
+			}) => {
+				await page.setViewportSize({ width: 375, height: 667 });
+				const longName = 'Minh ' + 'TênRấtDài'.repeat(18);
+				await openFixture(page, '/matrix', (state) => {
+					state.members.find((member) => member.id === ACTOR)!.name = longName;
+					state.members.find((member) => member.id === 'linh')!.name = 'Thảo ' + 'TênKhácRấtDài'.repeat(15);
+				});
+				const heading = page.getByRole('rowheader', { name: longName, exact: true });
+				await expect(heading).toHaveAttribute('title', longName);
+				const before = (await heading.boundingBox())!;
+				expect(before.width).toBeLessThanOrEqual(145);
+				const clipped = await heading
+					.locator('span')
+					.evaluate((element) => ({ width: element.clientWidth, text: element.scrollWidth }));
+				expect(clipped.text).toBeGreaterThan(clipped.width);
+				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+				await page.screenshot({ path: 'artifacts/iphone6-matrix-long-names.png' });
+				const scroll = page.locator('.matrix-panel .table-scroll');
+				await scroll.evaluate((element) => {
+					element.scrollLeft = element.scrollWidth;
+				});
+				expect(await scroll.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+				expect(Math.abs((await heading.boundingBox())!.x - before.x)).toBeLessThanOrEqual(1);
+				await expect(page.locator('.matrix-table tbody tr').first().locator('td').last()).toBeInViewport();
+				await page.screenshot({ path: 'artifacts/iphone6-matrix-scrolled.png' });
+				await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+				await page.screenshot({ path: 'artifacts/iphone6-matrix-dark.png' });
+			});
+		}
+
 		test('rows toggle independent histories and disabled QR explains its reason on hover and focus', async ({
 			page
 		}) => {
