@@ -1,6 +1,6 @@
 # Authentication, groups and service setup
 
-The repository contains both the SvelteKit frontend and Cloudflare Worker backend. Vercel hosts the frontend, Firebase provides Authentication and Firestore, and Cloudflare runs OAuth, authorization, financial commands and Discord REST integrations. Deployment has not been performed. There is no data migration because this app has not been published.
+The repository contains both the SvelteKit frontend and Cloudflare Worker backend. Vercel hosts the frontend, Firebase provides Authentication, and Cloudflare runs OAuth, authorization, financial commands and Discord REST integrations. Production uses Supabase Postgres through Hyperdrive; local development retains Firestore/Auth emulators. See the [Supabase migration runbook](supabase-migration.md) for the private schema, connection, export/import tooling and completed cutover record.
 
 ## Request and login flow
 
@@ -10,7 +10,7 @@ sequenceDiagram
     participant W as Cloudflare Worker
     participant D as Discord
     participant A as Firebase Authentication
-    participant F as Firestore
+    participant F as Supabase Postgres / Hyperdrive
     B->>W: Start Discord login with handoff challenge
     W->>D: OAuth authorize (identify, email)
     D->>W: Authorization code + state callback

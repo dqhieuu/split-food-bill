@@ -1,7 +1,14 @@
-import type { DurableObjectNamespace, R2Bucket } from '@cloudflare/workers-types';
+import type { DurableObjectNamespace, R2Bucket, Hyperdrive } from '@cloudflare/workers-types';
 export interface Env {
 	APP_ENV: 'local' | 'production';
 	FRONTEND_ORIGIN: string;
+	DATABASE_PROVIDER?: 'firestore' | 'supabase';
+	SUPABASE_DATABASE_URL?: string;
+	SUPABASE_DB_CA?: string;
+	/** Cloudflare-managed connection pool with verified TLS to Supabase. */
+	SUPABASE_DB?: Hyperdrive;
+	/** Temporarily reject database traffic during the verified data copy/cutover. */
+	DATABASE_MAINTENANCE?: string;
 	FIREBASE_PROJECT_ID: string;
 	FIREBASE_API_KEY: string;
 	FIREBASE_AUTH_DOMAIN: string;
@@ -22,6 +29,10 @@ export function isLocal(env: Env) {
 	return env.APP_ENV === 'local';
 }
 export function assertEnvironment(env: Env, request: Request) {
+	if (env.DATABASE_PROVIDER && !['firestore', 'supabase'].includes(env.DATABASE_PROVIDER))
+		throw new Error('Unknown database provider.');
+	if (env.DATABASE_PROVIDER === 'supabase' && !env.SUPABASE_DATABASE_URL && !env.SUPABASE_DB)
+		throw new Error('Supabase database connection is not configured.');
 	if (isLocal(env)) {
 		if (
 			!['127.0.0.1', 'localhost'].includes(new URL(request.url).hostname) ||

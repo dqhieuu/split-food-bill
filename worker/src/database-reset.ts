@@ -2,7 +2,7 @@ import { DomainError } from '../../src/lib/domain/ledger';
 import type { GlobalUser } from '../../src/lib/domain/types';
 import type { Env } from './env';
 import { sessionOperation } from './identity';
-import { Store, type Write } from './store';
+import type { DataStore as Store, Write } from './store';
 
 export const RESET_CONFIRMATION = 'XÓA TOÀN BỘ';
 const ACTIVE = 'database-reset:active';

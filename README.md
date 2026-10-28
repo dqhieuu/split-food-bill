@@ -1,10 +1,10 @@
 # Chia tiền ăn
 
-A Vietnamese group expense SPA using SvelteKit, Svelte 5, TypeScript, shadcn-svelte, Tailwind, Firebase Authentication/Firestore and a Cloudflare Worker. Code and documentation are English; UI is Vietnamese.
+A Vietnamese group expense SPA using SvelteKit, Svelte 5, TypeScript, shadcn-svelte, Tailwind, Firebase Authentication, Supabase Postgres and a Cloudflare Worker. Local development uses Firebase Auth/Firestore emulators. Code and documentation are English; UI is Vietnamese.
 
 Discord is the only login method. Firebase user IDs are `discord_<Discord ID>`. Global administrators create groups linked to Discord servers. Group administrators activate imported members and manage group data. Global and group roles are independent.
 
-No service has been deployed. No existing data migration is required or included.
+Production data was migrated from Firestore to Supabase Postgres on October 28, 2026. See [the Supabase migration runbook](docs/supabase-migration.md) for configuration, the verified export/import and cutover record. Firebase Authentication and Cloudflare R2 remain in place; the original Firestore data has been preserved.
 
 ## Run locally
 
@@ -62,7 +62,7 @@ The bill toggle sends Discord DM notifications to its participants after the bil
 
 ## Architecture and service setup
 
-The frontend signs into Firebase with a custom token issued after Worker-side Discord OAuth. Requests to the Worker carry Firebase ID tokens. The Worker verifies tokens, reads live roles/membership, and accesses Firestore through a dedicated service account. Browser Firestore access is denied. Each group's seven collections sit under `groups/{groupId}`; global users live under `users/{userId}`.
+The frontend signs into Firebase with a custom token issued after Worker-side Discord OAuth. Requests to the Worker carry Firebase ID tokens. The Worker verifies tokens, reads live roles/membership, and accesses Supabase Postgres through a verified Hyperdrive connection. Browser database access is denied. Each group's seven collections use paths under `groups/{groupId}`; global users use `users/{userId}`. Supabase stores the same paths and exact objects in a private Postgres schema. The Firestore adapter remains available for local emulators and controlled migration recovery.
 
 See [integration and deployment setup](docs/integrations.md) for the schema diagram, endpoint permissions, Discord application setup, Firebase IAM/rules, Worker secrets, Vercel configuration and automatic deployment instructions. The deployment workflow stays disabled until explicitly enabled in repository settings.
 
@@ -84,4 +84,4 @@ npm run test:e2e
 
 Useful separate commands: `npm run emulators`, `npm run seed:local`, `npm run dev:worker`, `npm run dev:web`. When running them separately, seed after the emulators start, then start Worker and frontend.
 
-Discord member previews and group member management include explicit refresh buttons that bypass the member cache. System admins can reset all Firestore data from group management after typing the confirmation phrase. See [database reset](docs/integrations.md#database-reset) for scope and recovery.
+Discord member previews and group member management include explicit refresh buttons that bypass the member cache. System admins can reset the configured app database from group management after typing the confirmation phrase. See [database reset](docs/integrations.md#database-reset) for scope and recovery.

@@ -1,7 +1,8 @@
 import { z, ZodError } from 'zod';
 import type { Env } from './env';
 import { assertEnvironment, isLocal } from './env';
-import { Store } from './store';
+import type { DataStore } from './store';
+import { createStore } from './database';
 import { authenticatedUser, verifiedUserId } from './identity';
 import { continueDatabaseReset, requireAvailableDatabase, startDatabaseReset } from './database-reset';
 import { oauth } from './oauth';
@@ -24,10 +25,15 @@ import { deliverBillNotifications } from './notifications';
 import { saveUserPreferences } from './preferences';
 export { AuthSessions } from './sessions';
 
-async function route(request: Request, env: Env): Promise<Response> {
+async function route(request: Request, env: Env, store: DataStore): Promise<Response> {
 	const url = new URL(request.url);
-	const store = new Store(env);
-	if (url.pathname === '/health') return Response.json({ ok: true, mode: env.APP_ENV });
+	if (url.pathname === '/health')
+		return Response.json({
+			ok: true,
+			mode: env.APP_ENV,
+			database: env.DATABASE_PROVIDER ?? 'firestore',
+			maintenance: env.DATABASE_MAINTENANCE === 'true'
+		});
 	if (url.pathname === '/config' && request.method === 'GET')
 		return Response.json({
 			mode: env.APP_ENV,
@@ -38,6 +44,8 @@ async function route(request: Request, env: Env): Promise<Response> {
 			},
 			...(isLocal(env) ? { authEmulatorUrl: `http://${env.FIREBASE_AUTH_EMULATOR_HOST}` } : {})
 		});
+	if (env.DATABASE_MAINTENANCE === 'true')
+		throw new DomainError('Đang chuyển cơ sở dữ liệu. Vui lòng thử lại sau ít phút.', 503);
 	if (url.pathname === '/api/admin/database-reset' && request.method === 'POST') {
 		const input = z
 			.object({
@@ -206,6 +214,7 @@ async function route(request: Request, env: Env): Promise<Response> {
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
 		let response: Response;
+		let store: DataStore | undefined;
 		const origin = request.headers.get('origin');
 		try {
 			assertEnvironment(env, request);
@@ -216,7 +225,9 @@ export default {
 			if (Number(request.headers.get('content-length')) > (isImageUpload ? MAX_BILL_IMAGE_BYTES : 1_000_000))
 				throw new DomainError('Dữ liệu quá lớn.', 413);
 			response =
-				request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : await route(request, env);
+				request.method === 'OPTIONS'
+					? new Response(null, { status: 204 })
+					: await route(request, env, (store = createStore(env)));
 		} catch (error) {
 			const status =
 				error instanceof DomainError
@@ -243,6 +254,8 @@ export default {
 							: {})
 				}
 			);
+		} finally {
+			await store?.close?.().catch(() => console.error('Database connection cleanup failed.'));
 		}
 		const headers = new Headers(response.headers);
 		headers.set('cache-control', 'no-store');

@@ -5,7 +5,7 @@ import { requireGroup } from './groups';
 import { Discord } from './discord';
 import { billImageAttachment } from './images';
 import type { Env } from './env';
-import { Store } from './store';
+import type { DataStore as Store } from './store';
 
 function summarize(receipt: Receipt) {
 	receipt.status = receipt.deliveries.some((delivery) => delivery.status === 'sending')

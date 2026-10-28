@@ -4,11 +4,15 @@
 	"workers_dev": true,
 	"main": "worker/src/index.ts",
 	"compatibility_date": "2026-10-26",
+	"compatibility_flags": ["nodejs_compat"],
+	"hyperdrive": [{ "binding": "SUPABASE_DB", "id": "e844f7d050434a9982b5e220073971b7" }],
 	"durable_objects": { "bindings": [{ "name": "AUTH_SESSIONS", "class_name": "AuthSessions" }] },
 	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["AuthSessions"] }],
 	"r2_buckets": [{ "binding": "BILL_IMAGES", "bucket_name": "split-food-bill-images" }],
 	"vars": {
 		"APP_ENV": "production",
+		"DATABASE_PROVIDER": "supabase",
+		"DATABASE_MAINTENANCE": "false",
 		"FRONTEND_ORIGIN": "https://anthitcho.vercel.app",
 		"FIREBASE_PROJECT_ID": "split-food-bill",
 		"FIREBASE_API_KEY": "AIzaSyB_sNBJhIGuvqpKFQTzs7ReRVxoMsmOxbA",
@@ -21,6 +25,7 @@
 			"r2_buckets": [{ "binding": "BILL_IMAGES", "bucket_name": "split-food-bill-images-local" }],
 			"vars": {
 				"APP_ENV": "local",
+				"DATABASE_PROVIDER": "firestore",
 				"FRONTEND_ORIGIN": "http://127.0.0.1:5173",
 				"FIREBASE_PROJECT_ID": "demo-lunchroom",
 				"FIREBASE_API_KEY": "demo-lunchroom-key",

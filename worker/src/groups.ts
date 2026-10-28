@@ -7,7 +7,7 @@ import {
 	type GroupSummary,
 	type Member
 } from '../../src/lib/domain/types';
-import { Store } from './store';
+import type { DataStore as Store } from './store';
 import { isLocal, type Env } from './env';
 import { avatarUrl, Discord, type DiscordProfile } from './discord';
 

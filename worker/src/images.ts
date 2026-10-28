@@ -1,7 +1,7 @@
 import { BILL_IMAGE_ID, DomainError } from '../../src/lib/domain/ledger';
 import type { Env } from './env';
 import { requireGroup } from './groups';
-import type { Store } from './store';
+import type { DataStore as Store } from './store';
 
 /** Clients downscale photos before upload, so 2 MB leaves ample room for a readable receipt. */
 export const MAX_BILL_IMAGE_BYTES = 2_000_000;

@@ -12,11 +12,25 @@ type Value = {
 	arrayValue?: { values?: Value[] };
 	mapValue?: { fields?: Record<string, Value> };
 };
-export type Write = {
+type FirestoreWrite = {
 	update?: { name: string; fields: Record<string, Value> };
 	delete?: string;
 	currentDocument?: { exists: boolean };
 };
+/** Database-neutral writes, applied atomically after the transaction callback finishes. */
+export type Write = { path: string; value: object; createOnly?: boolean } | { path: string; delete: true };
+export interface DataStore {
+	get<T>(path: string, transaction?: string): Promise<T | null>;
+	getMany<T>(paths: string[], transaction?: string): Promise<Map<string, T | null>>;
+	list<T>(path: string, transaction?: string): Promise<T[]>;
+	write(path: string, value: object, createOnly?: boolean): Write;
+	delete(path: string): Write;
+	commit(writes: Write[], transaction?: string): Promise<void>;
+	transaction<T>(operation: (transaction: string, writes: Write[]) => Promise<T>): Promise<T>;
+	collectionIds(parent: string, pageToken?: string): Promise<{ items: string[]; nextPageToken?: string }>;
+	documentPaths(collection: string, pageToken?: string): Promise<{ items: string[]; nextPageToken?: string }>;
+	close?(): Promise<void>;
+}
 const encode = (value: unknown): Value => {
 	if (value === null) return { nullValue: null };
 	if (typeof value === 'string') return { stringValue: value };
@@ -72,7 +86,7 @@ async function accessToken(env: Env) {
 	};
 	return data.access_token;
 }
-export class Store {
+export class Store implements DataStore {
 	readonly prefix: string;
 	readonly base: string;
 	constructor(readonly env: Env) {
@@ -162,13 +176,10 @@ export class Store {
 		return rows;
 	}
 	write(path: string, value: object, createOnly = false): Write {
-		return {
-			update: { name: `${this.prefix}/${path}`, fields: fields(value as Record<string, unknown>) },
-			...(createOnly ? { currentDocument: { exists: false } } : {})
-		};
+		return { path, value, ...(createOnly ? { createOnly } : {}) };
 	}
 	delete(path: string): Write {
-		return { delete: `${this.prefix}/${path}` };
+		return { path, delete: true };
 	}
 	async collectionIds(parent: string, pageToken = ''): Promise<{ items: string[]; nextPageToken?: string }> {
 		const result = await this.call(`${parent ? `/${parent}` : ''}:listCollectionIds`, {
@@ -196,10 +207,21 @@ export class Store {
 		};
 	}
 	async commit(writes: Write[], transaction?: string) {
+		const encoded: FirestoreWrite[] = writes.map((write) =>
+			'delete' in write
+				? { delete: `${this.prefix}/${write.path}` }
+				: {
+						update: {
+							name: `${this.prefix}/${write.path}`,
+							fields: fields(write.value as Record<string, unknown>)
+						},
+						...(write.createOnly ? { currentDocument: { exists: false } } : {})
+					}
+		);
 		if (writes.length || transaction)
 			await this.call(':commit', {
 				method: 'POST',
-				body: JSON.stringify({ writes, ...(transaction ? { transaction } : {}) })
+				body: JSON.stringify({ writes: encoded, ...(transaction ? { transaction } : {}) })
 			});
 	}
 	async transaction<T>(operation: (transaction: string, writes: Write[]) => Promise<T>): Promise<T> {

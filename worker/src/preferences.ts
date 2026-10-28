@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { DomainError } from '../../src/lib/domain/ledger';
 import type { GlobalUser } from '../../src/lib/domain/types';
-import type { Store } from './store';
+import type { DataStore as Store } from './store';
 
 /** The caller supplies the authenticated uid, never a user id from the request body. */
 export async function saveUserPreferences(store: Store, uid: string, input: unknown) {

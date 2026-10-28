@@ -12,7 +12,7 @@ import { isLocal, type Env } from './env';
 import { requireGroup } from './groups';
 import { sessionOperation } from './identity';
 import { billImageAttachment, requireUploadedImage } from './images';
-import type { Store } from './store';
+import type { DataStore as Store } from './store';
 
 /** Kept outside the group document so the key never reaches clients with group state. */
 type AiSettings = { endpoint: string; model: string; apiKey: string; updatedBy: string; updatedAt: string };

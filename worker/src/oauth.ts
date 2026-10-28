@@ -1,6 +1,6 @@
 import type { Env } from './env';
 import { isLocal } from './env';
-import { Store } from './store';
+import type { DataStore as Store } from './store';
 import { challenge, customToken, randomCode, sessionOperation } from './identity';
 import { mockProfiles, type DiscordProfile } from './discord';
 import { profileUser, userId } from './groups';

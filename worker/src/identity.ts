@@ -5,7 +5,7 @@ import { privateKey } from './store';
 import { jwtVerify } from 'jose';
 import { DomainError } from '../../src/lib/domain/ledger';
 import type { GlobalUser } from '../../src/lib/domain/types';
-import { Store } from './store';
+import type { DataStore as Store } from './store';
 
 const keys = createRemoteJWKSet(
 	new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
