@@ -258,6 +258,15 @@
 		const file = pickedFile(event);
 		if (file) await upload(file);
 	}
+	export function isProcessingImage() {
+		return imageBusy;
+	}
+	/** The mobile camera shortcut uses the same upload, draft and optional AI scan flow. */
+	export async function attachCapturedPhoto(file: File) {
+		if (imageBusy) throw new Error('Đang xử lý ảnh hóa đơn. Vui lòng thử lại sau.');
+		const uploaded = await upload(file);
+		if (uploaded && aiEnabled) await scanAttachedImage();
+	}
 	/** A newly selected photo shares the same scan action as an existing attachment. */
 	async function scanImage(event: Event) {
 		const file = pickedFile(event);

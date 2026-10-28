@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import {
@@ -19,7 +19,8 @@
 		Menu,
 		X,
 		Check,
-		AlertCircle
+		AlertCircle,
+		Camera
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -66,6 +67,13 @@
 	let releaseOpen = $state(false);
 	let accountOpen = $state(false);
 	let resetOpen = $state(false);
+	let cameraInput = $state<HTMLInputElement>();
+	let cameraContext: { groupId: string; actor: string } | null = null;
+	let cameraBusy = $state(false);
+	let billComposer = $state<{
+		attachCapturedPhoto: (file: File) => Promise<void>;
+		isProcessingImage: () => boolean;
+	}>();
 	const navigation = [
 		{ path: '/', label: 'Tổng quan', icon: LayoutDashboard },
 		{ path: '/new-bill', label: 'Tạo hoá đơn', icon: Plus },
@@ -77,6 +85,9 @@
 	];
 	const section = $derived(page.url.pathname);
 	const currentMember = $derived(appState?.members.find((member) => member.id === actor));
+	const canCaptureBill = $derived(
+		!!sessionData && !!appState && !!currentMember?.active && !loading && !error
+	);
 	const accountMember = $derived(sessionData?.user ?? currentMember);
 	/** First letters of up to two words, e.g. "Hội ăn trưa" → "HĂ". */
 	const groupInitials = $derived(
@@ -112,6 +123,38 @@
 				...sessionData,
 				user: { ...sessionData.user, preferences: { ...sessionData.user.preferences, ...preferences } }
 			};
+	}
+	function openBillCamera() {
+		cameraContext = { groupId: selectedGroupId, actor };
+		cameraInput?.click();
+	}
+	async function capturedBillPhoto(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		const context = cameraContext;
+		cameraContext = null;
+		if (
+			!file ||
+			!context ||
+			!canCaptureBill ||
+			context.groupId !== selectedGroupId ||
+			context.actor !== actor
+		)
+			return;
+		cameraBusy = true;
+		mobileMenu = false;
+		try {
+			await goto('/new-bill', { replace: true });
+			await tick();
+			if (context.groupId !== selectedGroupId || context.actor !== actor || !currentMember?.active) return;
+			if (!billComposer) throw new Error('Không mở được hóa đơn. Vui lòng thử lại.');
+			await billComposer.attachCapturedPhoto(file);
+		} catch (cause) {
+			notify((cause as Error).message || 'Không mở được hóa đơn. Vui lòng thử lại.', true);
+		} finally {
+			cameraBusy = false;
+		}
 	}
 	async function changeGroup(id: string) {
 		busy = true;
@@ -244,7 +287,7 @@
 			<Button variant="outline" onclick={initialize}>Kết nối lại</Button>{/if}
 	</div>
 {:else}<a class="skip-link" href="#main-content">Đến nội dung chính</a>
-	<div class="app-shell">
+	<div class="app-shell" class:has-mobile-camera={canCaptureBill}>
 		{#if mobileMenu}<button
 				class="mobile-backdrop"
 				aria-label="Đóng trình đơn bên"
@@ -363,6 +406,7 @@
 					{#key selectedGroupId + actor}
 						{#if section === '/'}<Overview {appState} {actor} {run} {busy} groupId={selectedGroupId} />
 						{:else if section === '/new-bill'}{#key actor}<BillComposer
+									bind:this={billComposer}
 									{appState}
 									{actor}
 									{run}
@@ -402,7 +446,35 @@
 			</footer>
 		</div>
 	</div>
-	{#if toast}<div class:error-toast={toastIsError} class="toast" role="status">
+	{#if canCaptureBill}
+		<input
+			bind:this={cameraInput}
+			type="file"
+			accept="image/*"
+			capture="environment"
+			hidden
+			aria-label="Chụp ảnh hóa đơn bằng camera"
+			onchange={capturedBillPhoto}
+			oncancel={() => (cameraContext = null)}
+		/>
+		<button
+			type="button"
+			class="mobile-bill-camera"
+			aria-label="Chụp ảnh hóa đơn"
+			title="Chụp ảnh hóa đơn"
+			aria-busy={cameraBusy}
+			disabled={busy || cameraBusy || (section === '/new-bill' && !!billComposer?.isProcessingImage())}
+			onclick={openBillCamera}
+		>
+			{#if cameraBusy}<LoaderCircle class="spin" size={26} />{:else}<Camera size={26} />{/if}
+		</button>
+	{/if}
+	{#if toast}<div
+			class:error-toast={toastIsError}
+			class:camera-toast-offset={canCaptureBill}
+			class="toast"
+			role="status"
+		>
 			{#if toastIsError}<AlertCircle size={19} />{:else}<Check size={19} />{/if}<span>{toast}</span><button
 				aria-label="Đóng thông báo"
 				onclick={() => (toast = '')}><X size={15} /></button

@@ -2300,6 +2300,9 @@ footer {
 .mobile-backdrop {
 	display: none;
 }
+.mobile-bill-camera {
+	display: none;
+}
 .skip-link {
 	position: fixed;
 	top: 12px;
@@ -2568,6 +2571,32 @@ footer {
 	}
 }
 @media (max-width: 760px) {
+	.mobile-bill-camera {
+		position: fixed;
+		left: 50%;
+		bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+		transform: translateX(-50%);
+		z-index: 20;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 60px;
+		height: 60px;
+		border: 1px solid light-dark(#ffffff40, #a1d0a650);
+		border-radius: 50%;
+		color: #fff;
+		background: #315e47;
+		box-shadow: 0 5px 20px light-dark(#203a3140, #00000070);
+	}
+	.mobile-bill-camera:disabled {
+		opacity: 0.7;
+	}
+	.has-mobile-camera .main-shell {
+		padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+	}
+	.toast.camera-toast-offset {
+		bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+	}
 	aside {
 		transform: translateX(-100%);
 		transition: transform 0.2s;

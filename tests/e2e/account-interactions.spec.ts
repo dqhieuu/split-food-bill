@@ -8,7 +8,12 @@ import type { Env } from '../../worker/src/env';
 const ACTOR = 'discord_100000000000000001';
 const now = '2026-10-27T05:00:00.000Z';
 
-async function openFixture(page: Page, path = '/balances', configure?: (state: AppState) => void) {
+async function openFixture(
+	page: Page,
+	path = '/balances',
+	configure?: (state: AppState) => void,
+	options: { aiEnabled?: boolean } = {}
+) {
 	const state = createDemoState(new Date(now));
 	const userPreferences = { discordBillNotifications: true };
 	state.members.find((member) => member.id === 'an')!.id = ACTOR;
@@ -58,7 +63,8 @@ async function openFixture(page: Page, path = '/balances', configure?: (state: A
 		discordGuildId: 'guild',
 		createdBy: ACTOR,
 		createdAt: now,
-		version: 1
+		version: 1,
+		...(options.aiEnabled ? { aiEnabled: true } : {})
 	};
 	await page.route('**/config', (route) =>
 		route.fulfill({
@@ -130,6 +136,120 @@ async function openFixture(page: Page, path = '/balances', configure?: (state: A
 for (const width of [1280, 390]) {
 	test.describe(`viewport ${width}px`, () => {
 		test.use({ viewport: { width, height: 844 } });
+
+		if (width > 760) {
+			test('mobile camera shortcut is hidden on desktop', async ({ page }) => {
+				await openFixture(page, '/');
+				await expect(page.locator('.mobile-bill-camera')).toBeHidden();
+			});
+		} else {
+			for (const aiEnabled of [false, true]) {
+				test(`mobile camera opens the composer, attaches photos and ${aiEnabled ? 'reads them with AI' : 'preserves manual entry without AI'}`, async ({
+					page
+				}) => {
+					const { image } = await openFixture(page, '/', undefined, { aiEnabled });
+					let uploads = 0;
+					let scans = 0;
+					let savedBills = 0;
+					let releaseUpload!: () => void;
+					const uploadGate = new Promise<void>((resolve) => {
+						releaseUpload = resolve;
+					});
+					await page.route('**/api/groups/local/images', async (route) => {
+						uploads++;
+						await uploadGate;
+						if (!aiEnabled && uploads === 2)
+							return route.fulfill({ status: 503, json: { message: 'Không tải được ảnh. Hãy thử lại.' } });
+						return route.fulfill({ json: { imageId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301.png' } });
+					});
+					await page.route('**/api/groups/local/ai/scan', (route) => {
+						scans++;
+						if (scans > 1)
+							return route.fulfill({
+								status: 503,
+								json: { message: 'AI đang bận. Bạn có thể nhập thủ công.' }
+							});
+						return route.fulfill({
+							json: { billName: 'Hóa đơn từ camera', totalCost: 125000, billDate: '2026-10-28' }
+						});
+					});
+					await page.route('**/api/groups/local/commands/createBill', (route) => {
+						savedBills++;
+						return route.abort();
+					});
+					await page.evaluate(
+						(actor) =>
+							localStorage.setItem(
+								`lunchroom-draft-local-${actor}`,
+								JSON.stringify({
+									description: 'Bản nháp camera',
+									selected: [actor, 'linh'],
+									amounts: { [actor]: 30, linh: 55 },
+									mode: 'manual',
+									unit: 1000
+								})
+							),
+						ACTOR
+					);
+					const camera = page.getByRole('button', { name: 'Chụp ảnh hóa đơn', exact: true });
+					await expect(camera).toBeVisible();
+					await expect(page.getByLabel('Chụp ảnh hóa đơn bằng camera', { exact: true })).toHaveAttribute(
+						'capture',
+						'environment'
+					);
+					const box = (await camera.boundingBox())!;
+					expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThan(1);
+					expect(844 - box.y - box.height).toBe(20);
+					await page.screenshot({ path: `artifacts/mobile-camera-${aiEnabled ? 'ai' : 'manual'}.png` });
+					let [chooser] = await Promise.all([page.waitForEvent('filechooser'), camera.click()]);
+					await chooser.setFiles([]);
+					await expect(page).toHaveURL(/\/$/);
+					expect(uploads).toBe(0);
+					[chooser] = await Promise.all([page.waitForEvent('filechooser'), camera.click()]);
+					await chooser.setFiles({ name: 'camera.png', mimeType: 'image/png', buffer: image });
+					try {
+						await expect(page).toHaveURL(/\/new-bill$/);
+						await expect(camera).toBeDisabled();
+					} finally {
+						releaseUpload();
+					}
+					await expect(page.locator('.bill-image-attached img')).toHaveJSProperty('naturalWidth', 1200);
+					await expect(camera).toBeEnabled();
+					await expect(page.getByLabel('Tên hóa đơn', { exact: true })).toHaveValue(
+						aiEnabled ? 'Hóa đơn từ camera' : 'Bản nháp camera'
+					);
+					if (aiEnabled) {
+						await expect(page.getByLabel('Tổng tiền cần chia', { exact: true })).toHaveValue('125');
+						await expect(page.locator('.ai-scan-notice')).toContainText('AI đã điền tên');
+					} else {
+						await expect(page.getByLabel('Số tiền của Thảo Linh', { exact: true })).toHaveValue('55');
+					}
+					expect(uploads).toBe(1);
+					expect(scans).toBe(aiEnabled ? 1 : 0);
+					await page.reload();
+					await expect(page.locator('.bill-image-attached img')).toHaveJSProperty('naturalWidth', 1200);
+					expect(uploads).toBe(1);
+					expect(scans).toBe(aiEnabled ? 1 : 0);
+					// The same camera input works again from the composer; errors keep its attachment/draft.
+					[chooser] = await Promise.all([page.waitForEvent('filechooser'), camera.click()]);
+					await chooser.setFiles({ name: 'camera.png', mimeType: 'image/png', buffer: image });
+					await expect(page.getByRole('alert')).toContainText(
+						aiEnabled ? 'AI đang bận' : 'Không tải được ảnh'
+					);
+					await expect(page.locator('.bill-image-attached img')).toHaveJSProperty('naturalWidth', 1200);
+					await expect(camera).toBeEnabled();
+					if (!aiEnabled) {
+						[chooser] = await Promise.all([page.waitForEvent('filechooser'), camera.click()]);
+						await chooser.setFiles({ name: 'camera.png', mimeType: 'image/png', buffer: image });
+						await expect(page.getByRole('alert')).toHaveCount(0);
+						await expect(camera).toBeEnabled();
+						expect(uploads).toBe(3);
+						expect(scans).toBe(0);
+					}
+					expect(savedBills).toBe(0);
+				});
+			}
+		}
 
 		test('account filters use net debts and all shows only active people including zero balances', async ({
 			page
