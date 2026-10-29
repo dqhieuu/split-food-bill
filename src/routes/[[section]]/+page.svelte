@@ -77,7 +77,7 @@
 		isProcessingImage: () => boolean;
 	}>();
 	const navigation = [
-		{ path: '/', label: 'Tổng quan', icon: LayoutDashboard },
+		{ path: '/overview', label: 'Tổng quan', icon: LayoutDashboard },
 		{ path: '/new-bill', label: 'Tạo hoá đơn', icon: Plus },
 		{ path: '/balances', label: 'Tài khoản của bạn', icon: Wallet },
 		{ path: '/matrix', label: 'Ma trận nợ nần', icon: Users },
@@ -89,10 +89,10 @@
 	const bottomNavigation = [
 		{ path: '/balances', lines: ['Tài khoản', 'của bạn'] },
 		{ path: '/new-bill', lines: ['Tạo', 'hoá đơn'] },
-		{ path: '/', lines: ['Tổng', 'quan'] },
+		{ path: '/overview', lines: ['Tổng', 'quan'] },
 		{ path: '/matrix', lines: ['Ma trận', 'nợ nần'] }
 	].map(({ path, lines }) => ({ ...navigation.find((item) => item.path === path)!, lines }));
-	const section = $derived(page.url.pathname);
+	const section = $derived(page.url.pathname === '/' ? '/balances' : page.url.pathname);
 	const currentMember = $derived(appState?.members.find((member) => member.id === actor));
 	const canCaptureBill = $derived(
 		!!sessionData && !!appState && !!currentMember?.active && !loading && !error
@@ -413,7 +413,13 @@
 					/>
 				{:else if appState && currentMember}
 					{#key selectedGroupId + actor}
-						{#if section === '/'}<Overview {appState} {actor} {run} {busy} groupId={selectedGroupId} />
+						{#if section === '/overview'}<Overview
+								{appState}
+								{actor}
+								{run}
+								{busy}
+								groupId={selectedGroupId}
+							/>
 						{:else if section === '/new-bill'}{#key actor}<BillComposer
 									bind:this={billComposer}
 									{appState}
@@ -450,7 +456,7 @@
 							/>
 						{:else}<div class="empty-state">
 								<h1>Không tìm thấy trang</h1>
-								<Button href="/">Về tổng quan</Button>
+								<Button href="/overview">Về tổng quan</Button>
 							</div>{/if}
 					{/key}
 				{/if}

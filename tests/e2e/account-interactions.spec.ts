@@ -137,6 +137,27 @@ for (const width of [1280, 390]) {
 	test.describe(`viewport ${width}px`, () => {
 		test.use({ viewport: { width, height: 844 } });
 
+		test('home opens your account and the picker keeps focus through repeated changes', async ({ page }) => {
+			await openFixture(page, '/');
+			await expect(page.getByRole('heading', { name: 'Tài khoản của bạn', exact: true })).toBeVisible();
+			const picker = page.getByRole('combobox', { name: 'Xem tài khoản', exact: true });
+			const historyLength = await page.evaluate(() => history.length);
+			for (const [id, heading] of [
+				['huy', 'Tài khoản của Quang Huy'],
+				['linh', 'Tài khoản của Thảo Linh'],
+				['mai', 'Tài khoản của Ngọc Mai'],
+				[ACTOR, 'Tài khoản của bạn']
+			]) {
+				await picker.focus();
+				await picker.selectOption(id);
+				await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+				await expect(picker).toBeFocused();
+				await expect(picker).toHaveValue(id);
+				expect(await page.evaluate(() => history.length)).toBe(historyLength);
+			}
+			await expect(page).toHaveURL(/\/$/);
+		});
+
 		test('royal leaderboard follows the matrix in navigation and opens real member balances', async ({
 			page
 		}) => {
@@ -188,7 +209,7 @@ for (const width of [1280, 390]) {
 		});
 
 		test('overview payment history shows the newest creation first', async ({ page }) => {
-			await openFixture(page, '/', (state) => {
+			await openFixture(page, '/overview', (state) => {
 				const base = { ...state.ledger[0], source: 'qr' as const, from: ACTOR, to: 'linh' };
 				state.ledger = [
 					{
@@ -273,6 +294,39 @@ for (const width of [1280, 390]) {
 		});
 
 		if (width < 760) {
+			test('phone bars stay fixed at both page boundaries with native overscroll enabled', async ({
+				page
+			}) => {
+				await page.setViewportSize({ width: 375, height: 667 });
+				await openFixture(page, '/balances');
+				const header = page.locator('.topbar');
+				const bottomBar = page.locator('.mobile-camera-bar');
+				await expect(header).toHaveCSS('position', 'fixed');
+				await expect(bottomBar).toHaveCSS('position', 'fixed');
+				const heading = (await page
+					.getByRole('heading', { name: 'Tài khoản của bạn', exact: true })
+					.boundingBox())!;
+				expect(heading.y).toBeGreaterThanOrEqual((await header.boundingBox())!.height);
+				await page.mouse.move(180, 350);
+				for (const delta of [-10000, 10000, 10000, -10000]) {
+					await page.mouse.wheel(0, delta);
+					await expect
+						.poll(() => page.evaluate(() => window.scrollY))
+						.toBe(
+							delta > 0
+								? await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)
+								: 0
+						);
+					await expect.poll(async () => (await header.boundingBox())!.y).toBe(0);
+					const bottomBounds = (await bottomBar.boundingBox())!;
+					expect(bottomBounds.y + bottomBounds.height).toBe(667);
+					await expect(header.getByRole('button', { name: 'Mở trình đơn', exact: true })).toBeInViewport();
+				}
+				await expect(page.locator('html')).toHaveCSS('overscroll-behavior-y', 'auto');
+				await header.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
+				await expect(page.locator('aside')).toHaveClass(/mobile-open/);
+			});
+
 			test('royal court fits long names and large balances on a narrow phone', async ({ page }) => {
 				await page.setViewportSize({ width: 320, height: 667 });
 				const longName = 'Thảo Linh ' + 'TênRấtDài'.repeat(20);
@@ -296,7 +350,7 @@ for (const width of [1280, 390]) {
 				const length = await page.evaluate(() => history.length);
 				for (const [name, path, heading] of [
 					['Tạo hoá đơn', '/new-bill', 'Tạo hoá đơn'],
-					['Tổng quan', '/', 'Tổng quan'],
+					['Tổng quan', '/overview', 'Tổng quan'],
 					['Ma trận nợ nần', '/matrix', 'Ma trận nợ nần'],
 					['Tài khoản của bạn', '/balances', 'Tài khoản của bạn']
 				]) {
@@ -327,7 +381,7 @@ for (const width of [1280, 390]) {
 				test(`mobile camera opens the composer, attaches photos and ${aiEnabled ? 'reads them with AI' : 'preserves manual entry without AI'}`, async ({
 					page
 				}) => {
-					const { image } = await openFixture(page, '/', undefined, { aiEnabled });
+					const { image } = await openFixture(page, '/overview', undefined, { aiEnabled });
 					let uploads = 0;
 					let scans = 0;
 					let savedBills = 0;
@@ -383,7 +437,7 @@ for (const width of [1280, 390]) {
 					await page.screenshot({ path: `artifacts/mobile-camera-${aiEnabled ? 'ai' : 'manual'}.png` });
 					let [chooser] = await Promise.all([page.waitForEvent('filechooser'), camera.click()]);
 					await chooser.setFiles([]);
-					await expect(page).toHaveURL(/\/$/);
+					await expect(page).toHaveURL(/\/overview$/);
 					expect(uploads).toBe(0);
 					[chooser] = await Promise.all([page.waitForEvent('filechooser'), camera.click()]);
 					await chooser.setFiles({ name: 'camera.png', mimeType: 'image/png', buffer: image });
@@ -461,14 +515,14 @@ for (const width of [1280, 390]) {
 			);
 			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
 			await page.locator('aside nav a[href="/matrix"]').click();
-			const header = page.getByRole('columnheader', { name: 'Minh An, Nợ - bị nợ: 90.000 ₫', exact: true });
+			const header = page.getByRole('columnheader', { name: 'Minh An, Tổng cộng: 90.000 ₫', exact: true });
 			await expect(header).toBeVisible();
 			await expect(header.locator('.matrix-net')).toHaveText('90.000 ₫');
 			await expect(
-				page.getByRole('columnheader', { name: 'Ngọc Mai, Nợ - bị nợ: 0 ₫', exact: true })
+				page.getByRole('columnheader', { name: 'Ngọc Mai, Tổng cộng: 0 ₫', exact: true })
 			).toBeAttached();
 			await expect(
-				page.locator('.matrix-net-row').getByRole('rowheader', { name: 'Nợ - bị nợ', exact: true })
+				page.locator('.matrix-net-row').getByRole('rowheader', { name: 'Tổng cộng', exact: true })
 			).toBeVisible();
 			await expect(page.locator('.matrix-table thead tr').first().locator('.matrix-net')).toHaveCount(0);
 			await expect(page.locator('.matrix-table thead .matrix-net')).toHaveCount(8);
@@ -529,13 +583,14 @@ for (const width of [1280, 390]) {
 			const linh = page.locator('.counterpart').filter({ hasText: 'Thảo Linh' });
 			const huy = page.locator('.counterpart').filter({ hasText: 'Quang Huy' });
 			await linh.getByRole('button', { name: 'Xem lịch sử với Thảo Linh', exact: true }).click();
-			await huy.getByRole('button', { name: 'Lịch sử với Quang Huy', exact: true }).click();
+			// The decorative chevron forwards clicks to the full-row history toggle.
+			const chevron = (await huy.locator('.counterpart-history-chevron').boundingBox())!;
+			await page.mouse.click(chevron.x + chevron.width / 2, chevron.y + chevron.height / 2);
 			await expect(page.locator('.counterpart-history')).toHaveCount(2);
 			await linh.screenshot({ path: `artifacts/balance-history-${width}.png` });
-			await expect(linh.getByRole('button', { name: 'Lịch sử với Thảo Linh', exact: true })).toHaveAttribute(
-				'aria-expanded',
-				'true'
-			);
+			await expect(
+				linh.getByRole('button', { name: 'Xem lịch sử với Thảo Linh', exact: true })
+			).toHaveAttribute('aria-expanded', 'true');
 			await expect(linh.getByRole('button', { name: 'Mã QR', exact: true })).toBeDisabled();
 			await linh.locator('.qr-button-with-tooltip').hover();
 			await expect(linh.getByRole('tooltip')).toBeVisible();
@@ -556,7 +611,7 @@ for (const width of [1280, 390]) {
 			await expect(page.getByRole('dialog', { name: 'Chuyển tiền bằng QR', exact: true })).toBeVisible();
 			await page.keyboard.press('Escape');
 			await expect(page.locator('.counterpart-history')).toHaveCount(2);
-			await linh.getByRole('button', { name: 'Lịch sử với Thảo Linh', exact: true }).click();
+			await linh.getByRole('button', { name: 'Xem lịch sử với Thảo Linh', exact: true }).click();
 			await expect(linh.locator('.counterpart-history')).toHaveCount(0);
 			await expect(huy.locator('.counterpart-history')).toBeVisible();
 		});
@@ -583,7 +638,7 @@ for (const width of [1280, 390]) {
 			await expect(page.locator('.stat-card').first()).toContainText('20.000 ₫');
 			await expect(page.locator('.counterpart-name').filter({ hasText: 'Quang Huy' })).toHaveCount(0);
 			const recipient = page.locator('.counterpart').filter({ hasText: 'Minh An' });
-			await recipient.getByRole('button', { name: 'Lịch sử với Minh An', exact: true }).click();
+			await recipient.getByRole('button', { name: 'Xem lịch sử với Minh An', exact: true }).click();
 			await expect(recipient.locator('.counterpart-history')).toContainText('Quang Huy nợ Minh An');
 			await page.locator('main').screenshot({ path: 'artifacts/member-balances-admin-' + width + '.png' });
 			await recipient.getByRole('button', { name: 'Mã QR', exact: true }).click();
@@ -659,7 +714,7 @@ for (const width of [1280, 390]) {
 			await openFixture(page);
 			const historyLength = await page.evaluate(() => history.length);
 			for (const [path, name] of [
-				['/', 'Tổng quan'],
+				['/overview', 'Tổng quan'],
 				['/new-bill', 'Tạo hoá đơn'],
 				['/balances', 'Tài khoản của bạn'],
 				['/activity', 'Ledger']
@@ -1123,7 +1178,7 @@ for (const width of [1280, 390]) {
 		test('compact payment history opens only bills and long bill details have one scroll area', async ({
 			page
 		}) => {
-			await openFixture(page, '/', (state) => {
+			await openFixture(page, '/overview', (state) => {
 				const bill = state.bills[0];
 				delete bill.undoneAt;
 				delete bill.undoneBy;
@@ -1208,7 +1263,7 @@ for (const width of [1280, 390]) {
 			const oldest = new Date(`${currentMonth}-01T00:00:00Z`);
 			oldest.setUTCMonth(oldest.getUTCMonth() - 5);
 			const oldestMonth = oldest.toISOString().slice(0, 7);
-			await openFixture(page, '/', (state) => {
+			await openFixture(page, '/overview', (state) => {
 				const bill = state.bills[0];
 				delete bill.undoneAt;
 				delete bill.undoneBy;
@@ -1254,7 +1309,7 @@ for (const width of [1280, 390]) {
 		test('calendar browses future months and payment history links to the Transactions tab', async ({
 			page
 		}) => {
-			await openFixture(page, '/', (state) => {
+			await openFixture(page, '/overview', (state) => {
 				delete state.bills[0].undoneAt;
 				delete state.bills[0].undoneBy;
 				state.ledger[0].reference = state.bills[0].id;
@@ -1290,6 +1345,7 @@ for (const width of [1280, 390]) {
 			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
 			await page.locator('aside nav a[href="/new-bill"]').click();
 			await expect(page.locator('.bill-summary-heading')).toBeVisible();
+			await page.getByLabel('Tên hóa đơn', { exact: true }).fill('Cơm trưa văn phòng');
 			await page.locator('.bill-summary').screenshot({ path: `artifacts/bill-summary-heading-${width}.png` });
 			await page.route('**/api/discord/guilds', (route) => route.fulfill({ json: { guilds: [] } }));
 			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();

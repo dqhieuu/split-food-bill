@@ -102,6 +102,8 @@ test('group activation, distinct roles, group isolation and last-group selection
 		const response = await creation;
 		expect(response.status()).toBe(201);
 		const { group } = await response.json();
+		await expect(page.getByRole('heading', { name: 'Tài khoản của bạn', exact: true })).toBeVisible();
+		await page.getByRole('link', { name: 'Tổng quan', exact: true }).click();
 		await expect(page.getByRole('heading', { name: 'Tổng quan', exact: true })).toBeVisible();
 		await expect(page.locator('.overview-empty')).toHaveText(['Chưa có hóa đơn.', 'Chưa có thanh toán.']);
 		const emptyStyles = await page.locator('.overview-empty').evaluateAll((items) =>

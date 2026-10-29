@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import QRCode from 'qrcode';
-	import { ArrowUpRight, ArrowDownLeft, QrCode, History, ChevronDown } from '@lucide/svelte';
+	import { ArrowUpRight, ArrowDownLeft, QrCode, ChevronDown } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import Avatar from '../Avatar.svelte';
@@ -76,7 +76,7 @@
 		if (id === actor) url.searchParams.delete('member');
 		else url.searchParams.set('member', id);
 		url.searchParams.delete('to');
-		await goto(url.pathname + url.search, { replace: true });
+		await goto(url.pathname + url.search, { replace: true, reset: false });
 	}
 	function toggleHistory(id: string) {
 		expanded = expanded.includes(id) ? expanded.filter((item) => item !== id) : [...expanded, id];
@@ -222,14 +222,10 @@
 							>{#if reason}<span class="qr-disabled-tooltip" role="tooltip" id={`qr-reason-${pair.member.id}`}
 									>{reason}</span
 								>{/if}</span
-						>{/if}<Button
-						variant="ghost"
-						class="counterpart-history-trigger"
-						aria-label={`Lịch sử với ${pair.member.name}`}
-						aria-expanded={expanded.includes(pair.member.id)}
-						aria-controls={`history-${pair.member.id}`}
-						onclick={() => toggleHistory(pair.member.id)}
-						><History size={17} /><ChevronDown size={14} /></Button
+						>{/if}<span
+						class="counterpart-history-chevron"
+						class:expanded={expanded.includes(pair.member.id)}
+						aria-hidden="true"><ChevronDown size={18} /></span
 					>
 				</div>
 			</div>

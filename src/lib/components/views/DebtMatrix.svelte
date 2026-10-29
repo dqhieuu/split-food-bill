@@ -68,10 +68,10 @@
 					{/each}
 				</tr>
 				<tr class="matrix-net-row">
-					<th scope="row">Nợ - bị nợ</th>
+					<th scope="row">Tổng cộng</th>
 					{#each members as member}
 						{@const net = 0 - netBalance(appState.ledger, member.id)}
-						<th scope="col" aria-label={`${member.name}, Nợ - bị nợ: ${currency(net)}`}>
+						<th scope="col" aria-label={`${member.name}, Tổng cộng: ${currency(net)}`}>
 							<strong class="matrix-net" class:net-owing={net > 0} class:net-owed={net < 0}
 								>{currency(net)}</strong
 							>

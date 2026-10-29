@@ -346,7 +346,7 @@
 	}
 </script>
 
-<a href="/" class="back-link"><ArrowLeft size={16} /> Về tổng quan</a>
+<a href="/overview" class="back-link"><ArrowLeft size={16} /> Về tổng quan</a>
 <div class="page-heading">
 	<div>
 		<h1>Tạo hoá đơn</h1>
@@ -537,7 +537,9 @@
 				<span class="summary-icon"><ReceiptText size={27} /></span>
 				<h2>Tóm tắt hóa đơn</h2>
 			</div>
-			<p>{description || 'Chưa có mô tả'}</p>
+			<p class="bill-summary-description" class:placeholder={!description}>
+				{description || 'Chưa có mô tả'}
+			</p>
 			<div class="summary-pair"><span>Người tham gia</span><strong>{selected.length} người</strong></div>
 			<div class="summary-pair">
 				<span>Phương thức</span><strong>{mode === 'equal' ? 'Chia đều' : 'Theo từng người'}</strong>

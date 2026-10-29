@@ -1230,6 +1230,17 @@ footer {
 	margin-top: 7px;
 	margin-bottom: 24px;
 }
+.bill-summary > .bill-summary-description {
+	font-size: 18px;
+	font-weight: 650;
+	color: var(--foreground);
+	overflow-wrap: anywhere;
+}
+.bill-summary > .bill-summary-description.placeholder {
+	font-size: 14px;
+	font-weight: 400;
+	color: light-dark(#6e7865, #a3ab9c);
+}
 .summary-pair {
 	display: flex;
 	justify-content: space-between;
@@ -1478,6 +1489,7 @@ footer {
 .qr-button-with-tooltip {
 	position: relative;
 	display: inline-flex;
+	pointer-events: auto;
 }
 .qr-button-with-tooltip:focus-visible {
 	outline: 2px solid var(--primary);
@@ -1549,6 +1561,7 @@ footer {
 	display: flex;
 	gap: 5px;
 	margin-left: 18px;
+	pointer-events: none;
 }
 .counterpart-history {
 	margin: 0 25px 16px 46px;
@@ -1607,14 +1620,16 @@ footer {
 	color: light-dark(#6e7865, #a3ab9c);
 	padding: 8px 0;
 }
-.counterpart-history-trigger[aria-expanded='true'] {
-	background: light-dark(#eff3e9, #28352a);
-	color: var(--primary);
-}
-.counterpart-history-trigger > svg:last-child {
+.counterpart-history-chevron {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	color: light-dark(#6e7865, #a3ab9c);
 	transition: transform 150ms ease;
 }
-.counterpart-history-trigger[aria-expanded='true'] > svg:last-child {
+.counterpart-history-chevron.expanded {
+	color: var(--primary);
 	transform: rotate(180deg);
 }
 .notice {
@@ -2644,6 +2659,8 @@ footer {
 		font-size: 11px;
 		line-height: 14px;
 		text-align: center;
+		-webkit-user-select: none;
+		user-select: none;
 	}
 	.mobile-bottom-label {
 		max-width: 100%;
@@ -2653,8 +2670,7 @@ footer {
 		display: block;
 		white-space: nowrap;
 	}
-	.mobile-bottom-link.active,
-	.mobile-bottom-link:hover {
+	.mobile-bottom-link.active {
 		color: var(--primary);
 		background: light-dark(#315e4710, #9bc8aa14);
 	}
@@ -2714,6 +2730,7 @@ footer {
 	.main-shell {
 		margin-left: 0;
 		width: 100%;
+		padding-top: 65px;
 	}
 	.mobile-close {
 		display: flex;
@@ -2725,6 +2742,8 @@ footer {
 		display: flex;
 	}
 	.topbar {
+		position: fixed;
+		inset: 0 0 auto;
 		height: 65px;
 		padding-inline: 16px;
 	}
@@ -3010,11 +3029,6 @@ footer {
 		min-height: 44px;
 		font-size: 12px;
 		padding: 6px 8px;
-	}
-	.counterpart-history-trigger[data-slot='button'] {
-		width: 44px;
-		gap: 2px;
-		padding: 6px;
 	}
 	.counterpart-history {
 		margin: 0 16px 14px 34px;
