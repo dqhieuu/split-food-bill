@@ -5,13 +5,11 @@
 		Gem,
 		Sprout,
 		Feather,
-		Sparkles,
 		ChevronRight,
 		ArrowUpRight,
 		ScrollText,
 		Crosshair,
-		Users,
-		Scale
+		Users
 	} from '@lucide/svelte';
 	import Avatar from '../Avatar.svelte';
 	import CourtFigure from '../CourtFigure.svelte';
@@ -21,8 +19,6 @@
 	import { currency, pairBalance } from '$lib/domain/ledger';
 
 	let { appState, actor, groupName }: { appState: AppState; actor: string; groupName: string } = $props();
-	let effects = $state(true);
-	let viewAngle = $state(0);
 	let filter = $state<'all' | 'creditors' | 'commoner' | 'servant'>('all');
 	let selectedId = $state<string | null>(null);
 	let profileOpen = $state(false);
@@ -34,7 +30,6 @@
 	const gathering = $derived(ranks.filter((entry) => !courtIds.has(entry.member.id)).slice(-3));
 	const ownRank = $derived(ranks.find((entry) => entry.member.id === actor));
 	const selected = $derived(ranks.find((entry) => entry.member.id === selectedId));
-	const coMonarchs = $derived(ranks.filter((entry) => entry.tier === 'sovereign').length);
 	const creditors = $derived(ranks.filter((entry) => entry.credit > 0).length);
 	const debtors = $derived(ranks.filter((entry) => entry.credit < 0).length);
 	const filters = $derived([
@@ -80,16 +75,10 @@
 	}
 </script>
 
-<div class="royal-court" class:effects-off={!effects}>
+<div class="royal-court">
 	<section class="royal-hero" aria-label="Đại điện hoàng gia">
 		<div class="royal-topline">
 			<span class="court-group"><Crown size={14} /><span>{groupName}</span></span>
-			<button
-				class="effects-button"
-				aria-label="Hiệu ứng đại điện"
-				aria-pressed={effects}
-				onclick={() => (effects = !effects)}><Sparkles size={15} /><span>Hiệu ứng</span></button
-			>
 		</div>
 		<header class="court-heading">
 			<p class="court-eyebrow"><span></span> ĐẠI ĐIỆN HOÀNG GIA <span></span></p>
@@ -97,7 +86,7 @@
 			<p>Ngai vàng đổi chủ. Sổ nợ lên ngôi.</p>
 		</header>
 		<div class="palace-stage">
-			<div class="palace-world" style:--court-angle={`${viewAngle}deg`}>
+			<div class="palace-world">
 				<svg class="palace-architecture" viewBox="0 0 720 500" preserveAspectRatio="none" aria-hidden="true">
 					<defs>
 						<linearGradient id="court-column" x1="0" x2="1"
@@ -212,26 +201,6 @@
 				</div>
 			</div>
 		</div>
-		<div class="stage-caption">
-			<span></span><Sparkles size={12} />{coMonarchs > 1
-				? `${coMonarchs} quân vương cùng hạng nhất`
-				: 'Chạm nhân vật để xem sắc phong'}<span></span>
-		</div>
-		<div class="court-perspective">
-			<label for="court-angle">Góc nhìn</label>
-			<input
-				id="court-angle"
-				aria-label="Góc nhìn đại điện"
-				type="range"
-				min="-12"
-				max="12"
-				step="1"
-				bind:value={viewAngle}
-			/>
-			<button onclick={() => (viewAngle = 0)} disabled={viewAngle === 0} aria-label="Đặt lại góc nhìn"
-				>Chính diện</button
-			>
-		</div>
 		<div class="court-census">
 			<div><Users size={15} /><strong>{ranks.length}</strong><span>thành viên</span></div>
 			<div><Crown size={15} /><strong>{creditors}</strong><span>chủ nợ</span></div>
@@ -265,7 +234,7 @@
 					onclick={() => (filter = item.id)}>{item.label}<span>{item.count}</span></button
 				>{/each}
 		</div>
-		<div class="register-columns"><span>THỨ BẬC / TƯỚC VỊ</span><span>NỢ − BỊ NỢ</span></div>
+		<div class="register-columns"><span>THỨ BẬC / TƯỚC VỊ</span><span>BỊ NỢ − NỢ</span></div>
 		<div class="rank-list" bind:this={rankList}>
 			{#each visible as entry (entry.member.id)}
 				{@const Emblem = emblem(entry.tier)}
@@ -286,7 +255,7 @@
 						><small><Emblem size={12} />{entry.title}</small></span
 					>
 					<span class="rank-balance" class:credit={entry.credit > 0} class:debt={entry.credit < 0}
-						><strong>{currency(0 - entry.credit)}</strong><small
+						><strong>{currency(entry.credit)}</strong><small
 							>{entry.credit > 0 ? 'Được nhận' : entry.credit < 0 ? 'Cần trả' : 'Đã cân bằng'}</small
 						></span
 					>
@@ -300,37 +269,6 @@
 				</div>{/each}
 		</div>
 	</section>
-	<details class="court-rules">
-		<summary><Scale size={17} /><span>Luật phong tước</span><ChevronRight size={16} /></summary>
-		<div class="rules-content">
-			<p>
-				Thứ bậc dựa trên <strong>Nợ − bị nợ</strong>, từ thấp đến cao. Số âm là tiền được nhận; số dương là
-				tiền cần trả.
-			</p>
-			<dl>
-				<div>
-					<dt><Crown size={15} /> Quân vương</dt>
-					<dd>Người được nhận ròng nhiều nhất, lớn hơn 0 ₫.</dd>
-				</div>
-				<div>
-					<dt><Gem size={15} /> Quý tộc</dt>
-					<dd>Các chủ nợ còn lại. Hạng 2 là Công tước, hạng 3 là Hầu tước.</dd>
-				</div>
-				<div>
-					<dt><Sprout size={15} /> Thường dân</dt>
-					<dd>Nợ và bị nợ cân bằng nhau.</dd>
-				</div>
-				<div>
-					<dt><Feather size={15} /> Nô bộc</dt>
-					<dd>Tiền cần trả nhiều hơn tiền được nhận.</dd>
-				</div>
-			</dl>
-			<p>
-				Chỉ xếp hạng thành viên đang hoạt động. Số dư vẫn tính toàn bộ giao dịch. Cùng số dư, cùng thứ hạng và
-				tước vị.
-			</p>
-		</div>
-	</details>
 	<div class="court-endmark" aria-hidden="true"><span></span><Crown size={17} /><span></span></div>
 </div>
 
@@ -387,8 +325,7 @@
 	.royal-court button {
 		font-family: inherit;
 	}
-	.royal-court button:focus-visible,
-	.court-rules summary:focus-visible {
+	.royal-court button:focus-visible {
 		outline: 2px solid var(--gold);
 		outline-offset: -3px;
 	}
@@ -421,23 +358,6 @@
 	}
 	.court-group :global(svg) {
 		flex-shrink: 0;
-	}
-	.effects-button {
-		display: flex;
-		align-items: center;
-		gap: 5px;
-		flex-shrink: 0;
-		color: #c2ad95;
-		font-size: 10px;
-		padding: 8px;
-		border: 1px solid var(--royal-line);
-		border-radius: 20px;
-		background: #100c1529;
-		cursor: pointer;
-		min-height: 36px;
-	}
-	.effects-button[aria-pressed='false'] {
-		color: #8c8194;
 	}
 	.court-heading {
 		position: relative;
@@ -490,7 +410,6 @@
 	.palace-world {
 		position: absolute;
 		inset: 0;
-		transform: rotateY(var(--court-angle));
 		transform-style: preserve-3d;
 	}
 	.palace-architecture {
@@ -617,48 +536,6 @@
 		animation: court-flicker 3s ease-in-out infinite alternate;
 		transform-box: fill-box;
 		transform-origin: bottom;
-	}
-	.stage-caption {
-		position: relative;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		gap: 7px;
-		color: #b9a086;
-		padding: 0 12px 10px;
-		font-size: 9px;
-		letter-spacing: 0.02em;
-	}
-	.stage-caption > span {
-		width: 20px;
-		height: 1px;
-		background: var(--royal-line);
-	}
-	.court-perspective {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 12px;
-		padding: 0 18px 14px;
-		font-size: 10px;
-		color: var(--muted-gold);
-	}
-	.court-perspective input {
-		width: 105px;
-		min-width: 0;
-		height: 36px;
-		accent-color: #d9b776;
-		cursor: ew-resize;
-	}
-	.court-perspective button {
-		color: var(--gold);
-		background: none;
-		border: 0;
-		padding: 10px 0;
-		font-size: 10px;
-	}
-	.court-perspective button:disabled {
-		opacity: 0.45;
 	}
 	.court-census {
 		display: grid;
@@ -940,55 +817,6 @@
 		margin: 0 auto 12px;
 		color: #c5a374;
 	}
-	.court-rules {
-		margin: 20px 16px 0;
-		border: 1px solid var(--royal-line);
-		border-radius: 10px;
-		background: #211b27;
-	}
-	.court-rules summary {
-		display: flex;
-		align-items: center;
-		gap: 9px;
-		padding: 14px;
-		font-size: 12px;
-		color: #c6ae8c;
-		cursor: pointer;
-		list-style: none;
-	}
-	.court-rules summary::-webkit-details-marker {
-		display: none;
-	}
-	.court-rules summary span {
-		flex: 1;
-	}
-	.court-rules[open] summary > :global(svg:last-child) {
-		transform: rotate(90deg);
-	}
-	.rules-content {
-		padding: 0 15px 15px;
-		font-size: 12px;
-		line-height: 1.7;
-		color: #b2a3b6;
-	}
-	.rules-content p {
-		margin: 0;
-	}
-	.rules-content dl {
-		margin: 17px 0;
-	}
-	.rules-content dl > div {
-		margin-top: 13px;
-	}
-	.rules-content dt {
-		display: flex;
-		align-items: center;
-		gap: 7px;
-		color: #dfc596;
-	}
-	.rules-content dd {
-		margin: 3px 0 0 22px;
-	}
 	.court-endmark {
 		display: flex;
 		align-items: center;
@@ -1001,10 +829,6 @@
 		width: 42px;
 		height: 1px;
 		background: var(--royal-line);
-	}
-	.effects-off .palace-dust i,
-	.effects-off .torch-flames {
-		animation: none;
 	}
 	.royal-profile {
 		background: radial-gradient(ellipse at 50% 0, #68472666, transparent 65%), #211824;
@@ -1124,8 +948,7 @@
 		.court-eyebrow {
 			font-size: 10px;
 		}
-		.court-group,
-		.effects-button {
+		.court-group {
 			font-size: 12px;
 		}
 		.palace-stage {
@@ -1155,9 +978,6 @@
 		}
 		.royal-carpet {
 			top: 335px;
-		}
-		.stage-caption {
-			font-size: 11px;
 		}
 		.court-census {
 			padding: 20px;
@@ -1229,16 +1049,10 @@
 		.rank-row :global(.rank-chevron) {
 			display: block;
 		}
-		.court-rules {
-			margin: 25px 30px 0;
-		}
 	}
 	@media (max-width: 359px) {
 		.royal-topline {
 			padding-inline: 12px;
-		}
-		.effects-button span {
-			display: none;
 		}
 		.court-register {
 			padding-inline: 11px;

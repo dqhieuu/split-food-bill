@@ -148,23 +148,15 @@ for (const width of [1280, 390]) {
 			await expect(page.getByRole('heading', { name: 'Bảng xếp hạng', exact: true })).toBeVisible();
 			await expect(page.locator('.throne-occupant')).toContainText('Thảo Linh');
 			await expect(page.locator('.rank-row').first()).toContainText('Thảo Linh');
-			await expect(page.locator('.rank-row').first()).toContainText('-40.000');
+			await expect(page.locator('.rank-row').first().locator('.rank-balance strong')).toHaveText('40.000 ₫');
+			await expect(page.locator('.rank-row[data-self="true"] .rank-balance strong')).toHaveText('-90.000 ₫');
 			await expect(page.locator('.rank-row')).toHaveCount(8);
 			await expect(page.locator('.rank-row', { hasText: 'Thành viên cũ' })).toHaveCount(0);
-			await page.getByRole('slider', { name: 'Góc nhìn đại điện' }).fill('12');
-			await expect(page.getByRole('button', { name: 'Đặt lại góc nhìn' })).toBeEnabled();
-			await page.getByRole('button', { name: 'Đặt lại góc nhìn' }).click();
-			await expect(page.getByRole('slider', { name: 'Góc nhìn đại điện' })).toHaveValue('0');
 			expect(await page.locator('.royal-hero').evaluate((element) => element.scrollLeft)).toBe(0);
 			expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width < 760 ? 375 : width);
 			await page.evaluate(() => window.scrollTo(0, 0));
 			await page.screenshot({ path: `artifacts/royal-court-viewport-${width}.png` });
 			await page.screenshot({ path: `artifacts/royal-court-${width}.png`, fullPage: true });
-			await page.getByRole('button', { name: 'Hiệu ứng đại điện', exact: true }).click();
-			await expect(page.getByRole('button', { name: 'Hiệu ứng đại điện', exact: true })).toHaveAttribute(
-				'aria-pressed',
-				'false'
-			);
 			await page.locator('.court-filters').getByRole('button', { name: 'Nô bộc' }).click();
 			await expect(page.locator('.rank-row')).toHaveCount(2);
 			await page.getByRole('button', { name: 'Tìm tôi', exact: true }).click();
@@ -193,8 +185,6 @@ for (const width of [1280, 390]) {
 			await expect(page.locator('.rank-balance strong').first()).toHaveText('0 ₫');
 			await page.locator('.court-filters').getByRole('button', { name: 'Hoàng tộc' }).click();
 			await expect(page.locator('.court-empty')).toContainText('Chưa có ai mang tước vị này.');
-			await page.locator('.court-rules summary').click();
-			await expect(page.locator('.rules-content')).toBeVisible();
 		});
 
 		test('overview payment history shows the newest creation first', async ({ page }) => {
@@ -291,7 +281,6 @@ for (const width of [1280, 390]) {
 					state.ledger[0].amount = 1000000000;
 				});
 				await expect(page.locator('.throne-occupant')).toContainText(longName);
-				await page.getByRole('slider', { name: 'Góc nhìn đại điện' }).fill('-12');
 				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
 				await page.locator('.rank-row').first().click();
 				await expect(page.getByRole('dialog')).toContainText(longName);
