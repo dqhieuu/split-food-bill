@@ -27,6 +27,8 @@
 	--background: light-dark(#faf9f6, #141814);
 	--foreground: light-dark(#29362c, #e6ebe3);
 	--primary: light-dark(#315e47, #7fbf98);
+	--amount-owing: light-dark(#2f7a52, #7fd3a2);
+	--amount-owed: light-dark(#b42318, #ff8b82);
 	--font-sans: 'Segoe UI', Arial, sans-serif;
 	font-family: var(--font-sans);
 	font-size: 15px;
@@ -563,14 +565,8 @@ main {
 	font-weight: 500;
 	white-space: nowrap;
 }
-.positive {
-	color: light-dark(#528060, #76a583) !important;
-}
-.negative {
-	color: light-dark(#6e7865, #a3ab9c) !important;
-}
 .stat-card > strong.negative {
-	color: light-dark(#b42318, #ff8b82) !important;
+	color: var(--amount-owed) !important;
 }
 .stat-unit {
 	font-size: 15px;
@@ -1920,10 +1916,10 @@ footer {
 	font-weight: 700;
 }
 .matrix-net.net-owing {
-	color: light-dark(#2f7a52, #7fd3a2);
+	color: var(--amount-owing);
 }
 .matrix-net.net-owed {
-	color: light-dark(#b42318, #ff8b82);
+	color: var(--amount-owed);
 }
 .matrix-table th:first-child {
 	text-align: left;
@@ -1981,7 +1977,7 @@ footer {
 }
 .matrix-table td.debt-cell {
 	background: light-dark(#eff4e7, #1f221a);
-	color: light-dark(#2f7a52, #7fd3a2);
+	color: var(--amount-owing);
 	font-weight: 600;
 }
 .settlement-history {
@@ -3253,17 +3249,13 @@ footer {
 }
 
 /* Readable finance text and a compact, scrollable sidebar on short screens. */
-.positive {
-	color: light-dark(#49744e, #85b38a) !important;
-}
+.positive,
 .gain-amount {
-	color: light-dark(#49744e, #85b38a) !important;
+	color: var(--amount-owing) !important;
 }
-.loss-amount {
-	color: light-dark(#a46744, #c1825e) !important;
-}
+.loss-amount,
 .negative {
-	color: light-dark(#a46744, #c1825e) !important;
+	color: var(--amount-owed) !important;
 }
 .stat-card > strong {
 	font-variant-numeric: tabular-nums;
@@ -4270,7 +4262,7 @@ select[aria-invalid='true'] {
 	overflow-y: auto;
 }
 .matrix-table td.credit-cell {
-	color: light-dark(#b42318, #ff8b82);
+	color: var(--amount-owed);
 	background: light-dark(#fff1f0, #321e1d);
 }
 .simplify-button {

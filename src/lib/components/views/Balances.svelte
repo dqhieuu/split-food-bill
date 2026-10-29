@@ -168,9 +168,7 @@
 	<div class="stat-card">
 		<div class="stat-label">{subject} đang bị nợ <ArrowDownLeft size={19} /></div>
 		<strong class="loss-amount">{currency(owed)}</strong><span class="stat-foot"
-			>{pairs.filter((p) => p.balance < 0).length} người cần trả tiền cho {isOwnAccount
-				? 'bạn'
-				: account?.name}</span
+			>{pairs.filter((p) => p.balance < 0).length} người đang nợ {isOwnAccount ? 'bạn' : account?.name}</span
 		>
 	</div>
 </div>
