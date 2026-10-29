@@ -2630,13 +2630,17 @@ footer {
 		padding: 2px;
 		border-radius: 8px;
 		color: light-dark(#747c6f, #a4ad9d);
-		font-size: 10px;
-		line-height: 12px;
+		font-size: 11px;
+		line-height: 14px;
 		text-align: center;
 	}
-	.mobile-bottom-link span {
+	.mobile-bottom-label {
 		max-width: 100%;
-		min-height: 24px;
+		min-height: 28px;
+	}
+	.mobile-bottom-label > span {
+		display: block;
+		white-space: nowrap;
 	}
 	.mobile-bottom-link.active,
 	.mobile-bottom-link:hover {

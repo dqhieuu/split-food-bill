@@ -83,9 +83,12 @@
 		{ path: '/members', label: 'Thành viên & quản lý', icon: Users },
 		{ path: '/groups', label: 'Nhóm', icon: Users }
 	];
-	const bottomNavigation = ['/balances', '/new-bill', '/', '/matrix'].map((path) =>
-		navigation.find((item) => item.path === path)!
-	);
+	const bottomNavigation = [
+		{ path: '/balances', lines: ['Tài khoản', 'của bạn'] },
+		{ path: '/new-bill', lines: ['Tạo', 'hoá đơn'] },
+		{ path: '/', lines: ['Tổng', 'quan'] },
+		{ path: '/matrix', lines: ['Ma trận', 'nợ nần'] }
+	].map(({ path, lines }) => ({ ...navigation.find((item) => item.path === path)!, lines }));
 	const section = $derived(page.url.pathname);
 	const currentMember = $derived(appState?.members.find((member) => member.id === actor));
 	const canCaptureBill = $derived(
@@ -468,9 +471,12 @@
 						class="mobile-bottom-link"
 						class:active={section === item.path}
 						href={item.path}
+						aria-label={item.label}
 						aria-current={section === item.path ? 'page' : undefined}
 						onclick={() => (mobileMenu = false)}
-						><item.icon size={20} aria-hidden="true" /><span>{item.label}</span></a
+						><item.icon size={20} aria-hidden="true" /><span class="mobile-bottom-label"
+							>{#each item.lines as line}<span>{line}</span>{/each}</span
+						></a
 					>
 				{/each}
 			</nav>
