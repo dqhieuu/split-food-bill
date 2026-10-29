@@ -329,7 +329,7 @@
 				onclick={() => (mobileMenu = false)}
 			></button>{/if}
 		<aside class:mobile-open={mobileMenu}>
-			<a class="brand" href="/"
+			<a class="brand" href="/overview" onclick={() => (mobileMenu = false)}
 				><span class="brand-mark"><Utensils size={23} /></span><span>Chia tiền ăn</span></a
 			>
 			<button

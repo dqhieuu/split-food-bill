@@ -236,7 +236,7 @@ for (const width of [1280, 390]) {
 			]);
 		});
 
-		test('balance rows highlight edge to edge and keep long names away from actions', async ({ page }) => {
+		test('balance rows stay unhighlighted and keep long names away from actions', async ({ page }) => {
 			if (width < 760) await page.setViewportSize({ width: 375, height: 667 });
 			const longName = 'Thảo Linh ' + 'TênRấtDài'.repeat(15);
 			await openFixture(page, '/balances', (state) => {
@@ -254,7 +254,7 @@ for (const width of [1280, 390]) {
 			await page.mouse.move(bounds.x + 2, bounds.y + 2);
 			await expect
 				.poll(() => main.evaluate((element) => getComputedStyle(element).backgroundColor))
-				.not.toBe('rgba(0, 0, 0, 0)');
+				.toBe('rgba(0, 0, 0, 0)');
 			if (width < 760) {
 				const actions = (await row.locator('.counterpart-actions').boundingBox())!;
 				const name = (await row.locator('.counterpart-name').boundingBox())!;

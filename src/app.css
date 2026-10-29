@@ -1476,10 +1476,6 @@ footer {
 	padding: 14px 25px;
 	cursor: pointer;
 }
-.counterpart-main:hover,
-.counterpart-main:focus-within {
-	background: light-dark(#f5f6ef, #1e1e1a);
-}
 .counterpart-row-toggle {
 	position: absolute;
 	inset: 0;
@@ -4292,6 +4288,9 @@ select[aria-invalid='true'] {
 
 @media (max-width: 760px) {
 	/* Phones: cells shrink and each bill becomes a colour chip; details live in the inspector below. */
+	.cal-toggle {
+		display: none;
+	}
 	.calendar-panel {
 		padding: 16px 12px;
 	}
