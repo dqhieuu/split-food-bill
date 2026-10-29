@@ -137,6 +137,66 @@ for (const width of [1280, 390]) {
 	test.describe(`viewport ${width}px`, () => {
 		test.use({ viewport: { width, height: 844 } });
 
+		test('royal leaderboard follows the matrix in navigation and opens real member balances', async ({
+			page
+		}) => {
+			if (width < 760) await page.setViewportSize({ width: 375, height: 812 });
+			await openFixture(page, '/matrix');
+			if (width < 760) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
+			await expect(page.locator('aside nav a[href="/matrix"] + a')).toHaveAttribute('href', '/leaderboard');
+			await page.locator('aside nav a[href="/leaderboard"]').click();
+			await expect(page.getByRole('heading', { name: 'Bảng xếp hạng', exact: true })).toBeVisible();
+			await expect(page.locator('.throne-occupant')).toContainText('Thảo Linh');
+			await expect(page.locator('.rank-row').first()).toContainText('Thảo Linh');
+			await expect(page.locator('.rank-row').first()).toContainText('-40.000');
+			await expect(page.locator('.rank-row')).toHaveCount(8);
+			await expect(page.locator('.rank-row', { hasText: 'Thành viên cũ' })).toHaveCount(0);
+			await page.getByRole('slider', { name: 'Góc nhìn đại điện' }).fill('12');
+			await expect(page.getByRole('button', { name: 'Đặt lại góc nhìn' })).toBeEnabled();
+			await page.getByRole('button', { name: 'Đặt lại góc nhìn' }).click();
+			await expect(page.getByRole('slider', { name: 'Góc nhìn đại điện' })).toHaveValue('0');
+			expect(await page.locator('.royal-hero').evaluate((element) => element.scrollLeft)).toBe(0);
+			expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width < 760 ? 375 : width);
+			await page.evaluate(() => window.scrollTo(0, 0));
+			await page.screenshot({ path: `artifacts/royal-court-viewport-${width}.png` });
+			await page.screenshot({ path: `artifacts/royal-court-${width}.png`, fullPage: true });
+			await page.getByRole('button', { name: 'Hiệu ứng đại điện', exact: true }).click();
+			await expect(page.getByRole('button', { name: 'Hiệu ứng đại điện', exact: true })).toHaveAttribute(
+				'aria-pressed',
+				'false'
+			);
+			await page.locator('.court-filters').getByRole('button', { name: 'Nô bộc' }).click();
+			await expect(page.locator('.rank-row')).toHaveCount(2);
+			await page.getByRole('button', { name: 'Tìm tôi', exact: true }).click();
+			await expect(page.locator('.rank-row')).toHaveCount(8);
+			await expect(page.locator('.rank-row[data-self="true"]')).toBeFocused();
+			await page.locator('.rank-row[data-self="true"]').click();
+			const dialog = page.getByRole('dialog');
+			await expect(dialog).toContainText('Nô bộc');
+			await expect(dialog.locator('.profile-net')).toContainText('90.000');
+			await dialog.getByRole('link', { name: 'Xem tài khoản' }).click();
+			await expect(page).toHaveURL(new RegExp(`/balances\\?member=${ACTOR}$`));
+			await expect(page.getByRole('heading', { name: 'Tài khoản của bạn', exact: true })).toBeVisible();
+		});
+
+		test('royal court updates its crown with live balances and handles a vacant throne', async ({ page }) => {
+			const { state } = await openFixture(page, '/leaderboard');
+			await expect(page.locator('.throne-occupant')).toContainText('Thảo Linh');
+			state.ledger.push({ ...state.ledger[0], id: 'crown-change', from: 'linh', to: ACTOR, amount: 150000 });
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await expect(page.locator('.throne-occupant')).toContainText('Minh An');
+			state.ledger = [];
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await expect(page.locator('.vacant-throne')).toContainText('Ngai vàng đang chờ');
+			await expect(page.locator('.rank-row.sovereign')).toHaveCount(0);
+			await expect(page.locator('.rank-row.commoner')).toHaveCount(8);
+			await expect(page.locator('.rank-balance strong').first()).toHaveText('0 ₫');
+			await page.locator('.court-filters').getByRole('button', { name: 'Hoàng tộc' }).click();
+			await expect(page.locator('.court-empty')).toContainText('Chưa có ai mang tước vị này.');
+			await page.locator('.court-rules summary').click();
+			await expect(page.locator('.rules-content')).toBeVisible();
+		});
+
 		test('overview payment history shows the newest creation first', async ({ page }) => {
 			await openFixture(page, '/', (state) => {
 				const base = { ...state.ledger[0], source: 'qr' as const, from: ACTOR, to: 'linh' };
@@ -223,6 +283,20 @@ for (const width of [1280, 390]) {
 		});
 
 		if (width < 760) {
+			test('royal court fits long names and large balances on a narrow phone', async ({ page }) => {
+				await page.setViewportSize({ width: 320, height: 667 });
+				const longName = 'Thảo Linh ' + 'TênRấtDài'.repeat(20);
+				await openFixture(page, '/leaderboard', (state) => {
+					state.members.find((member) => member.id === 'linh')!.name = longName;
+					state.ledger[0].amount = 1000000000;
+				});
+				await expect(page.locator('.throne-occupant')).toContainText(longName);
+				await page.getByRole('slider', { name: 'Góc nhìn đại điện' }).fill('-12');
+				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+				await page.locator('.rank-row').first().click();
+				await expect(page.getByRole('dialog')).toContainText(longName);
+				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+			});
 			test('bottom navigation has four links around the camera and replaces browser history', async ({
 				page
 			}) => {
@@ -376,8 +450,11 @@ for (const width of [1280, 390]) {
 			await expect(page.locator('.stat-card').nth(0)).toContainText('110.000 ₫');
 			await expect(page.locator('.stat-card').nth(1)).toContainText('Bạn đang bị nợ');
 			await expect(page.locator('.stat-card').nth(1)).toContainText('20.000 ₫');
-			await expect(page.locator('.stat-card').nth(2)).toContainText('Nợ - bị nợ');
-			await expect(page.locator('.stat-card').nth(2)).toContainText('90.000 ₫');
+			await expect(page.locator('.stat-card')).toHaveCount(2);
+			const firstTile = (await page.locator('.stat-card').nth(0).boundingBox())!;
+			const secondTile = (await page.locator('.stat-card').nth(1).boundingBox())!;
+			expect(Math.abs(firstTile.y - secondTile.y)).toBeLessThan(1);
+			if (width < 760) await expect(page.locator('.main-shell > footer')).toBeHidden();
 			await expect(page.getByRole('button', { name: 'Tất cả', exact: true })).toBeVisible();
 			await expect(page.locator('.counterpart')).toHaveCount(7);
 			await expect(page.locator('.counterpart').filter({ hasText: 'Thành viên cũ' })).toHaveCount(0);

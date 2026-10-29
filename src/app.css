@@ -501,6 +501,12 @@ main {
 	border-radius: 12px;
 	padding: 21px 22px 18px;
 }
+.stat-grid.balance-stat-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.balance-stat-grid .stat-card:first-child {
+	grid-column: auto;
+}
 .stat-label {
 	font-size: 14px;
 	color: light-dark(#6e7865, #a3ab9c);
@@ -2597,6 +2603,15 @@ footer {
 	}
 }
 @media (max-width: 760px) {
+	.main-shell > footer {
+		display: none;
+	}
+	.balance-stat-grid .stat-card {
+		padding: 15px 12px;
+	}
+	.balance-stat-grid .stat-card > strong {
+		font-size: clamp(16px, 5vw, 23px);
+	}
 	html {
 		touch-action: pan-x pan-y;
 	}
@@ -2667,7 +2682,7 @@ footer {
 		opacity: 0.7;
 	}
 	.has-mobile-camera .main-shell {
-		padding-bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+		padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
 	}
 	.toast.camera-toast-offset {
 		bottom: calc(104px + env(safe-area-inset-bottom, 0px));

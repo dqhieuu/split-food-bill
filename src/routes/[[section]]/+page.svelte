@@ -20,7 +20,8 @@
 		X,
 		Check,
 		AlertCircle,
-		Camera
+		Camera,
+		Crown
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -32,6 +33,7 @@
 	import Activity from '$lib/components/views/Activity.svelte';
 	import Management from '$lib/components/views/Management.svelte';
 	import DebtMatrix from '$lib/components/views/DebtMatrix.svelte';
+	import Leaderboard from '$lib/components/views/Leaderboard.svelte';
 	import Groups from '$lib/components/views/Groups.svelte';
 	import { Switch } from '$lib/components/ui/switch';
 	import {
@@ -79,6 +81,7 @@
 		{ path: '/new-bill', label: 'Tạo hoá đơn', icon: Plus },
 		{ path: '/balances', label: 'Tài khoản của bạn', icon: Wallet },
 		{ path: '/matrix', label: 'Ma trận nợ nần', icon: Users },
+		{ path: '/leaderboard', label: 'Bảng xếp hạng', icon: Crown },
 		{ path: '/activity', label: 'Ledger', icon: ReceiptText },
 		{ path: '/members', label: 'Thành viên & quản lý', icon: Users },
 		{ path: '/groups', label: 'Nhóm', icon: Users }
@@ -440,6 +443,11 @@
 								groupId={selectedGroupId}
 							/>
 						{:else if section === '/matrix'}<DebtMatrix {appState} {actor} {run} {busy} />
+						{:else if section === '/leaderboard'}<Leaderboard
+								{appState}
+								{actor}
+								groupName={group?.name ?? ''}
+							/>
 						{:else}<div class="empty-state">
 								<h1>Không tìm thấy trang</h1>
 								<Button href="/">Về tổng quan</Button>

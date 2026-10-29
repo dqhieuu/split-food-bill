@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import QRCode from 'qrcode';
-	import { Wallet, ArrowUpRight, ArrowDownLeft, QrCode, History, ChevronDown } from '@lucide/svelte';
+	import { ArrowUpRight, ArrowDownLeft, QrCode, History, ChevronDown } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import Avatar from '../Avatar.svelte';
@@ -158,7 +158,7 @@
 		</select>
 	</label>
 </div>
-<div class="stat-grid">
+<div class="stat-grid balance-stat-grid">
 	<div class="stat-card">
 		<div class="stat-label">{subject} đang nợ <ArrowUpRight size={19} /></div>
 		<strong class="gain-amount">{currency(owing)}</strong><span class="stat-foot"
@@ -171,12 +171,6 @@
 			>{pairs.filter((p) => p.balance < 0).length} người cần trả tiền cho {isOwnAccount
 				? 'bạn'
 				: account?.name}</span
-		>
-	</div>
-	<div class="stat-card">
-		<div class="stat-label">Nợ - bị nợ <Wallet size={19} /></div>
-		<strong class:negative={owing - owed < 0} class:positive={owing - owed > 0}
-			>{currency(owing - owed)}</strong
 		>
 	</div>
 </div>
