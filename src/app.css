@@ -1235,6 +1235,8 @@ footer {
 	font-weight: 650;
 	color: var(--foreground);
 	overflow-wrap: anywhere;
+	margin-top: 18px;
+	margin-bottom: 8px;
 }
 .bill-summary > .bill-summary-description.placeholder {
 	font-size: 14px;
@@ -2556,8 +2558,8 @@ footer {
 	}
 	.bill-summary {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0 30px;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0;
 	}
 	.bill-summary-heading,
 	.bill-summary > p {

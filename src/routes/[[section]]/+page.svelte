@@ -69,6 +69,8 @@
 	let releaseOpen = $state(false);
 	let accountOpen = $state(false);
 	let resetOpen = $state(false);
+	let mainContent = $state<HTMLElement>();
+	let mobilePageAnimation: Animation | undefined;
 	let cameraInput = $state<HTMLInputElement>();
 	let cameraContext: { groupId: string; actor: string } | null = null;
 	let cameraBusy = $state(false);
@@ -109,6 +111,29 @@
 			.toLocaleUpperCase('vi') || '?'
 	);
 	let toastTimer: ReturnType<typeof setTimeout>;
+	async function navigateFromBottomBar(event: MouseEvent, path: string) {
+		mobileMenu = false;
+		if (
+			event.button !== 0 ||
+			event.metaKey ||
+			event.ctrlKey ||
+			event.shiftKey ||
+			event.altKey ||
+			section === path
+		)
+			return;
+		event.preventDefault();
+		mobilePageAnimation?.cancel();
+		await goto(path, { replace: true });
+		if (section !== path || !mainContent || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		mobilePageAnimation = mainContent.animate(
+			[
+				{ opacity: 0, transform: 'translateY(10px)' },
+				{ opacity: 1, transform: 'translateY(0)' }
+			],
+			{ duration: 200, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
+		);
+	}
 	/** Keeps the header and the group picker in step when an admin renames the group. */
 	function applyGroup(next: Group) {
 		if (group?.id === next.id) group = next;
@@ -265,6 +290,7 @@
 		const interval = setInterval(poll, 15000);
 		document.addEventListener('visibilitychange', poll);
 		return () => {
+			mobilePageAnimation?.cancel();
 			clearInterval(interval);
 			document.removeEventListener('visibilitychange', poll);
 			clearTimeout(toastTimer);
@@ -388,7 +414,7 @@
 					>
 				</div>
 			</header>
-			<main id="main-content">
+			<main id="main-content" bind:this={mainContent}>
 				{#if loading}
 					<div class="loading-panel">
 						<h1>Đang tải dữ liệu…</h1>
@@ -487,7 +513,7 @@
 						href={item.path}
 						aria-label={item.label}
 						aria-current={section === item.path ? 'page' : undefined}
-						onclick={() => (mobileMenu = false)}
+						onclick={(event) => void navigateFromBottomBar(event, item.path)}
 						><item.icon size={20} aria-hidden="true" /><span class="mobile-bottom-label"
 							>{#each item.lines as line}<span>{line}</span>{/each}</span
 						></a

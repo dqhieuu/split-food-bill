@@ -22,7 +22,7 @@
 	import Modal from '../Modal.svelte';
 	import type { AppState, Member } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, dateTimeLabel, localDate, netBalance } from '$lib/domain/ledger';
+	import { currency, dateTimeLabel, localDate } from '$lib/domain/ledger';
 	import { bankNames, resolveBank } from '$lib/domain/qr';
 	import { banks } from '$lib/domain/banks';
 	import { parseLedgerImport, summarizeImport, type ImportedEntry } from '$lib/domain/import';
@@ -223,12 +223,7 @@
 		</div>
 		<div class="table-scroll">
 			<table class="data-table">
-				<thead
-					><tr
-						><th>Thành viên</th><th>Vai trò</th><th>Ngân hàng</th><th class="align-right">Lỗ/lãi</th><th
-						></th></tr
-					></thead
-				><tbody
+				<thead><tr><th>Thành viên</th><th>Vai trò</th><th>Ngân hàng</th><th></th></tr></thead><tbody
 					>{#each members as member (member.id)}<tr class:inactive-member={!member.active}
 							><td
 								><div class="table-person">
@@ -240,11 +235,6 @@
 										? `•••• ${member.bankAccount.slice(-4)}`
 										: 'Chưa có số tài khoản'}</small
 								></td
-							><td
-								class="align-right"
-								class:positive={netBalance(appState.ledger, member.id) >= 0}
-								class:negative={netBalance(appState.ledger, member.id) < 0}
-								>{currency(netBalance(appState.ledger, member.id))}</td
 							><td
 								><div class="member-row-actions">
 									{#if isAdmin}<Switch
