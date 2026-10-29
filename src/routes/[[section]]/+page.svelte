@@ -83,6 +83,9 @@
 		{ path: '/members', label: 'Thành viên & quản lý', icon: Users },
 		{ path: '/groups', label: 'Nhóm', icon: Users }
 	];
+	const bottomNavigation = ['/balances', '/new-bill', '/', '/matrix'].map((path) =>
+		navigation.find((item) => item.path === path)!
+	);
 	const section = $derived(page.url.pathname);
 	const currentMember = $derived(appState?.members.find((member) => member.id === actor));
 	const canCaptureBill = $derived(
@@ -458,6 +461,19 @@
 			oncancel={() => (cameraContext = null)}
 		/>
 		<div class="mobile-camera-bar">
+			<nav class="mobile-bottom-navigation" aria-label="Điều hướng nhanh">
+				{#each bottomNavigation as item, index}
+					{#if index === 2}<span aria-hidden="true"></span>{/if}
+					<a
+						class="mobile-bottom-link"
+						class:active={section === item.path}
+						href={item.path}
+						aria-current={section === item.path ? 'page' : undefined}
+						onclick={() => (mobileMenu = false)}
+						><item.icon size={20} aria-hidden="true" /><span>{item.label}</span></a
+					>
+				{/each}
+			</nav>
 			<button
 				type="button"
 				class="mobile-bill-camera"

@@ -1,5 +1,5 @@
 import type { Bill, LedgerEntry } from './types';
-import { cancelledEntryIds, localDate } from './ledger';
+import { cancelledEntryIds, compareLedgerEntries, localDate } from './ledger';
 
 export type SpendingGranularity = 'day' | 'week' | 'month';
 
@@ -74,5 +74,5 @@ export function personalPaymentHistory(ledger: LedgerEntry[], actor: string, act
 						? ('sent-transfer' as const)
 						: ('received-transfer' as const)
 		}))
-		.sort((a, b) => b.entry.date.localeCompare(a.entry.date) || b.entry.id.localeCompare(a.entry.id));
+		.sort((a, b) => compareLedgerEntries(a.entry, b.entry));
 }

@@ -62,6 +62,29 @@ describe('spending windows', () => {
 });
 
 describe('personal payment history', () => {
+	it('orders by creation time instead of payment date, falling back for legacy entries', () => {
+		const base: LedgerEntry = {
+			id: 'base',
+			from: 'an',
+			to: 'linh',
+			type: 'debt',
+			source: 'bill',
+			amount: 50000,
+			date: '2026-10-29T05:00:00.000Z',
+			description: '',
+			note: '',
+			creator: 'an',
+			reference: 'bill'
+		};
+		const entries = [
+			{ ...base, id: 'old-created', date: '2030-01-01T00:00:00.000Z', createdAt: '2026-10-27T05:00:00.000Z' },
+			{ ...base, id: 'new-created', date: '2020-01-01T00:00:00.000Z', createdAt: '2026-10-29T05:00:00.000Z' },
+			{ ...base, id: 'legacy', date: '2026-10-28T05:00:00.000Z' }
+		];
+		expect(
+			personalPaymentHistory(entries, 'an', new Set(['an', 'linh'])).map((item) => item.entry.id)
+		).toEqual(['new-created', 'legacy', 'old-created']);
+	});
 	it('distinguishes covering a meal from sending a repayment and omits synthetic/self/inactive entries', () => {
 		const entry = (
 			id: string,

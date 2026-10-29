@@ -202,7 +202,7 @@
 					onclick={() => toggleHistory(pair.member.id)}
 				></button>
 				<Avatar member={pair.member} />
-				<div class="counterpart-name">
+				<div class="counterpart-name" title={pair.member.name}>
 					<strong>{pair.member.name}</strong>
 				</div>
 				<div class="counterpart-amount">

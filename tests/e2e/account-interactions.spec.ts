@@ -137,6 +137,123 @@ for (const width of [1280, 390]) {
 	test.describe(`viewport ${width}px`, () => {
 		test.use({ viewport: { width, height: 844 } });
 
+		test('overview payment history shows the newest creation first', async ({ page }) => {
+			await openFixture(page, '/', (state) => {
+				const base = { ...state.ledger[0], source: 'qr' as const, from: ACTOR, to: 'linh' };
+				state.ledger = [
+					{
+						...base,
+						id: 'old',
+						description: 'Older creation',
+						date: '2030-01-01T00:00:00.000Z',
+						createdAt: '2026-10-27T05:00:00.000Z'
+					},
+					{
+						...base,
+						id: 'new',
+						description: 'Newest creation',
+						date: '2020-01-01T00:00:00.000Z',
+						createdAt: '2026-10-29T05:00:00.000Z'
+					},
+					{ ...base, id: 'legacy', description: 'Legacy entry', date: '2026-10-28T05:00:00.000Z' }
+				];
+			});
+			await expect(page.locator('.payment-history-row small')).toHaveText([
+				/Newest creation$/,
+				/Legacy entry$/,
+				/Older creation$/
+			]);
+		});
+
+		test('balance rows highlight edge to edge and keep long names away from actions', async ({ page }) => {
+			if (width < 760) await page.setViewportSize({ width: 375, height: 667 });
+			const longName = 'Thảo Linh ' + 'TênRấtDài'.repeat(15);
+			await openFixture(page, '/balances', (state) => {
+				state.members.find((member) => member.id === 'linh')!.name = longName;
+			});
+			const row = page
+				.locator('.counterpart')
+				.filter({ has: page.locator('.counterpart-name', { hasText: longName }) });
+			const main = row.locator('.counterpart-main');
+			await main.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+			const bounds = (await row.boundingBox())!;
+			const mainBounds = (await main.boundingBox())!;
+			expect(Math.abs(mainBounds.x - bounds.x)).toBeLessThanOrEqual(1);
+			expect(Math.abs(mainBounds.width - bounds.width)).toBeLessThanOrEqual(1);
+			await page.mouse.move(bounds.x + 2, bounds.y + 2);
+			await expect
+				.poll(() => main.evaluate((element) => getComputedStyle(element).backgroundColor))
+				.not.toBe('rgba(0, 0, 0, 0)');
+			if (width < 760) {
+				const actions = (await row.locator('.counterpart-actions').boundingBox())!;
+				const name = (await row.locator('.counterpart-name').boundingBox())!;
+				expect(name.x + name.width).toBeLessThanOrEqual(actions.x);
+				expect(actions.x + actions.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+				expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+			}
+			await page.screenshot({ path: `artifacts/balance-layout-${width}.png` });
+		});
+
+		test('page zoom gestures are blocked only on mobile while single-finger scrolling is allowed', async ({
+			page
+		}) => {
+			await openFixture(page, '/');
+			const result = await page.evaluate(() => {
+				const gesture = new Event('gesturestart', { bubbles: true, cancelable: true });
+				document.dispatchEvent(gesture);
+				const touches = [1, 2].map(
+					(identifier) =>
+						new Touch({ identifier, target: document.body, clientX: identifier * 50, clientY: 200 })
+				);
+				const pinch = new TouchEvent('touchmove', { touches, bubbles: true, cancelable: true });
+				document.dispatchEvent(pinch);
+				const scroll = new TouchEvent('touchmove', {
+					touches: touches.slice(0, 1),
+					bubbles: true,
+					cancelable: true
+				});
+				document.dispatchEvent(scroll);
+				return {
+					gesture: gesture.defaultPrevented,
+					pinch: pinch.defaultPrevented,
+					scroll: scroll.defaultPrevented
+				};
+			});
+			expect(result).toEqual({ gesture: width < 760, pinch: width < 760, scroll: false });
+		});
+
+		if (width < 760) {
+			test('bottom navigation has four links around the camera and replaces browser history', async ({
+				page
+			}) => {
+				await page.setViewportSize({ width: 375, height: 667 });
+				await openFixture(page, '/balances');
+				const navigation = page.getByRole('navigation', { name: 'Điều hướng nhanh', exact: true });
+				await expect(navigation.getByRole('link')).toHaveCount(4);
+				const length = await page.evaluate(() => history.length);
+				for (const [name, path, heading] of [
+					['Tạo hoá đơn', '/new-bill', 'Tạo hoá đơn'],
+					['Tổng quan', '/', 'Tổng quan'],
+					['Ma trận nợ nần', '/matrix', 'Ma trận nợ nần'],
+					['Tài khoản của bạn', '/balances', 'Tài khoản của bạn']
+				]) {
+					await navigation.getByRole('link', { name, exact: true }).click();
+					await expect(page).toHaveURL(new RegExp(`${path}$`));
+					await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+					await expect(navigation.getByRole('link', { name, exact: true })).toHaveAttribute(
+						'aria-current',
+						'page'
+					);
+					expect(await page.evaluate(() => history.length)).toBe(length);
+				}
+				const camera = (await page
+					.getByRole('button', { name: 'Chụp ảnh hóa đơn', exact: true })
+					.boundingBox())!;
+				expect(Math.abs(camera.x + camera.width / 2 - 375 / 2)).toBeLessThan(1);
+				await page.screenshot({ path: 'artifacts/mobile-bottom-navigation.png' });
+			});
+		}
+
 		if (width > 760) {
 			test('mobile camera shortcut is hidden on desktop', async ({ page }) => {
 				await openFixture(page, '/');
@@ -277,7 +394,7 @@ for (const width of [1280, 390]) {
 				'Không còn nợ'
 			);
 			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
-			await page.locator('nav a[href="/matrix"]').click();
+			await page.locator('aside nav a[href="/matrix"]').click();
 			const header = page.getByRole('columnheader', { name: 'Minh An, Nợ - bị nợ: 90.000 ₫', exact: true });
 			await expect(header).toBeVisible();
 			await expect(header.locator('.matrix-net')).toHaveText('90.000 ₫');
@@ -482,7 +599,7 @@ for (const width of [1280, 390]) {
 				['/activity', 'Ledger']
 			]) {
 				if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
-				await page.locator(`nav a[href="${path}"]`).click();
+				await page.locator(`aside nav a[href="${path}"]`).click();
 				await expect(page.getByRole('heading', { name, exact: true }).first()).toBeVisible();
 				expect(await page.evaluate(() => history.length)).toBe(historyLength);
 			}
@@ -659,7 +776,7 @@ for (const width of [1280, 390]) {
 			state.version++;
 			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
-			await page.locator('nav a[href="/new-bill"]').click();
+			await page.locator('aside nav a[href="/new-bill"]').click();
 			await expect(page.getByRole('combobox', { name: 'Người thanh toán', exact: true })).toHaveCount(0);
 			await expect(page.locator('.payer-field')).toContainText('Minh An');
 			await page.evaluate((actor) => {
@@ -699,7 +816,7 @@ for (const width of [1280, 390]) {
 			await expect(page).toHaveURL(/\/activity$/);
 			expect(state.receipts.some((receipt) => receipt.billId === billId)).toBe(false);
 			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
-			await page.locator('nav a[href="/new-bill"]').click();
+			await page.locator('aside nav a[href="/new-bill"]').click();
 			await expect(toggle).not.toBeChecked();
 			await page.evaluate((actor) => {
 				const key = `lunchroom-draft-local-${actor}`;
@@ -1105,12 +1222,12 @@ for (const width of [1280, 390]) {
 			await page.getByRole('button', { name: /^Hóa đơn \(/ }).click();
 			await expect(page.locator('.clickable-bill-row')).toBeVisible();
 			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
-			await page.locator('nav a[href="/new-bill"]').click();
+			await page.locator('aside nav a[href="/new-bill"]').click();
 			await expect(page.locator('.bill-summary-heading')).toBeVisible();
 			await page.locator('.bill-summary').screenshot({ path: `artifacts/bill-summary-heading-${width}.png` });
 			await page.route('**/api/discord/guilds', (route) => route.fulfill({ json: { guilds: [] } }));
 			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
-			await page.locator('nav a[href="/groups"]').click();
+			await page.locator('aside nav a[href="/groups"]').click();
 			await expect(page.getByRole('heading', { name: 'Nhóm của bạn', exact: true })).toBeVisible();
 			await page.locator('.groups-layout').screenshot({ path: `artifacts/group-headers-${width}.png` });
 		});
