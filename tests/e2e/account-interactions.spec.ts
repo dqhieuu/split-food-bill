@@ -644,6 +644,7 @@ for (const width of [1280, 390]) {
 			await recipient.getByRole('button', { name: 'Mã QR', exact: true }).click();
 			const dialog = page.getByRole('dialog', { name: 'Chuyển tiền bằng QR', exact: true });
 			await expect(dialog).toContainText('Người trả: Quang Huy');
+			await expect(dialog.locator('.qr-bank-link')).toHaveCount(0);
 			await expect(dialog.getByRole('button', { name: 'Đã thanh toán', exact: true })).toBeDisabled();
 			expect(commands).toBe(0);
 			await dialog.getByRole('checkbox', { name: 'Quang Huy đã chuyển khoản xong', exact: true }).click();
@@ -1352,6 +1353,112 @@ for (const width of [1280, 390]) {
 			await page.locator('aside nav a[href="/groups"]').click();
 			await expect(page.getByRole('heading', { name: 'Nhóm của bạn', exact: true })).toBeVisible();
 			await page.locator('.groups-layout').screenshot({ path: `artifacts/group-headers-${width}.png` });
+		});
+	});
+}
+
+for (const [platform, userAgent] of [
+	[
+		'ios',
+		'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'
+	],
+	[
+		'android',
+		'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36'
+	]
+]) {
+	test.describe(`bank app on ${platform}`, () => {
+		test.use({ userAgent, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+		test('tapping the QR opens your saved bank with the recipient and amount, without recording payment', async ({
+			page,
+			context
+		}) => {
+			const { state } = await openFixture(page, '/balances?group=local&to=nam', (state) => {
+				state.members.find((member) => member.id === ACTOR)!.bankCode = '970418';
+			});
+			let commands = 0;
+			await page.route('**/api/groups/local/commands/*', (route) => {
+				commands++;
+				return route.abort();
+			});
+			const dialog = page.getByRole('dialog', { name: 'Chuyển tiền bằng QR', exact: true });
+			const link = dialog.getByRole('link', {
+				name: 'Mở BIDV SmartBanking để chuyển 20.000 ₫ cho Hoàng Nam',
+				exact: true
+			});
+			await expect(link).toBeVisible();
+			const url = new URL((await link.getAttribute('href'))!);
+			expect(url.searchParams.get('app')).toBe('bidv');
+			expect(url.searchParams.get('ba')).toBe(
+				`${state.members.find((member) => member.id === 'nam')!.bankAccount}@vcb`
+			);
+			expect(url.searchParams.get('am')).toBe('20000');
+			expect(url.searchParams.get('tn')).toMatch(/^CHIATIENAN [a-f0-9]{8}$/);
+			expect(url.searchParams.get('url')).toBe('http://127.0.0.1:5173/balances?group=local');
+			const qrImage = await link.locator('img').getAttribute('src');
+			const recipient = state.members.find((member) => member.id === 'nam')!;
+			recipient.bankCode = '970416';
+			recipient.bankAccount = '999999';
+			state.version++;
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await expect(link).toHaveAttribute('href', url.href);
+			await expect(link.locator('img')).toHaveAttribute('src', qrImage!);
+			// Never reach the real banking service with fixture details.
+			await context.route('https://dl.vietqr.io/**', (route) =>
+				route.fulfill({ contentType: 'text/html', body: '<p>Bank app handoff fixture</p>' })
+			);
+			const [popup] = await Promise.all([page.waitForEvent('popup'), link.click()]);
+			await expect(popup).toHaveURL(url.href);
+			await popup.close();
+			await expect(dialog).toBeVisible();
+			await expect(dialog.getByRole('checkbox')).not.toBeChecked();
+			await expect(dialog.getByRole('button', { name: 'Đã thanh toán', exact: true })).toBeDisabled();
+			expect(commands).toBe(0);
+		});
+
+		test('supports additional bank apps and explains when autofill is unavailable', async ({ page }) => {
+			await openFixture(page, '/balances?to=nam', (state) => {
+				state.members.find((member) => member.id === ACTOR)!.bankCode = '970416';
+			});
+			const dialog = page.getByRole('dialog', { name: 'Chuyển tiền bằng QR', exact: true });
+			await expect(dialog.locator('.qr-bank-link')).toHaveAttribute('href', /app=acb&/);
+			await dialog.getByRole('combobox', { name: 'Ứng dụng ngân hàng', exact: true }).selectOption('acb-biz');
+			await expect(dialog.locator('.qr-bank-link')).toHaveAttribute('href', /app=acb-biz&/);
+			await expect(dialog).toContainText('Ứng dụng này chưa hỗ trợ điền sẵn');
+			await dialog.screenshot({ path: `artifacts/bank-app-${platform}.png` });
+		});
+
+		test('admin uses their own banking app even while viewing another member’s account', async ({ page }) => {
+			await openFixture(page, `/balances?member=huy&to=${ACTOR}`, (state) => {
+				state.members.find((member) => member.id === ACTOR)!.bankCode = '970422';
+				state.members.find((member) => member.id === 'huy')!.bankCode = '970416';
+			});
+			const dialog = page.getByRole('dialog', { name: 'Chuyển tiền bằng QR', exact: true });
+			const link = dialog.locator('.qr-bank-link');
+			await expect(link).toBeVisible();
+			const url = new URL((await link.getAttribute('href'))!);
+			expect(url.searchParams.get('app')).toBe('mb');
+			expect(url.searchParams.get('ba')).toMatch(/^000000001123@mb$/);
+			expect(url.searchParams.get('am')).toBe('20000');
+			expect(url.searchParams.get('url')).toBe('http://127.0.0.1:5173/balances?member=huy');
+			await expect(dialog).toContainText('Người trả: Quang Huy');
+		});
+
+		test('keeps the QR usable when your saved bank is missing or has no app link', async ({ page }) => {
+			const { state } = await openFixture(page, '/balances?to=nam', (state) => {
+				state.members.find((member) => member.id === ACTOR)!.bankCode = '';
+			});
+			const dialog = page.getByRole('dialog', { name: 'Chuyển tiền bằng QR', exact: true });
+			await expect(dialog.locator('img')).toBeVisible();
+			await expect(dialog.locator('.qr-bank-link')).toHaveCount(0);
+			await expect(dialog).toContainText('Cập nhật ngân hàng của bạn');
+			state.members.find((member) => member.id === ACTOR)!.bankCode = '458761';
+			state.version++;
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await expect(dialog).toContainText('Ngân hàng của bạn chưa hỗ trợ mở ứng dụng');
+			await expect(dialog.locator('img')).toBeVisible();
+			await expect(dialog.locator('.qr-bank-link')).toHaveCount(0);
 		});
 	});
 }

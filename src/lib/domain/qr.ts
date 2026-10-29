@@ -1,6 +1,6 @@
 import { banks } from './banks';
 
-// VietQR EMVCo payload generated locally; bank details never leave the app.
+// VietQR EMVCo payload generated locally without sending bank details to a QR service.
 function field(id: string, value: string): string {
 	return id + new TextEncoder().encode(value).length.toString().padStart(2, '0') + value;
 }

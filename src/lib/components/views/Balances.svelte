@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import QRCode from 'qrcode';
 	import { ArrowUpRight, ArrowDownLeft, QrCode, ChevronDown } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -13,6 +13,12 @@
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, dateLabel, cancelledEntryIds, pairBalance } from '$lib/domain/ledger';
 	import { vietQrPayload, bankNames } from '$lib/domain/qr';
+	import {
+		bankAppsForMember,
+		bankTransferLink,
+		mobileBankPlatform,
+		type BankPlatform
+	} from '$lib/domain/bank-apps';
 	import { preferences } from '$lib/client/preferences.svelte';
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
 		$props();
@@ -28,6 +34,11 @@
 	let confirmed = $state(false);
 	let qrImage = $state('');
 	let qrError = $state('');
+	let mobilePlatform = $state<BankPlatform | null>(null);
+	let selectedBankApp = $state('');
+	onMount(() => {
+		mobilePlatform = mobileBankPlatform(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
+	});
 	const currentMember = $derived(appState.members.find((member) => member.id === actor));
 	const isAdmin = $derived(currentMember?.active && currentMember.role === 'admin');
 	const account = $derived(
@@ -70,6 +81,26 @@
 	const owed = $derived(pairs.reduce((s, p) => s + Math.max(0, -p.balance), 0));
 	const owing = $derived(pairs.reduce((s, p) => s + Math.max(0, p.balance), 0));
 	const recipient = $derived(qrPayment?.recipient);
+	const availableBankApps = $derived(
+		mobilePlatform && currentMember ? bankAppsForMember(currentMember, mobilePlatform) : []
+	);
+	const bankApp = $derived(
+		availableBankApps.find((app) => app.id === selectedBankApp) ?? availableBankApps[0]
+	);
+	const bankLink = $derived.by(() => {
+		if (!qrPayment || !bankApp || !canManage || busy) return null;
+		const returnUrl = new URL('/balances', page.url.origin);
+		const group = page.url.searchParams.get('group');
+		if (group) returnUrl.searchParams.set('group', group);
+		if (!isOwnAccount) returnUrl.searchParams.set('member', accountId);
+		return bankTransferLink({
+			appId: bankApp.id,
+			recipient: qrPayment.recipient,
+			amount: qrPayment.amount,
+			description: `CHIATIENAN ${qrPayment.id.slice(0, 8)}`,
+			returnUrl: returnUrl.href
+		});
+	});
 	async function changeAccount(id: string) {
 		if (busy) return;
 		const url = new URL(page.url.href);
@@ -101,6 +132,7 @@
 			payer: { id: account.id, name: account.name }
 		};
 		qrPayment = payment;
+		selectedBankApp = '';
 		confirmed = false;
 		qrError = '';
 		qrImage = '';
@@ -274,12 +306,42 @@
 	description={preferences.testView ? 'Tài khoản ngân hàng mẫu · Không chuyển tiền khi thử nghiệm.' : ''}
 >
 	{#if qrPayment && recipient}<div class="qr-content">
-			{#if qrImage}<img
-					src={qrImage}
-					alt="Mã VietQR cho khoản thanh toán thử nghiệm"
-					width="240"
-					height="240"
-				/>{/if}
+			{#if qrImage}
+				{#snippet qrCodeImage()}
+					<img src={qrImage} alt={`Mã VietQR chuyển khoản cho ${recipient.name}`} width="240" height="240" />
+				{/snippet}
+				{#if bankLink && bankApp}
+					<a
+						class="qr-bank-link"
+						href={bankLink}
+						target="_blank"
+						rel="noopener noreferrer"
+						aria-label={`Mở ${bankApp.name} để chuyển ${currency(qrPayment.amount)} cho ${recipient.name}`}
+						aria-describedby="qr-bank-hint">{@render qrCodeImage()}</a
+					>
+					{#if availableBankApps.length > 1}<label class="qr-bank-app-picker">
+							Ứng dụng ngân hàng
+							<select
+								aria-label="Ứng dụng ngân hàng"
+								value={bankApp.id}
+								onchange={(event) => (selectedBankApp = event.currentTarget.value)}
+							>
+								{#each availableBankApps as app}<option value={app.id}>{app.name}</option>{/each}
+							</select>
+						</label>{/if}
+					<small id="qr-bank-hint"
+						>Chạm mã QR để mở {bankApp.name}.{#if !bankApp.autofill}
+							{' '}Ứng dụng này chưa hỗ trợ điền sẵn; hãy quét mã QR để chuyển tiền.{/if}</small
+					>
+				{:else}
+					{@render qrCodeImage()}
+					{#if mobilePlatform && canManage && !busy}<small>
+							{currentMember?.bankCode
+								? 'Ngân hàng của bạn chưa hỗ trợ mở ứng dụng từ mã QR. Hãy quét mã để chuyển tiền.'
+								: 'Cập nhật ngân hàng của bạn trong Thành viên & quản lý để mở ứng dụng từ mã QR.'}
+						</small>{/if}
+				{/if}
+			{/if}
 			<h2>{currency(qrPayment.amount)}</h2>
 			<strong>{recipient.name}</strong>
 			{#if qrPayment.payer.id !== actor}<p>

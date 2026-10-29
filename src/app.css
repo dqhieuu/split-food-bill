@@ -1666,6 +1666,17 @@ footer {
 	border-radius: 12px;
 	border: 1px solid light-dark(#e5e9da, #282a21);
 }
+.qr-bank-link {
+	display: inline-flex;
+	border-radius: 12px;
+}
+.qr-bank-app-picker {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 13px;
+	color: light-dark(#6e7865, #a3ab9c);
+}
 .qr-content h2 {
 	font-size: 30px;
 	letter-spacing: -1px;
