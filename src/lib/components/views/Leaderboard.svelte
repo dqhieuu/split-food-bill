@@ -249,9 +249,10 @@
 					>
 					<path d="M16 140L37 151V179L16 171ZM144 140L123 151V179L144 171Z" fill="#ab783c" />
 					<path d="M13 136H35V149H13ZM125 136H147V149H125Z" fill="url(#court-gold)" />
-					<path d="M25 164H135L142 185H18Z" fill="#a8713c" />
-					<path d="M18 185H142V200H18Z" fill="url(#court-gold)" />
-					<path d="M25 199H40L35 218H22ZM120 199H135L138 218H125Z" fill="#d0a15e" />
+					<path d="M25 149H135L142 170H18Z" fill="#a8713c" />
+					<path d="M29 150H131L137 164H23Z" fill="#772b3f" stroke="#d6ac67" />
+					<path d="M18 170H142V185H18Z" fill="url(#court-gold)" />
+					<path d="M25 184H40L35 218H22ZM120 184H135L138 218H125Z" fill="#d0a15e" />
 				</svg>
 				{#if monarch}
 					<div class="throne-occupant">

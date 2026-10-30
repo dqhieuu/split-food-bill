@@ -79,7 +79,11 @@ export async function createCourtModel(
 	const scene = new THREE.Scene();
 	const model = new THREE.Group();
 	scene.add(model);
-	const camera = new THREE.OrthographicCamera(-0.83, 0.83, 2.35, -0.14, 0.1, 20);
+	// Match the sprite's occupied height and floor, including its shorter kneeling pose.
+	const top = entry.tier === 'sovereign' ? 1.7 : entry.tier === 'servant' ? 1.6 : 1.98;
+	const bottom = -0.06;
+	const halfWidth = (top - bottom) / 3;
+	const camera = new THREE.OrthographicCamera(-halfWidth, halfWidth, top, bottom, 0.1, 20);
 	camera.position.set(0, 0, 6);
 	camera.updateMatrixWorld();
 	scene.add(new THREE.HemisphereLight('#fff1da', '#3b2945', 2.2));
@@ -99,11 +103,6 @@ export async function createCourtModel(
 	const debtor = entry.tier === 'servant';
 	const royal = entry.tier === 'sovereign' || entry.tier === 'noble';
 	const skin = material('#d8aa85');
-	const cloth = material(
-		debtor ? '#85715c' : entry.tier === 'sovereign' ? '#862b45' : royal ? '#5a3c80' : '#357b70'
-	);
-	const dark = material(debtor ? '#504539' : '#242332');
-	const boot = material('#29232a', 0.12, 0.38);
 	const gold = material(royal ? '#dfb65f' : '#a29478', 0.72, 0.28);
 	const rope = material('#d4ac72');
 	const hair = material('#302622');
@@ -214,14 +213,15 @@ export async function createCourtModel(
 		}
 		const breath = Math.sin(seconds * 1.7),
 			sway = Math.sin(seconds * 0.9);
-		bone('pelvis').position.z = origin.z - (debtor ? 0.4 : seated ? 0.28 : 0) + breath * 0.012;
+		// A seated hip stays on the cushion; breathing comes from the spine, not hovering.
+		bone('pelvis').position.z = origin.z - (debtor ? 0.4 : seated ? 0.45 : 0) + (seated ? 0 : breath * 0.012);
 		bone('spine_01').rotateX((debtor ? 0.16 : -0.02) + breath * 0.035);
 		bone('spine_02').rotateZ(sway * (debtor ? 0.045 : 0.025));
 		bone('spine_03').rotateY(Math.sin(seconds * 0.7) * 0.05);
 		outfit.updateMatrixWorld(true);
 		for (const side of ['l', 'r']) {
 			const sign = side === 'l' ? 1 : -1;
-			const foot: Point = [sign * (seated ? 0.18 : 0.1), 0.085, debtor ? -0.28 : seated ? 0.3 : -0.085];
+			const foot: Point = [sign * (seated ? 0.2 : 0.1), 0.085, debtor ? -0.28 : seated ? 0.43 : -0.085];
 			solveLimb(`thigh_${side}`, `calf_${side}`, `foot_${side}`, foot, [sign * 0.2, 0.3, 1]);
 			const joint = bone(`foot_${side}`);
 			joint.quaternion.copy(
@@ -230,7 +230,7 @@ export async function createCourtModel(
 		}
 		outfit.updateMatrixWorld(true);
 		const reach = Math.sin(seconds * 1.25);
-		const height = debtor ? 0.81 : seated ? 1.05 : 1.13;
+		const height = debtor ? 0.81 : seated ? 0.82 : 1.13;
 		solveLimb(
 			'upperarm_l',
 			'lowerarm_l',
@@ -246,7 +246,7 @@ export async function createCourtModel(
 			'hand_r',
 			debtor
 				? [-0.07 + sway * 0.018, height + breath * 0.035, 0.32 + reach * 0.025]
-				: [-0.34 + sway * 0.035, seated ? 0.9 + reach * 0.035 : 0.96 + reach * 0.05, 0.18],
+				: [-0.34 + sway * 0.035, seated ? 0.76 + reach * 0.025 : 0.96 + reach * 0.05, 0.18],
 			[-0.65, height, -0.15]
 		);
 		for (const side of ['l', 'r']) {
@@ -341,23 +341,96 @@ export async function createCourtModel(
 	faceGeometry.computeVertexNormals();
 	mesh(faceGeometry, faceMaterial, [0, -0.015, 0], [1, 1, 1], head);
 	if (entry.tier === 'sovereign') {
-		mesh(new THREE.CylinderGeometry(0.23, 0.22, 0.075, 64, 4, true), gold, [0, 0.235, 0], [1, 1, 1], head);
-		for (let i = 0; i < 7; i++) {
-			const angle = (i / 7) * Math.PI * 2;
+		const crown = new THREE.Group();
+		crown.position.y = 0.19;
+		crown.scale.z = 0.86;
+		head.add(crown);
+		const ruby = material('#a51d3a', 0.25, 0.16);
+		const pearl = material('#fff3ca', 0.25, 0.22);
+		// Closed, profiled metal circlet with rolled edges and cast fleur-de-lis.
+		const profile = [
+			[0.213, 0],
+			[0.236, 0],
+			[0.239, 0.014],
+			[0.232, 0.065],
+			[0.24, 0.078],
+			[0.219, 0.078],
+			[0.213, 0]
+		];
+		mesh(
+			new THREE.LatheGeometry(
+				profile.map(([x, y]) => new THREE.Vector2(x, y)),
+				96
+			),
+			gold,
+			[0, 0, 0],
+			[1, 1, 1],
+			crown
+		);
+		for (const y of [0.008, 0.07]) {
+			const rim = mesh(new THREE.TorusGeometry(0.232, 0.009, 12, 96), gold, [0, y, 0], [1, 1, 1], crown);
+			rim.rotation.x = Math.PI / 2;
+		}
+		const lily = new THREE.Shape();
+		lily.moveTo(-0.025, 0);
+		lily.bezierCurveTo(-0.018, 0.038, -0.078, 0.048, -0.044, 0.079);
+		lily.quadraticCurveTo(-0.013, 0.08, -0.009, 0.047);
+		lily.bezierCurveTo(-0.036, 0.095, -0.014, 0.115, 0, 0.14);
+		lily.bezierCurveTo(0.014, 0.115, 0.036, 0.095, 0.009, 0.047);
+		lily.quadraticCurveTo(0.013, 0.08, 0.044, 0.079);
+		lily.bezierCurveTo(0.078, 0.048, 0.018, 0.038, 0.025, 0);
+		lily.closePath();
+		for (let i = 0; i < 8; i++) {
+			const angle = (i / 8) * Math.PI * 2;
+			const ornament = new THREE.Group();
+			ornament.position.set(Math.sin(angle) * 0.225, 0.064, Math.cos(angle) * 0.225);
+			ornament.rotation.y = angle;
+			crown.add(ornament);
 			mesh(
-				new THREE.ConeGeometry(0.055, 0.15, 32, 8),
+				new THREE.ExtrudeGeometry(lily, {
+					depth: 0.009,
+					bevelEnabled: true,
+					bevelThickness: 0.003,
+					bevelSize: 0.003,
+					bevelSegments: 3,
+					curveSegments: 12
+				}),
 				gold,
-				[Math.sin(angle) * 0.218, 0.32, Math.cos(angle) * 0.218],
+				[0, 0, 0],
 				[1, 1, 1],
-				head
+				ornament
+			);
+			mesh(
+				new THREE.OctahedronGeometry(1, 1),
+				i % 2 ? pearl : ruby,
+				[0, -0.027, 0.014],
+				[0.019, 0.024, 0.013],
+				ornament
 			);
 		}
-		oval([0, 0.25, 0.23], [0.035, 0.04, 0.015], material('#a62e49', 0.3, 0.2), head);
+		// Crossed arches and a finial give the crown depth from every viewing angle.
+		for (let i = 0; i < 2; i++) {
+			const points = Array.from({ length: 33 }, (_, j) => {
+				const angle = (j / 32) * Math.PI;
+				return new THREE.Vector3(Math.cos(angle) * 0.22, 0.08 + Math.sin(angle) * 0.22, 0);
+			});
+			const arch = mesh(
+				new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 64, 0.009, 8, false),
+				gold,
+				[0, 0, 0],
+				[1, 1, 1],
+				crown
+			);
+			arch.rotation.y = (i * Math.PI) / 2;
+		}
+		oval([0, 0.31, 0], [0.025, 0.025, 0.025], gold, crown);
+		mesh(new THREE.BoxGeometry(0.009, 0.055, 0.009), gold, [0, 0.35, 0], [1, 1, 1], crown);
+		mesh(new THREE.BoxGeometry(0.035, 0.009, 0.009), gold, [0, 0.36, 0], [1, 1, 1], crown);
 	}
 	const marker = new THREE.Object3D();
 	marker.position.set(0, 0.025, 0);
 	bone('hand_l').add(marker);
-	model.rotation.y = -0.12;
+	model.rotation.y = debtor ? -0.4 : seated ? -0.18 : -0.22;
 	pose(0);
 	canvas.dataset.modelId = model.uuid;
 	let triangles = 0;

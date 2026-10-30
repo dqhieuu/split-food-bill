@@ -210,6 +210,13 @@
 	function toggleMember(id: string) {
 		selected = selected.includes(id) ? selected.filter((v) => v !== id) : [...selected, id];
 	}
+	function changeMode(next: 'manual' | 'equal') {
+		if (next === mode) return;
+		// Both fields describe the final bill price, before per-person rounding.
+		if (next === 'manual') discountInput = totalInput;
+		else if (discountInput !== null) totalInput = discountInput;
+		mode = next;
+	}
 	async function changeNotificationPreference(enabled: boolean) {
 		if (savingNotificationPreference || busy) return;
 		const previous = discordNotification;
@@ -461,8 +468,9 @@
 			</div>
 			<div class="split-controls">
 				<div class="segmented-control">
-					<button class:active={mode === 'manual'} onclick={() => (mode = 'manual')}>Nhập từng người</button
-					><button class:active={mode === 'equal'} onclick={() => (mode = 'equal')}>Chia đều</button>
+					<button class:active={mode === 'manual'} onclick={() => changeMode('manual')}
+						>Nhập từng người</button
+					><button class:active={mode === 'equal'} onclick={() => changeMode('equal')}>Chia đều</button>
 				</div>
 				<label class="unit-control"
 					>Đơn vị <select

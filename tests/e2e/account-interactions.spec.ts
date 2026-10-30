@@ -254,6 +254,7 @@ for (const width of [1280, 390]) {
 			const figure = page.locator('.throne-occupant .figure-model');
 			await expect(figure).toHaveAttribute('data-renderer', '3d');
 			await expect(figure).toHaveAttribute('data-avatar', 'photo');
+			await expect(figure).toHaveAttribute('data-rig', 'skinned');
 			expect(await figure.getAttribute('data-triangles').then(Number)).toBeGreaterThan(60000);
 			await expect(page.locator('.court-figure.servant .figure-model').first()).toHaveAttribute(
 				'data-avatar',
@@ -288,6 +289,34 @@ for (const width of [1280, 390]) {
 				)
 				.toBeGreaterThan(400);
 			await figure.screenshot({ path: `artifacts/court-idle-after-${width}.png` });
+			// Cropping below the face catches regressions where only the head animates.
+			for (const body of [figure, page.locator('.court-figure.servant .figure-model').first()]) {
+				await body.scrollIntoViewIfNeeded();
+				await expect(body).toHaveAttribute('data-motion', 'idle');
+				const torso = () =>
+					body.evaluate((canvas: HTMLCanvasElement) => {
+						const y = Math.round(canvas.height * 0.4);
+						return Array.from(
+							canvas.getContext('2d')!.getImageData(0, y, canvas.width, Math.round(canvas.height * 0.35)).data
+						);
+					});
+				const original = await torso();
+				await expect
+					.poll(async () => {
+						const current = await torso();
+						let changed = 0;
+						for (let i = 0; i < current.length; i += 4)
+							if (
+								Math.abs(current[i] - original[i]) +
+									Math.abs(current[i + 1] - original[i + 1]) +
+									Math.abs(current[i + 2] - original[i + 2]) >
+								45
+							)
+								changed++;
+						return changed;
+					})
+					.toBeGreaterThan(100);
+			}
 			await page.locator('.court-register').scrollIntoViewIfNeeded();
 			await expect(figure).toHaveAttribute('data-motion', 'still');
 			await figure.scrollIntoViewIfNeeded();
@@ -1119,6 +1148,32 @@ for (const width of [1280, 390]) {
 			await expect(page.getByRole('alert')).toContainText('Không lưu được tùy chọn Discord');
 			await expect(toggle).toBeChecked();
 			expect(userPreferences.discordBillNotifications).toBe(true);
+		});
+
+		test('split modes carry over the final price without changing individual prices', async ({ page }) => {
+			await openFixture(page, '/new-bill');
+			const individual = page.getByLabel('Số tiền của Minh An', { exact: true });
+			await individual.fill('120');
+			await page.getByRole('button', { name: 'Chia đều', exact: true }).click();
+			const equal = page.getByLabel('Tổng tiền cần chia', { exact: true });
+			await equal.fill('100.001');
+			await page.getByRole('button', { name: 'Nhập từng người', exact: true }).click();
+			const discount = page.getByLabel('Giá sau khi giảm giá', { exact: true });
+			await expect(discount).toHaveValue('100.001');
+			await expect(individual).toHaveValue('120');
+			await page.getByRole('combobox', { name: 'Đơn vị', exact: true }).selectOption('1');
+			await discount.fill('80001');
+			await page.getByRole('button', { name: 'Chia đều', exact: true }).click();
+			await expect(equal).toHaveValue('80001');
+			await page.reload();
+			await expect(equal).toHaveValue('80001');
+			await page.getByRole('button', { name: 'Nhập từng người', exact: true }).click();
+			await expect(discount).toHaveValue('80001');
+			await expect(individual).toHaveValue('120000');
+			await page.getByRole('button', { name: 'Chia đều', exact: true }).click();
+			await equal.fill('');
+			await page.getByRole('button', { name: 'Nhập từng người', exact: true }).click();
+			await expect(discount).toHaveValue('');
 		});
 
 		test('discounted bills highlight missing participant prices instead of the discounted total', async ({
