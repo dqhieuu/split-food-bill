@@ -25,9 +25,65 @@
 	let rankList: HTMLDivElement;
 	const ranks = $derived(courtRanking(appState.members, appState.ledger));
 	const monarch = $derived(ranks.find((entry) => entry.tier === 'sovereign'));
-	const courtiers = $derived(ranks.filter((entry) => entry.member.id !== monarch?.member.id).slice(0, 2));
+	const courtiers = $derived(
+		ranks.filter((entry) => entry.member.id !== monarch?.member.id && entry.credit >= 0).slice(0, 2)
+	);
 	const courtIds = $derived(new Set([monarch?.member.id, ...courtiers.map((entry) => entry.member.id)]));
 	const gathering = $derived(ranks.filter((entry) => !courtIds.has(entry.member.id)).slice(-3));
+	let ropePaths = $state<string[]>([]);
+	// Measure the illustrated hands so ropes stay attached at every screen width.
+	function connectRopes(node: HTMLDivElement, _entries: CourtRank[]) {
+		let frame = 0;
+		function pin(selector: string) {
+			const anchor = node.querySelector<HTMLElement>(selector);
+			return anchor ? point(anchor) : undefined;
+		}
+		function point(anchor: HTMLElement) {
+			const body = anchor.parentElement!.getBoundingClientRect();
+			return new DOMPoint(
+				body.left + (body.width * parseFloat(anchor.style.left)) / 100,
+				body.top + (body.height * parseFloat(anchor.style.top)) / 100
+			);
+		}
+		function measure() {
+			if (frame) return;
+			frame = requestAnimationFrame(() => {
+				frame = 0;
+				const origin = node.getBoundingClientRect();
+				const matrix = node.querySelector<SVGSVGElement>('.debt-ropes')?.getScreenCTM();
+				const grip = pin('.throne-occupant .rope-anchor');
+				if (!grip || !matrix) {
+					ropePaths = [];
+					return;
+				}
+				const inverse = matrix.inverse();
+				const { x, y } = grip.matrixTransform(inverse);
+				ropePaths = Array.from(node.querySelectorAll<HTMLElement>('.servant .rope-anchor')).map((anchor) => {
+					const { x: endX, y: endY } = point(anchor).matrixTransform(inverse);
+					const bend = Math.min(origin.width - 12, x + 100);
+					const approach = Math.min(origin.width - 12, endX + 65);
+					return `M ${x} ${y} C ${bend} ${y + 100}, ${approach} ${endY + 30}, ${endX} ${endY}`;
+				});
+			});
+		}
+		const observer = new ResizeObserver(measure);
+		observer.observe(node);
+		const anchors = new MutationObserver((changes) => {
+			if (changes.some((change) => (change.target as Element).classList.contains('rope-anchor'))) measure();
+		});
+		anchors.observe(node, { subtree: true, attributes: true, attributeFilter: ['style'] });
+		window.addEventListener('resize', measure);
+		measure();
+		return {
+			update: measure,
+			destroy() {
+				observer.disconnect();
+				anchors.disconnect();
+				window.removeEventListener('resize', measure);
+				cancelAnimationFrame(frame);
+			}
+		};
+	}
 	const ownRank = $derived(ranks.find((entry) => entry.member.id === actor));
 	const selected = $derived(ranks.find((entry) => entry.member.id === selectedId));
 	const creditors = $derived(ranks.filter((entry) => entry.credit > 0).length);
@@ -86,7 +142,7 @@
 			<p>Ngai vàng đổi chủ. Sổ nợ lên ngôi.</p>
 		</header>
 		<div class="palace-stage">
-			<div class="palace-world">
+			<div class="palace-world" use:connectRopes={ranks}>
 				<svg class="palace-architecture" viewBox="0 0 720 500" preserveAspectRatio="none" aria-hidden="true">
 					<defs>
 						<linearGradient id="court-column" x1="0" x2="1"
@@ -156,12 +212,30 @@
 				</svg>
 				<div class="palace-floor" aria-hidden="true"></div>
 				<div class="royal-carpet" aria-hidden="true"></div>
+				<svg class="debt-ropes" aria-hidden="true">
+					{#each ropePaths as path}
+						<path d={path} class="rope-shadow" />
+						<path d={path} class="rope-strand" />
+						<path d={path} class="rope-twist" />
+					{/each}
+				</svg>
 				<div class="palace-dust" aria-hidden="true">
 					{#each [12, 26, 41, 60, 74, 89] as left, index}<i
 							style:left={`${left}%`}
 							style:--delay={`${index * -0.9}s`}
 						></i>{/each}
 				</div>
+				<svg class="throne-dais" viewBox="0 0 240 340" preserveAspectRatio="none" aria-hidden="true">
+					<path d="M48 0H192V260H48Z" fill="#3d2c30" stroke="#aa8054" />
+					<path d="M56 8H184V260H56Z" fill="#4c3633" />
+					<path d="M48 0H192L205 14H35Z" fill="#af895b" />
+					<path
+						d="M35 260H205V280H35ZM24 280H216V300H24ZM12 300H228V320H12ZM0 320H240V340H0Z"
+						fill="#594136"
+						stroke="#aa805466"
+					/>
+					<path d="M66 25H174M66 36H174M66 235H174" stroke="#9c79554d" />
+				</svg>
 				<svg class="royal-throne" viewBox="0 0 160 220" aria-hidden="true">
 					<path d="M23 171V49L39 25L59 30L80 4L101 30L121 25L137 49V171Z" fill="url(#court-gold)" />
 					<path d="M32 164V53L44 36L62 40L80 19L98 40L116 36L128 53V164Z" fill="#571c30" />
@@ -180,7 +254,9 @@
 					<path d="M25 199H40L35 218H22ZM120 199H135L138 218H125Z" fill="#d0a15e" />
 				</svg>
 				{#if monarch}
-					<div class="throne-occupant"><CourtFigure entry={monarch} enthroned onselect={summon} /></div>
+					<div class="throne-occupant">
+						<CourtFigure entry={monarch} enthroned onselect={summon} />
+					</div>
 				{:else}
 					<div class="vacant-throne">
 						<Crown size={34} /><strong>Ngai vàng đang chờ</strong><span
@@ -402,7 +478,7 @@
 	}
 	.palace-stage {
 		position: relative;
-		height: 494px;
+		height: 630px;
 		max-width: 820px;
 		margin: 4px auto 0;
 		perspective: 800px;
@@ -411,6 +487,30 @@
 		position: absolute;
 		inset: 0;
 		transform-style: preserve-3d;
+	}
+	.debt-ropes {
+		position: absolute;
+		inset: 0;
+		z-index: 5;
+		width: 100%;
+		height: 100%;
+		overflow: visible;
+		pointer-events: none;
+		fill: none;
+		stroke-linecap: round;
+	}
+	.rope-shadow {
+		stroke: #100b0b99;
+		stroke-width: 6;
+	}
+	.rope-strand {
+		stroke: #ad8151;
+		stroke-width: 3.2;
+	}
+	.rope-twist {
+		stroke: #eed4a0;
+		stroke-width: 1.6;
+		stroke-dasharray: 2 4;
 	}
 	.palace-architecture {
 		position: absolute;
@@ -448,43 +548,90 @@
 	.royal-throne {
 		position: absolute;
 		left: 50%;
-		top: 28px;
+		top: 20px;
 		width: 138px;
 		height: 190px;
 		transform: translateX(-50%);
 		filter: drop-shadow(0 12px 9px #0005);
 		pointer-events: none;
 	}
+	.throne-dais {
+		position: absolute;
+		left: 50%;
+		top: 208px;
+		width: min(64%, 240px);
+		height: 350px;
+		transform: translateX(-50%);
+		filter: drop-shadow(0 9px 8px #08050b88);
+		pointer-events: none;
+	}
 	.throne-occupant {
 		position: absolute;
-		z-index: 2;
-		top: 82px;
+		z-index: 3;
+		top: 55px;
 		left: 30%;
 		width: 40%;
-		transform: translateZ(12px);
 	}
 	.courtier {
 		position: absolute;
 		z-index: 3;
-		top: 185px;
+		top: 230px;
 		left: 4%;
 		width: 28%;
-		transform: translateZ(22px);
 	}
 	.courtier-right {
 		left: auto;
 		right: 4%;
 	}
+	.courtier::before {
+		content: '';
+		position: absolute;
+		top: 162px;
+		left: 50%;
+		width: 90px;
+		height: 181px;
+		transform: translateX(-50%);
+		border-radius: 0 0 8px 8px;
+		border-inline: 1px solid #9b774844;
+		background:
+			repeating-linear-gradient(90deg, #ffffff04 0 9px, #00000014 10px 12px),
+			linear-gradient(90deg, #241e27, #4a3733 45%, #231d27);
+		box-shadow: 0 9px 10px #08050b88;
+		pointer-events: none;
+	}
+	.courtier::after {
+		content: '';
+		position: absolute;
+		top: 154px;
+		left: 50%;
+		width: 108px;
+		height: 19px;
+		transform: translateX(-50%);
+		border-radius: 50% / 30%;
+		border-top: 3px solid #bb915b;
+		background: linear-gradient(90deg, #3c2c30, #896647 45%, #443035);
+		box-shadow:
+			0 10px 12px #08050b88,
+			inset 0 -3px #2a202a;
+		pointer-events: none;
+	}
+	.courtier :global(.figure-body),
+	.courtier :global(.figure-caption) {
+		position: relative;
+		z-index: 1;
+	}
+	.courtier :global(.figure-caption) {
+		margin-top: 14px;
+	}
 	.court-gathering {
 		position: absolute;
 		z-index: 4;
-		top: 365px;
+		top: 440px;
 		left: 9%;
 		right: 9%;
 		display: flex;
 		justify-content: space-evenly;
 		gap: 10px;
-		transform: translateZ(32px);
 	}
 	.court-gathering > div {
 		width: 29%;
@@ -952,18 +1099,21 @@
 			font-size: 12px;
 		}
 		.palace-stage {
-			height: 480px;
+			height: 600px;
 		}
 		.throne-occupant {
-			top: 89px;
+			top: 55px;
 		}
 		.royal-throne {
-			top: 30px;
+			top: 0;
 			width: 154px;
 			height: 212px;
 		}
+		.throne-dais {
+			height: 326px;
+		}
 		.courtier {
-			top: 199px;
+			top: 215px;
 			left: 10%;
 			width: 25%;
 		}
@@ -971,8 +1121,11 @@
 			left: auto;
 			right: 10%;
 		}
+		.courtier::before {
+			height: 163px;
+		}
 		.court-gathering {
-			top: 347px;
+			top: 410px;
 			left: 19%;
 			right: 19%;
 		}

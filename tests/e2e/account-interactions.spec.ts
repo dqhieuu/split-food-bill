@@ -168,6 +168,27 @@ for (const width of [1280, 390]) {
 			await page.locator('aside nav a[href="/leaderboard"]').click();
 			await expect(page.getByRole('heading', { name: 'Bảng xếp hạng', exact: true })).toBeVisible();
 			await expect(page.locator('.throne-occupant')).toContainText('Thảo Linh');
+			await expect(page.locator('.debt-ropes .rope-strand')).toHaveCount(2);
+			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(6);
+
+			// Ropes finish at the illustrated wrists, including after responsive resizing.
+			const ropeError = () =>
+				page.locator('.palace-world').evaluate((world) => {
+					const wrists = [...world.querySelectorAll('.servant .rope-anchor')];
+					return Math.max(
+						...[...world.querySelectorAll<SVGPathElement>('.rope-strand')].map((path, index) => {
+							const end = path.getPointAtLength(path.getTotalLength());
+							const point = new DOMPoint(end.x, end.y).matrixTransform(path.getScreenCTM()!);
+							const wrist = wrists[index].getBoundingClientRect();
+							return Math.hypot(point.x - wrist.left, point.y - wrist.top);
+						})
+					);
+				});
+			await expect.poll(ropeError).toBeLessThan(2);
+			const originalSize = page.viewportSize()!;
+			await page.setViewportSize({ ...originalSize, width: originalSize.width - 20 });
+			await expect.poll(ropeError).toBeLessThan(2);
+			await page.setViewportSize(originalSize);
 			await expect(page.locator('.rank-row').first()).toContainText('Thảo Linh');
 			await expect(page.locator('.rank-row').first().locator('.rank-balance strong')).toHaveText('40.000 ₫');
 			await expect(page.locator('.rank-row[data-self="true"] .rank-balance strong')).toHaveText('-90.000 ₫');
@@ -201,11 +222,149 @@ for (const width of [1280, 390]) {
 			state.ledger = [];
 			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 			await expect(page.locator('.vacant-throne')).toContainText('Ngai vàng đang chờ');
+			await expect(page.locator('.debt-ropes .rope-strand')).toHaveCount(0);
 			await expect(page.locator('.rank-row.sovereign')).toHaveCount(0);
 			await expect(page.locator('.rank-row.commoner')).toHaveCount(8);
 			await expect(page.locator('.rank-balance strong').first()).toHaveText('0 ₫');
 			await page.locator('.court-filters').getByRole('button', { name: 'Hoàng tộc' }).click();
 			await expect(page.locator('.court-empty')).toContainText('Chưa có ai mang tước vị này.');
+		});
+
+		test('royal court renders detailed avatar faces and always animates visible figures', async ({
+			page
+		}) => {
+			const errors: string[] = [];
+			page.on('pageerror', (error) => errors.push(error.message));
+			await page.route('https://avatars.example.test/portrait.svg', (route) =>
+				route.fulfill({
+					contentType: 'image/svg+xml',
+					headers: { 'Access-Control-Allow-Origin': '*' },
+					body: '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#408b9c"/><path d="M32 256Q38 170 128 170Q218 170 224 256" fill="#30487c"/><ellipse cx="128" cy="108" rx="65" ry="82" fill="#e5ae87"/><path d="M61 106Q40 16 127 14Q219 20 194 104L170 60L110 75L77 63Z" fill="#29272e"/><path d="M91 104h19m36 0h19" stroke="#30262b" stroke-width="10" stroke-linecap="round"/><path d="M104 146q24 20 48 0" fill="none" stroke="#97494a" stroke-width="8"/></svg>'
+				})
+			);
+			await page.route('https://avatars.example.test/missing.png', (route) =>
+				route.fulfill({ status: 404, body: '' })
+			);
+			await openFixture(page, '/leaderboard', (state) => {
+				state.members.find((member) => member.id === 'linh')!.avatarUrl =
+					'https://avatars.example.test/portrait.svg';
+				state.members.find((member) => member.id === 'huy')!.avatarUrl =
+					'https://avatars.example.test/missing.png';
+			});
+			const figure = page.locator('.throne-occupant .figure-model');
+			await expect(figure).toHaveAttribute('data-renderer', '3d');
+			await expect(figure).toHaveAttribute('data-avatar', 'photo');
+			expect(await figure.getAttribute('data-triangles').then(Number)).toBeGreaterThan(60000);
+			await expect(page.locator('.court-figure.servant .figure-model').first()).toHaveAttribute(
+				'data-avatar',
+				'initials'
+			);
+			const pixels = () => figure.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+			const still = await pixels();
+			await page.emulateMedia({ reducedMotion: 'no-preference' });
+			await expect(figure).toHaveAttribute('data-motion', 'idle');
+			await expect.poll(pixels).not.toBe(still);
+			const before = await figure.evaluate((canvas: HTMLCanvasElement) =>
+				Array.from(canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data)
+			);
+			await figure.screenshot({ path: `artifacts/court-idle-before-${width}.png` });
+			// Require a visible change across the model, not just a different PNG encoding.
+			await expect
+				.poll(() =>
+					figure.evaluate((canvas: HTMLCanvasElement, previous) => {
+						const current = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+						let changed = 0;
+						for (let i = 0; i < current.length; i += 4) {
+							if (
+								Math.abs(current[i] - previous[i]) +
+									Math.abs(current[i + 1] - previous[i + 1]) +
+									Math.abs(current[i + 2] - previous[i + 2]) >
+								45
+							)
+								changed++;
+						}
+						return changed;
+					}, before)
+				)
+				.toBeGreaterThan(400);
+			await figure.screenshot({ path: `artifacts/court-idle-after-${width}.png` });
+			await page.locator('.court-register').scrollIntoViewIfNeeded();
+			await expect(figure).toHaveAttribute('data-motion', 'still');
+			await figure.scrollIntoViewIfNeeded();
+			await expect(figure).toHaveAttribute('data-motion', 'idle');
+			await page.emulateMedia({ reducedMotion: 'reduce' });
+			await expect(figure).toHaveAttribute('data-motion', 'idle');
+			const reducedFrame = await pixels();
+			await expect.poll(pixels).not.toBe(reducedFrame);
+			await expect(page.getByRole('button', { name: /Bật chuyển động|Tạm dừng chuyển động/ })).toHaveCount(0);
+			await page.locator('.palace-stage').screenshot({ path: `artifacts/court-3d-avatars-${width}.png` });
+			// Leaving and returning disposes and recreates the shared renderer cleanly.
+			await page.locator('.throne-occupant button').click();
+			await page.getByRole('dialog').getByRole('link', { name: 'Xem tài khoản' }).click();
+			await page.goBack();
+			await expect(figure).toHaveAttribute('data-avatar', 'photo');
+			expect(errors).toEqual([]);
+		});
+
+		test('royal court retains models across 15-second polls and balance updates', async ({ page }) => {
+			await page.clock.install();
+			const { state } = await openFixture(page, '/leaderboard');
+			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(6);
+			const ids = () =>
+				page
+					.locator('.figure-model')
+					.evaluateAll((elements) => elements.map((el) => (el as HTMLElement).dataset.modelId));
+			const originalIds = await ids();
+			const flashes = await page.evaluateHandle(() => {
+				const result = { count: 0 };
+				new MutationObserver((records) => {
+					result.count += records.filter((record) => record.attributeName === 'data-renderer').length;
+				}).observe(document.querySelector('.palace-world')!, {
+					subtree: true,
+					attributes: true,
+					attributeFilter: ['data-renderer']
+				});
+				return result;
+			});
+			for (let poll = 0; poll < 3; poll++) {
+				// A full state response with fresh objects must not rebuild an unchanged model.
+				const response = page.waitForResponse((response) =>
+					response.url().includes('/api/groups/local/state')
+				);
+				await page.clock.fastForward(15000);
+				await response;
+				await page.evaluate(async () => {
+					for (let i = 0; i < 3; i++) await new Promise(requestAnimationFrame);
+				});
+				expect(await ids()).toEqual(originalIds);
+			}
+			state.ledger.push({ ...state.ledger[0], id: 'same-tier-increase', amount: 1000 });
+			await page.clock.fastForward(15000);
+			await expect(page.locator('.rank-row').first().locator('.rank-balance strong')).toHaveText('41.000 ₫');
+			expect(await ids()).toEqual(originalIds);
+			expect(await flashes.evaluate((result) => result.count)).toBe(0);
+			// A genuine appearance change still replaces the affected model.
+			state.members.find((member) => member.id === 'linh')!.color = '#cf5048';
+			await page.clock.fastForward(15000);
+			await expect
+				.poll(() => page.locator('.throne-occupant .figure-model').getAttribute('data-model-id'))
+				.not.toBe(originalIds[0]);
+			await expect(page.locator('.throne-occupant .figure-model')).toHaveAttribute('data-renderer', '3d');
+		});
+
+		test('royal court keeps member selection usable without WebGL', async ({ page }) => {
+			await page.addInitScript(() => {
+				const getContext = HTMLCanvasElement.prototype.getContext;
+				Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+					value(type: string, ...args: unknown[]) {
+						return type.startsWith('webgl') ? null : Reflect.apply(getContext, this, [type, ...args]);
+					}
+				});
+			});
+			await openFixture(page, '/leaderboard');
+			await expect(page.locator('.throne-occupant .fallback-face')).toBeVisible();
+			await page.locator('.throne-occupant button').click();
+			await expect(page.getByRole('dialog')).toContainText('Thảo Linh');
 		});
 
 		test('overview payment history shows the newest creation first', async ({ page }) => {
