@@ -260,6 +260,7 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		}
 		await page.getByRole('button', { name: 'Chia đều', exact: true }).click();
 		await page.getByRole('textbox', { name: 'Tổng tiền cần chia', exact: true }).fill('100.001');
+		await page.getByRole('combobox', { name: 'Làm tròn lên mỗi phần', exact: true }).selectOption('3');
 		await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
 		await expect(page.getByRole('dialog')).toContainText('51.000');
 		await page.getByRole('button', { name: 'Xem trước Discord', exact: true }).click();

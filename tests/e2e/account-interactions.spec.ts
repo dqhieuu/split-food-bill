@@ -1322,7 +1322,7 @@ for (const width of [1280, 390]) {
 					totalInput: null,
 					discountInput: null,
 					imageId: '',
-					rounding: 3,
+					rounding: 0,
 					mode: 'manual'
 				});
 			const freshId = await page.evaluate(
@@ -1547,6 +1547,12 @@ for (const width of [1280, 390]) {
 				const amounts = page.locator(
 					mode === 'manual' ? '.discounted-share' : '.participant-line .amount-input strong'
 				);
+				await expect(rounding).toHaveValue('0');
+				await expect(page.locator('.summary-total strong')).toHaveText(
+					mode === 'manual' ? '80.001 ₫' : '100.001 ₫'
+				);
+				await rounding.selectOption('3');
+				await page.reload();
 				await expect(rounding).toHaveValue('3');
 				await expect(amounts).toHaveText(
 					mode === 'manual'

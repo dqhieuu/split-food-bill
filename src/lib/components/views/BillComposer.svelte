@@ -30,7 +30,7 @@
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, billDateLabel, discountShares, equalShares, localDate } from '$lib/domain/ledger';
 	const ROUNDING_OPTIONS = [0, 1, 2, 3, 4];
-	const DEFAULT_ROUNDING = 3;
+	const DEFAULT_ROUNDING = 0;
 	let {
 		appState,
 		actor,
