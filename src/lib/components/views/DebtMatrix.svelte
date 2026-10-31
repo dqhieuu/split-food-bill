@@ -12,6 +12,11 @@
 	let plan = $state<SettlementPlan | null>(null);
 	let planError = $state('');
 	const members = $derived(appState.members.filter((m) => m.active));
+	const columnTotals = $derived(
+		members.map((column) =>
+			members.reduce((sum, row) => sum + pairBalance(appState.ledger, row.id, column.id), 0)
+		)
+	);
 	const isAdmin = $derived(appState.members.find((m) => m.id === actor)?.role === 'admin');
 	const hubName = $derived(appState.members.find((m) => m.id === plan?.hub)?.name ?? '');
 	const previewPositions = $derived(
@@ -69,8 +74,8 @@
 				</tr>
 				<tr class="matrix-net-row">
 					<th scope="row">Tổng cộng</th>
-					{#each members as member}
-						{@const net = 0 - netBalance(appState.ledger, member.id)}
+					{#each members as member, index}
+						{@const net = columnTotals[index]}
 						<th scope="col" aria-label={`${member.name}, Tổng cộng: ${currency(net)}`}>
 							<strong class="matrix-net" class:net-owing={net > 0} class:net-owed={net < 0}
 								>{currency(net)}</strong

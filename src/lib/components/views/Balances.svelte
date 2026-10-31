@@ -193,13 +193,13 @@
 <div class="stat-grid balance-stat-grid">
 	<div class="stat-card">
 		<div class="stat-label">{subject} đang nợ <ArrowUpRight size={19} /></div>
-		<strong class="gain-amount">{currency(owing)}</strong><span class="stat-foot"
+		<strong class="loss-amount">{currency(owing)}</strong><span class="stat-foot"
 			>{pairs.filter((p) => p.balance > 0).length} khoản cần thanh toán</span
 		>
 	</div>
 	<div class="stat-card">
 		<div class="stat-label">{subject} đang bị nợ <ArrowDownLeft size={19} /></div>
-		<strong class="loss-amount">{currency(owed)}</strong><span class="stat-foot"
+		<strong class="owed-amount">{currency(owed)}</strong><span class="stat-foot"
 			>{pairs.filter((p) => p.balance < 0).length} người đang nợ {isOwnAccount ? 'bạn' : account?.name}</span
 		>
 	</div>
@@ -215,7 +215,7 @@
 			>
 		</div>
 	</div>
-	{#each visible as pair (pair.member.id)}<div class="counterpart">
+	{#each visible as pair (pair.member.id)}<div class="counterpart" class:owing={pair.balance > 0}>
 			<div class="counterpart-main">
 				<button
 					type="button"
@@ -236,7 +236,7 @@
 							: pair.balance < 0
 								? `${subject} đang bị nợ`
 								: 'Không còn nợ'}</small
-					><strong class:gain-amount={pair.balance > 0} class:loss-amount={pair.balance < 0}
+					><strong class:loss-amount={pair.balance > 0} class:owed-amount={pair.balance < 0}
 						>{currency(Math.abs(pair.balance))}</strong
 					>
 				</div>
@@ -288,8 +288,8 @@
 							</div>
 							<strong
 								class="counterpart-history-amount"
-								class:gain-amount={entry.from === accountId}
-								class:loss-amount={entry.to === accountId}>{currency(entry.amount)}</strong
+								class:loss-amount={entry.from === accountId}
+								class:owed-amount={entry.to === accountId}>{currency(entry.amount)}</strong
 							>
 						</div>{/each}{#if !entries.length}<p class="counterpart-history-empty">
 							Chưa có khoản nợ trực tiếp; số dư có thể đến từ tối giản nợ.
@@ -370,3 +370,9 @@
 			>
 		</div>{/if}
 </Modal>
+
+<style>
+	.owed-amount {
+		color: light-dark(#171717, #e6ebe3);
+	}
+</style>

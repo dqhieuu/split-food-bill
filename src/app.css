@@ -1447,6 +1447,9 @@ footer {
 	padding: 0;
 	border-bottom: 1px solid light-dark(#eef0e6, #22241e);
 }
+.counterpart.owing > .counterpart-main {
+	background: light-dark(#fff4f2, #2b2020);
+}
 .balances-heading {
 	flex-wrap: wrap;
 }

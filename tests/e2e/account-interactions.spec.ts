@@ -170,6 +170,15 @@ for (const width of [1280, 390]) {
 			await expect(page.locator('.throne-occupant')).toContainText('Thảo Linh');
 			await expect(page.locator('.debt-ropes .rope-strand')).toHaveCount(2);
 			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(6);
+			const ropes = page.locator('.rope-model');
+			await expect(ropes).toHaveAttribute('data-renderer', '3d');
+			await expect(ropes).toHaveAttribute('data-ropes', '2');
+			expect(await ropes.evaluate((el) => Number(getComputedStyle(el).opacity))).toBe(1);
+			const moneyBottom = await page
+				.locator('.courtier .figure-amount')
+				.evaluateAll((elements) => Math.max(...elements.map((el) => el.getBoundingClientRect().bottom)));
+			const debtorTop = (await page.locator('.court-gathering').boundingBox())!.y;
+			expect(debtorTop).toBeGreaterThan(moneyBottom);
 
 			// Ropes finish at the illustrated wrists, including after responsive resizing.
 			const ropeError = () =>
@@ -703,9 +712,19 @@ for (const width of [1280, 390]) {
 			);
 			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
 			await page.locator('aside nav a[href="/matrix"]').click();
-			const header = page.getByRole('columnheader', { name: 'Minh An, Tổng cộng: 90.000 ₫', exact: true });
+			const header = page.getByRole('columnheader', { name: 'Minh An, Tổng cộng: -40.000 ₫', exact: true });
 			await expect(header).toBeVisible();
-			await expect(header.locator('.matrix-net')).toHaveText('90.000 ₫');
+			await expect(header.locator('.matrix-net')).toHaveText('-40.000 ₫');
+			const totalsMatch = () =>
+				page.locator('.matrix-table').evaluate((table) => {
+					const amount = (el: Element) => Number(el.textContent!.replace(/[^\d-]/g, ''));
+					const rows = [...table.querySelectorAll('tbody tr')];
+					return [...table.querySelectorAll('.matrix-net')].every(
+						(total, index) =>
+							amount(total) === rows.reduce((sum, row) => sum + amount(row.querySelectorAll('td')[index]), 0)
+					);
+				});
+			expect(await totalsMatch()).toBe(true);
 			await expect(
 				page.getByRole('columnheader', { name: 'Ngọc Mai, Tổng cộng: 0 ₫', exact: true })
 			).toBeAttached();

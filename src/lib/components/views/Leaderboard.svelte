@@ -17,6 +17,7 @@
 	import type { AppState } from '$lib/domain/types';
 	import { courtRanking, type CourtRank, type CourtTier } from '$lib/domain/leaderboard';
 	import { currency, pairBalance } from '$lib/domain/ledger';
+	import type { createCourtRopes, Rope } from '$lib/graphics/court-ropes';
 
 	let { appState, actor, groupName }: { appState: AppState; actor: string; groupName: string } = $props();
 	let filter = $state<'all' | 'creditors' | 'commoner' | 'servant'>('all');
@@ -31,9 +32,23 @@
 	const courtIds = $derived(new Set([monarch?.member.id, ...courtiers.map((entry) => entry.member.id)]));
 	const gathering = $derived(ranks.filter((entry) => !courtIds.has(entry.member.id)).slice(-3));
 	let ropePaths = $state<string[]>([]);
+	let ropesReady = $state(false);
 	// Measure the illustrated hands so ropes stay attached at every screen width.
 	function connectRopes(node: HTMLDivElement, _entries: CourtRank[]) {
 		let frame = 0;
+		let destroyed = false;
+		let ropeModel: ReturnType<typeof createCourtRopes> | undefined;
+		import('$lib/graphics/court-ropes')
+			.then(({ createCourtRopes }) => {
+				if (destroyed) return;
+				ropeModel = createCourtRopes(node.querySelector<HTMLCanvasElement>('.rope-model')!, () => {
+					ropesReady = false;
+				});
+				measure();
+			})
+			.catch(() => {
+				ropesReady = false;
+			});
 		function pin(selector: string) {
 			const anchor = node.querySelector<HTMLElement>(selector);
 			return anchor ? point(anchor) : undefined;
@@ -54,16 +69,23 @@
 				const grip = pin('.throne-occupant .rope-anchor');
 				if (!grip || !matrix) {
 					ropePaths = [];
+					ropeModel?.update([], node.clientWidth, node.clientHeight);
 					return;
 				}
 				const inverse = matrix.inverse();
 				const { x, y } = grip.matrixTransform(inverse);
+				const ropes: Rope[] = [];
 				ropePaths = Array.from(node.querySelectorAll<HTMLElement>('.servant .rope-anchor')).map((anchor) => {
 					const { x: endX, y: endY } = point(anchor).matrixTransform(inverse);
+					ropes.push({ start: [x, y], end: [endX, endY] });
 					const bend = Math.min(origin.width - 12, x + 100);
 					const approach = Math.min(origin.width - 12, endX + 65);
 					return `M ${x} ${y} C ${bend} ${y + 100}, ${approach} ${endY + 30}, ${endX} ${endY}`;
 				});
+				if (ropeModel) {
+					ropeModel.update(ropes, node.clientWidth, node.clientHeight);
+					ropesReady = true;
+				}
 			});
 		}
 		const observer = new ResizeObserver(measure);
@@ -77,6 +99,8 @@
 		return {
 			update: measure,
 			destroy() {
+				destroyed = true;
+				ropeModel?.dispose();
 				observer.disconnect();
 				anchors.disconnect();
 				window.removeEventListener('resize', measure);
@@ -212,7 +236,8 @@
 				</svg>
 				<div class="palace-floor" aria-hidden="true"></div>
 				<div class="royal-carpet" aria-hidden="true"></div>
-				<svg class="debt-ropes" aria-hidden="true">
+				<canvas class="rope-model" class:ready={ropesReady} aria-hidden="true"></canvas>
+				<svg class="debt-ropes" class:rendered={ropesReady} aria-hidden="true">
 					{#each ropePaths as path}
 						<path d={path} class="rope-shadow" />
 						<path d={path} class="rope-strand" />
@@ -479,7 +504,7 @@
 	}
 	.palace-stage {
 		position: relative;
-		height: 630px;
+		height: 690px;
 		max-width: 820px;
 		margin: 4px auto 0;
 		perspective: 800px;
@@ -499,6 +524,22 @@
 		pointer-events: none;
 		fill: none;
 		stroke-linecap: round;
+		opacity: 1;
+	}
+	.debt-ropes.rendered {
+		visibility: hidden;
+	}
+	.rope-model {
+		position: absolute;
+		inset: 0;
+		z-index: 5;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+		opacity: 0;
+	}
+	.rope-model.ready {
+		opacity: 1;
 	}
 	.rope-shadow {
 		stroke: #100b0b99;
@@ -549,7 +590,7 @@
 	.royal-throne {
 		position: absolute;
 		left: 50%;
-		top: 20px;
+		top: 90px;
 		width: 138px;
 		height: 190px;
 		transform: translateX(-50%);
@@ -559,9 +600,9 @@
 	.throne-dais {
 		position: absolute;
 		left: 50%;
-		top: 208px;
+		top: 278px;
 		width: min(64%, 240px);
-		height: 350px;
+		height: 280px;
 		transform: translateX(-50%);
 		filter: drop-shadow(0 9px 8px #08050b88);
 		pointer-events: none;
@@ -569,7 +610,7 @@
 	.throne-occupant {
 		position: absolute;
 		z-index: 3;
-		top: 55px;
+		top: 125px;
 		left: 30%;
 		width: 40%;
 	}
@@ -627,7 +668,7 @@
 	.court-gathering {
 		position: absolute;
 		z-index: 4;
-		top: 440px;
+		top: 500px;
 		left: 9%;
 		right: 9%;
 		display: flex;
@@ -642,7 +683,7 @@
 	.vacant-throne {
 		position: absolute;
 		z-index: 2;
-		top: 102px;
+		top: 172px;
 		left: 25%;
 		width: 50%;
 		display: flex;
@@ -1100,18 +1141,18 @@
 			font-size: 12px;
 		}
 		.palace-stage {
-			height: 600px;
+			height: 660px;
 		}
 		.throne-occupant {
-			top: 55px;
+			top: 125px;
 		}
 		.royal-throne {
-			top: 0;
+			top: 70px;
 			width: 154px;
 			height: 212px;
 		}
 		.throne-dais {
-			height: 326px;
+			height: 256px;
 		}
 		.courtier {
 			top: 215px;
@@ -1126,7 +1167,7 @@
 			height: 163px;
 		}
 		.court-gathering {
-			top: 410px;
+			top: 470px;
 			left: 19%;
 			right: 19%;
 		}
