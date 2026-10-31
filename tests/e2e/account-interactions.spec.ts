@@ -169,8 +169,10 @@ for (const width of [1280, 390]) {
 			await expect(page.getByRole('heading', { name: 'Bảng xếp hạng', exact: true })).toBeVisible();
 			await expect(page.locator('.throne-occupant')).toContainText('Thảo Linh');
 			await expect(page.locator('.debt-ropes .rope-strand')).toHaveCount(2);
-			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(6);
-			await expect(page.locator('.courtier .figure-model[data-pose="kneeling"]')).toHaveCount(2);
+			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(5);
+			await expect(page.locator('.courtier .figure-model[data-pose="kneeling"]')).toHaveCount(1);
+			await expect(page.locator('.courtier .commoner')).toHaveCount(0);
+			await expect(page.locator('.court-gathering .commoner')).toHaveCount(1);
 			const ropes = page.locator('.rope-model');
 			await expect(ropes).toHaveAttribute('data-renderer', '3d');
 			await expect(ropes).toHaveAttribute('data-ropes', '2');
@@ -235,6 +237,7 @@ for (const width of [1280, 390]) {
 			await expect(page.locator('.debt-ropes .rope-strand')).toHaveCount(0);
 			await expect(page.locator('.rank-row.sovereign')).toHaveCount(0);
 			await expect(page.locator('.rank-row.commoner')).toHaveCount(8);
+			await expect(page.locator('.courtier')).toHaveCount(0);
 			await expect(page.locator('.rank-balance strong').first()).toHaveText('0 ₫');
 			await page.locator('.court-filters').getByRole('button', { name: 'Hoàng tộc' }).click();
 			await expect(page.locator('.court-empty')).toContainText('Chưa có ai mang tước vị này.');
@@ -350,7 +353,7 @@ for (const width of [1280, 390]) {
 		}) => {
 			await page.clock.install();
 			await openFixture(page, '/leaderboard');
-			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(6);
+			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(5);
 			await page.locator('.palace-stage').scrollIntoViewIfNeeded();
 			const king = page.locator('.throne-occupant .figure-model');
 			const servants = page.locator('.servant .figure-model');
@@ -395,7 +398,7 @@ for (const width of [1280, 390]) {
 		test('royal court retains models across 15-second polls and balance updates', async ({ page }) => {
 			await page.clock.install();
 			const { state } = await openFixture(page, '/leaderboard');
-			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(6);
+			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(5);
 			const ids = () =>
 				page
 					.locator('.figure-model')

@@ -28,7 +28,7 @@
 	const ranks = $derived(courtRanking(appState.members, appState.ledger));
 	const monarch = $derived(ranks.find((entry) => entry.tier === 'sovereign'));
 	const courtiers = $derived(
-		ranks.filter((entry) => entry.member.id !== monarch?.member.id && entry.credit >= 0).slice(0, 2)
+		ranks.filter((entry) => entry.member.id !== monarch?.member.id && entry.credit > 0).slice(0, 2)
 	);
 	const courtIds = $derived(new Set([monarch?.member.id, ...courtiers.map((entry) => entry.member.id)]));
 	const gathering = $derived(ranks.filter((entry) => !courtIds.has(entry.member.id)).slice(-3));
