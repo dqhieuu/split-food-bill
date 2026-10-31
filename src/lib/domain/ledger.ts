@@ -118,7 +118,7 @@ export function discountShares(amounts: number[], discountedTotal: number, digit
 	shares[shares.length - 1] = discountedTotal - shares.slice(0, -1).reduce((a, b) => a + b, 0);
 	return shares;
 }
-/** Bill entries cancelled by an undo, together with their reversal entries. */
+/** Ledger entries cancelled by an undo, together with their reversal entries. */
 export function cancelledEntryIds(ledger: LedgerEntry[]): Set<string> {
 	const ids = new Set<string>();
 	for (const entry of ledger)
@@ -137,7 +137,7 @@ function requireMember(state: AppState, id: string, active = false): Member {
 function requireAvailableEntryIds(state: AppState, ids: string[]) {
 	const existing = new Set(state.ledger.map((entry) => entry.id));
 	if (new Set(ids).size !== ids.length || ids.some((id) => existing.has(id)))
-		throw new DomainError('Mã bút toán đã tồn tại. Vui lòng tải lại và thử một giao dịch mới.', 409);
+		throw new DomainError('Mã giao dịch đã tồn tại. Vui lòng tải lại và thử một giao dịch mới.', 409);
 }
 export function requireAdmin(state: AppState, actor: string) {
 	if (requireMember(state, actor, true).role !== 'admin')
@@ -493,6 +493,40 @@ export function applyCommand(
 			entryCount: plan.entries.length
 		});
 		reference = data.id;
+	} else if (command === 'undoSettlement') {
+		requireAdmin(state, actor);
+		const { id } = z.object({ id: identifier }).parse(input);
+		const batch = state.settlements.find((settlement) => settlement.id === id);
+		if (!batch) throw new DomainError('Không tìm thấy lần tối giản nợ.', 404);
+		// A retry after a lost response must not reverse the same batch twice.
+		if (batch.undoneAt) return { reference: batch.id };
+		const entries = state.ledger.filter(
+			(entry) => entry.source === 'settlement' && entry.reference === batch.id
+		);
+		if (!entries.length || entries.length !== batch.entryCount)
+			throw new DomainError('Không tìm thấy đầy đủ giao dịch của lần tối giản này.', 409);
+		requireAvailableEntryIds(
+			state,
+			entries.map((entry) => `${entry.id}-undo`)
+		);
+		for (const entry of entries)
+			state.ledger.push({
+				id: `${entry.id}-undo`,
+				from: entry.to,
+				to: entry.from,
+				type: entry.type,
+				amount: entry.amount,
+				date: now,
+				createdAt: now,
+				description: `Hoàn tác: ${entry.description}`,
+				note: '',
+				creator: actor,
+				source: 'reversal',
+				reference: batch.id
+			});
+		batch.undoneAt = now;
+		batch.undoneBy = actor;
+		reference = batch.id;
 	} else if (command === 'saveMember') {
 		const editor = requireMember(state, actor, true);
 		const data = z

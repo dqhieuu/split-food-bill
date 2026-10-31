@@ -2037,6 +2037,16 @@ footer {
 	padding: 15px 22px;
 	border-top: 1px solid light-dark(#eef0e6, #22241e);
 }
+.settlement-history-details {
+	flex: 1;
+	min-width: 0;
+}
+.settlement-history-details .settlement-undone {
+	color: var(--muted-foreground);
+}
+.settlement-history-more {
+	margin: 12px 22px;
+}
 .settlement-history strong {
 	display: block;
 	font-size: 14px;

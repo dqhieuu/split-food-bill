@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Scale, ShieldCheck, Clock } from '@lucide/svelte';
+	import { Scale, ShieldCheck, Clock, Undo2 } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Modal from '../Modal.svelte';
 	import Avatar from '../Avatar.svelte';
@@ -11,13 +11,18 @@
 	let confirmOpen = $state(false);
 	let plan = $state<SettlementPlan | null>(null);
 	let planError = $state('');
+	let undoOpen = $state(false);
+	let undoBatchId = $state('');
+	let historyLimit = $state(5);
+	const settlementHistory = $derived([...appState.settlements].sort((a, b) => b.date.localeCompare(a.date)));
+	const undoBatch = $derived(appState.settlements.find((batch) => batch.id === undoBatchId));
 	const members = $derived(appState.members.filter((m) => m.active));
 	const columnTotals = $derived(
 		members.map((column) =>
 			members.reduce((sum, row) => sum + pairBalance(appState.ledger, row.id, column.id), 0)
 		)
 	);
-	const isAdmin = $derived(appState.members.find((m) => m.id === actor)?.role === 'admin');
+	const isAdmin = $derived(appState.members.some((m) => m.id === actor && m.active && m.role === 'admin'));
 	const hubName = $derived(appState.members.find((m) => m.id === plan?.hub)?.name ?? '');
 	const previewPositions = $derived(
 		plan
@@ -45,6 +50,15 @@
 				);
 				confirmOpen = false;
 			} catch {}
+	}
+	async function undo() {
+		if (!undoBatch || undoBatch.undoneAt || !isAdmin || busy) return;
+		try {
+			await run('undoSettlement', { id: undoBatch.id }, 'Đã hoàn tác lần tối giản nợ.');
+			undoOpen = false;
+		} catch {
+			/* Keep the confirmation available for a retry. */
+		}
 	}
 </script>
 
@@ -120,25 +134,68 @@
 			<h2>Lịch sử tối giản</h2>
 			<span class="mini-pill">{appState.settlements.length} lần</span>
 		</div>
-		{#each [...appState.settlements].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5) as batch}<div
+		{#each settlementHistory.slice(0, historyLimit) as batch}<div
 				class="settlement-history"
+				data-settlement-id={batch.id}
 			>
 				<span class="stat-icon"><Scale size={17} /></span>
-				<div>
+				<div class="settlement-history-details">
 					<strong>Nợ chúa: {appState.members.find((m) => m.id === batch.hub)?.name}</strong><small
-						>{dateTimeLabel(batch.date)} · {batch.entryCount} bản ghi được thêm vào Ledger</small
+						>{dateTimeLabel(batch.date)} · {batch.entryCount} giao dịch được thêm vào Ledger</small
 					>
+					{#if batch.undoneAt}<small class="settlement-undone"
+							>Đã hoàn tác bởi {appState.members.find((m) => m.id === batch.undoneBy)?.name ?? batch.undoneBy} ·
+							{dateTimeLabel(batch.undoneAt)}</small
+						>{/if}
 				</div>
+				{#if isAdmin && !batch.undoneAt}<Button
+						variant="outline"
+						disabled={busy}
+						aria-label="Hoàn tác tối giản"
+						onclick={() => {
+							undoBatchId = batch.id;
+							undoOpen = true;
+						}}><Undo2 size={14} />Hoàn tác</Button
+					>{/if}
 			</div>{/each}{#if !appState.settlements.length}<div class="inline-empty">
 				Chưa có lần tối giản nào.
 			</div>{/if}
+		{#if settlementHistory.length > historyLimit}<Button
+				class="settlement-history-more"
+				variant="outline"
+				onclick={() => (historyLimit += 5)}>Xem thêm</Button
+			>{/if}
 	</section>
 </div>
+<Modal bind:open={undoOpen} title="Hoàn tác tối giản nợ" compact>
+	{#if undoBatch}
+		<p>
+			Lần tối giản lúc {dateTimeLabel(undoBatch.date)} · Nợ chúa: {appState.members.find(
+				(m) => m.id === undoBatch.hub
+			)?.name ?? undoBatch.hub}.
+		</p>
+		{#if undoBatch.undoneAt}<p role="status">Lần tối giản này đã được hoàn tác.</p>
+		{:else}
+			<p>
+				Hoàn tác sẽ thêm {undoBatch.entryCount} giao dịch bù trừ để đảo ngược lần tối giản này. Các giao dịch phát
+				sinh sau đó được giữ nguyên.
+			</p>
+			<div class="modal-actions">
+				<Button variant="outline" disabled={busy} onclick={() => (undoOpen = false)}>Hủy</Button><Button
+					variant="destructive"
+					disabled={busy || !isAdmin}
+					onclick={undo}><Undo2 size={16} />{busy ? 'Đang hoàn tác…' : 'Xác nhận hoàn tác'}</Button
+				>
+			</div>
+		{/if}
+	{/if}
+</Modal>
 <Modal bind:open={confirmOpen} title="Xem lại phương án tối giản nợ" wide compact
 	>{#if plan}<div class="notice">
 			<ShieldCheck size={20} />
 			<p>
-				Nợ chúa: <strong>{hubName}</strong>. Sau khi tối giản, {plan.entries.length} bản ghi sẽ được thêm vào Ledger.
+				Nợ chúa: <strong>{hubName}</strong>. Sau khi tối giản, {plan.entries.length} giao dịch sẽ được thêm vào
+				Ledger.
 			</p>
 		</div>
 		<h3>Các khoản nợ sau tối giản</h3>

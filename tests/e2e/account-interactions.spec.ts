@@ -827,6 +827,82 @@ for (const width of [1280, 390]) {
 			});
 		}
 
+		test('admins can cancel, retry and undo a simplification from its history', async ({ page }) => {
+			let originalPairs: number[] = [];
+			const { state } = await openFixture(page, '/matrix', (state) => {
+				originalPairs = state.members.flatMap((a) =>
+					state.members.map((b) => pairBalance(state.ledger, a.id, b.id))
+				);
+				applyCommand(state, ACTOR, 'settleDebts', { id: 'ui-simplification', version: state.version }, now);
+			});
+			const beforeUndo = structuredClone(state.ledger);
+			let requests = 0;
+			await page.route('**/api/groups/local/commands/undoSettlement', async (route) => {
+				requests++;
+				if (requests === 1)
+					return route.fulfill({ status: 503, json: { message: 'Chưa hoàn tác được. Thử lại.' } });
+				const input = route.request().postDataJSON();
+				expect(input).toEqual({ id: 'ui-simplification' });
+				const result = applyCommand(state, ACTOR, 'undoSettlement', input, now);
+				await route.fulfill({ json: { state, result } });
+			});
+			const history = page.locator('[data-settlement-id="ui-simplification"]');
+			const openUndo = history.getByRole('button', { name: 'Hoàn tác tối giản', exact: true });
+			await openUndo.click();
+			const confirmation = page.getByRole('dialog', { name: 'Hoàn tác tối giản nợ', exact: true });
+			await expect(confirmation).toContainText('giao dịch bù trừ');
+			await expect(confirmation).not.toContainText('bút toán');
+			await confirmation.getByRole('button', { name: 'Hủy', exact: true }).click();
+			expect(requests).toBe(0);
+			expect(state.ledger).toEqual(beforeUndo);
+			await openUndo.click();
+			await confirmation.getByRole('button', { name: 'Xác nhận hoàn tác', exact: true }).click();
+			await expect(page.locator('.error-toast')).toContainText('Thử lại');
+			await expect(confirmation).toBeVisible();
+			expect(state.ledger).toEqual(beforeUndo);
+			await confirmation.getByRole('button', { name: 'Xác nhận hoàn tác', exact: true }).click();
+			await expect(confirmation).toHaveCount(0);
+			await expect(history).toContainText('Đã hoàn tác bởi Minh An');
+			await expect(openUndo).toHaveCount(0);
+			expect(state.ledger.slice(0, beforeUndo.length)).toEqual(beforeUndo);
+			expect(
+				state.members.flatMap((a) => state.members.map((b) => pairBalance(state.ledger, a.id, b.id)))
+			).toEqual(originalPairs);
+			await page.reload();
+			await expect(history).toContainText('Đã hoàn tác bởi Minh An');
+			await expect(openUndo).toHaveCount(0);
+			await page.goto('/members');
+			await page.getByRole('button', { name: 'Nhật ký thay đổi', exact: true }).click();
+			await expect(page.locator('.audit-table')).toContainText('Hoàn tác tối giản nợ');
+		});
+
+		test('regular group members see simplification history without undo actions', async ({ page }) => {
+			await openFixture(page, '/matrix', (state) => {
+				applyCommand(state, ACTOR, 'settleDebts', { id: 'member-history', version: state.version }, now);
+				state.members.find((member) => member.id === ACTOR)!.role = 'member';
+			});
+			await expect(page.locator('[data-settlement-id="member-history"]')).toBeVisible();
+			await expect(page.getByRole('button', { name: 'Hoàn tác tối giản', exact: true })).toHaveCount(0);
+		});
+
+		test('admins can reach older simplifications beyond the five most recent', async ({ page }) => {
+			await openFixture(page, '/matrix', (state) => {
+				for (let i = 0; i < 6; i++)
+					applyCommand(
+						state,
+						ACTOR,
+						'settleDebts',
+						{ id: `older-${i}`, version: state.version },
+						new Date(Date.parse(now) + i * 60000).toISOString()
+					);
+			});
+			await expect(page.locator('.settlement-history')).toHaveCount(5);
+			await page.getByRole('button', { name: 'Xem thêm', exact: true }).click();
+			const older = page.locator('[data-settlement-id="older-0"]');
+			await older.getByRole('button', { name: 'Hoàn tác tối giản', exact: true }).click();
+			await expect(page.getByRole('dialog', { name: 'Hoàn tác tối giản nợ', exact: true })).toBeVisible();
+		});
+
 		test('rows toggle independent histories and disabled QR explains its reason on hover and focus', async ({
 			page
 		}) => {

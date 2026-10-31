@@ -95,6 +95,8 @@ export type Settlement = {
 	creator: string;
 	version: number;
 	entryCount: number;
+	undoneAt?: string;
+	undoneBy?: string;
 };
 export type Archive = { id: string; name: string; url: string; date: string };
 export type AuditEvent = { id: string; actor: string; action: string; date: string; reference: string };

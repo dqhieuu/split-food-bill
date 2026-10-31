@@ -82,6 +82,7 @@
 		recordPayment: 'Ghi hoàn tiền',
 		confirmQrPayment: 'Ghi thanh toán QR',
 		settleDebts: 'Tối giản nợ',
+		undoSettlement: 'Hoàn tác tối giản nợ',
 		saveMember: 'Cập nhật thành viên',
 		retryBillNotification: 'Gửi lại thông báo Discord',
 		saveArchive: 'Thêm lưu trữ',
