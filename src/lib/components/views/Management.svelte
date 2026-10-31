@@ -317,20 +317,12 @@
 			</div>
 		</div>
 	{:else}<div class="table-scroll">
-			<table class="data-table">
+			<table class="data-table audit-table">
 				<thead><tr><th>Thời gian</th><th>Thành viên</th><th>Thao tác</th></tr></thead><tbody
 					>{#each [...appState.audit].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 100) as event}<tr
-							><td
-								>{dateTimeLabel(event.date)}<small
-									>{new Intl.DateTimeFormat('vi-VN', {
-										hour: '2-digit',
-										minute: '2-digit',
-										timeZone: 'Asia/Ho_Chi_Minh'
-									}).format(new Date(event.date))}</small
-								></td
-							><td>{appState.members.find((m) => m.id === event.actor)?.name || event.actor}</td><td
-								>{actionLabels[event.action] || 'Cập nhật dữ liệu'}</td
-							></tr
+							><td>{dateTimeLabel(event.date)}</td><td
+								>{appState.members.find((m) => m.id === event.actor)?.name || event.actor}</td
+							><td>{actionLabels[event.action] || 'Cập nhật dữ liệu'}</td></tr
 						>{/each}</tbody
 				>
 			</table>

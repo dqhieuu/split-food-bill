@@ -72,7 +72,7 @@ export async function createCourtModel(
 		renderer.setClearColor(0x000000, 0);
 		renderer.outputColorSpace = THREE.SRGBColorSpace;
 		renderer.toneMapping = THREE.ACESFilmicToneMapping;
-		renderer.toneMappingExposure = 1;
+		renderer.toneMappingExposure = 1.15;
 	}
 	const engine = renderer;
 	clients++;
@@ -91,11 +91,11 @@ export async function createCourtModel(
 	const camera = new THREE.OrthographicCamera(-halfWidth, halfWidth, top, bottom, 0.1, 20);
 	camera.position.set(0, 0, 6);
 	camera.updateMatrixWorld();
-	scene.add(new THREE.HemisphereLight('#fff5e9', '#302935', 1.45));
-	const key = new THREE.DirectionalLight('#fff4e9', 2);
+	scene.add(new THREE.HemisphereLight('#fff5e9', '#302935', 1.8));
+	const key = new THREE.DirectionalLight('#fff4e9', 2.6);
 	key.position.set(-3, 5, 5);
 	scene.add(key);
-	const rim = new THREE.DirectionalLight('#e1ac62', 0.85);
+	const rim = new THREE.DirectionalLight('#e1ac62', 1.4);
 	rim.position.set(3, 2, -2);
 	scene.add(rim);
 	const materials: THREE.Material[] = [];

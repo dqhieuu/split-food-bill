@@ -1,5 +1,21 @@
 import { banks } from './banks';
 
+/** VietQR transfer notes allow 25 unaccented characters. Keep the purpose intact. */
+export function qrPaymentMessage(payerName: string): string {
+	const name = payerName
+		.normalize('NFD')
+		.replace(/\p{Diacritic}/gu, '')
+		.replace(/đ/g, 'd')
+		.replace(/Đ/g, 'D')
+		.replace(/[^a-z0-9 ]/gi, '')
+		.trim()
+		.replace(/\s+/g, ' ');
+	const purpose = ' tra tien an QR';
+	const budget = 25 - purpose.length;
+	const shortName = name.length <= budget ? name : name.split(' ').at(-1)!.slice(0, budget);
+	return `${shortName || 'Ban'}${purpose}`;
+}
+
 // VietQR EMVCo payload generated locally without sending bank details to a QR service.
 function field(id: string, value: string): string {
 	return id + new TextEncoder().encode(value).length.toString().padStart(2, '0') + value;

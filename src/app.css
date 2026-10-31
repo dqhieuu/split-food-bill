@@ -1780,6 +1780,10 @@ footer {
 	color: light-dark(#7c896e, #7e8b70);
 	font-size: 14px;
 }
+.data-table.audit-table th,
+.data-table.audit-table td {
+	padding: 10px 16px;
+}
 .data-table td > strong {
 	display: block;
 	font-size: 14px;
@@ -2005,7 +2009,6 @@ footer {
 .matrix-table td.debt-cell {
 	background: light-dark(#eff4e7, #1f221a);
 	color: var(--amount-owing);
-	font-weight: 600;
 }
 .settlement-history {
 	display: flex;

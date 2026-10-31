@@ -1675,7 +1675,7 @@ for (const [platform, userAgent] of [
 				`${state.members.find((member) => member.id === 'nam')!.bankAccount}@vcb`
 			);
 			expect(url.searchParams.get('am')).toBe('20000');
-			expect(url.searchParams.get('tn')).toMatch(/^CHIATIENAN [a-f0-9]{8}$/);
+			expect(url.searchParams.get('tn')).toBe('Minh An tra tien an QR');
 			expect(url.searchParams.get('url')).toBe('http://127.0.0.1:5173/balances?group=local');
 			const qrImage = await link.locator('img').getAttribute('src');
 			const recipient = state.members.find((member) => member.id === 'nam')!;

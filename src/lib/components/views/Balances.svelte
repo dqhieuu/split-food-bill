@@ -12,7 +12,7 @@
 	import type { AppState, Member } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, dateLabel, cancelledEntryIds, pairBalance } from '$lib/domain/ledger';
-	import { vietQrPayload, bankNames } from '$lib/domain/qr';
+	import { vietQrPayload, bankNames, qrPaymentMessage } from '$lib/domain/qr';
 	import {
 		bankAppsForMember,
 		bankTransferLink,
@@ -30,6 +30,7 @@
 		amount: number;
 		recipient: Member;
 		payer: Pick<Member, 'id' | 'name'>;
+		description: string;
 	} | null>(null);
 	let confirmed = $state(false);
 	let qrImage = $state('');
@@ -97,7 +98,7 @@
 			appId: bankApp.id,
 			recipient: qrPayment.recipient,
 			amount: qrPayment.amount,
-			description: `CHIATIENAN ${qrPayment.id.slice(0, 8)}`,
+			description: qrPayment.description,
 			returnUrl: returnUrl.href
 		});
 	});
@@ -129,7 +130,8 @@
 			id: crypto.randomUUID(),
 			amount,
 			recipient: structuredClone($state.snapshot(person)),
-			payer: { id: account.id, name: account.name }
+			payer: { id: account.id, name: account.name },
+			description: qrPaymentMessage(account.name)
 		};
 		qrPayment = payment;
 		selectedBankApp = '';
@@ -139,7 +141,7 @@
 		qrOpen = true;
 		try {
 			const image = await QRCode.toDataURL(
-				vietQrPayload(person.bankCode, person.bankAccount, amount, `CHIATIENAN ${payment.id.slice(0, 8)}`),
+				vietQrPayload(person.bankCode, person.bankAccount, amount, payment.description),
 				{ width: 320, margin: 2, errorCorrectionLevel: 'M' }
 			);
 			if (qrPayment?.id === payment.id) qrImage = image;

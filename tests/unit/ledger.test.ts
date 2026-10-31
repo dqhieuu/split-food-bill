@@ -12,7 +12,7 @@ import {
 } from '../../src/lib/domain/ledger';
 import { createDemoState } from '../../src/lib/domain/seed';
 import { parseLedgerImport } from '../../src/lib/domain/import';
-import { crc16, vietQrPayload, resolveBank } from '../../src/lib/domain/qr';
+import { crc16, vietQrPayload, resolveBank, qrPaymentMessage } from '../../src/lib/domain/qr';
 
 const now = '2026-10-25T12:00:00.000Z';
 const fresh = () => createDemoState(new Date(now));
@@ -424,6 +424,22 @@ describe('migration and receipts', () => {
 		expect(payload).toContain('00000123');
 		expect(payload).toContain('A000000727');
 		expect(payload.slice(-4)).toBe(crc16(payload.slice(0, -4)));
+	});
+	it('preserves the QR payment purpose within the bank memo limit', () => {
+		for (const [name, expected] of [
+			['Minh An', 'Minh An'],
+			['Thảo Linh', 'Thao Linh'],
+			['Đăng Khoa', 'Dang Khoa'],
+			['Alexandra', 'Alexandra'],
+			['Nguyễn Hoàng Minh An', 'An']
+		]) {
+			const message = qrPaymentMessage(name);
+			expect(message).toBe(`${expected} tra tien an QR`);
+			expect(message.length).toBeLessThanOrEqual(25);
+			const payload = vietQrPayload('970436', '00000123', 55000, message);
+			expect(payload).toContain(message);
+			expect(payload.slice(-4)).toBe(crc16(payload.slice(0, -4)));
+		}
 	});
 	it('resolves suggested banks to QR codes and preserves arbitrary bank text without a fabricated code', () => {
 		expect(resolveBank('  vIet com bank ')).toEqual({ code: '970436', label: 'Vietcombank' });
