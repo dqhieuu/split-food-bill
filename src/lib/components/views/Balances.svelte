@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount, untrack } from 'svelte';
 	import QRCode from 'qrcode';
-	import { ArrowUpRight, ArrowDownLeft, QrCode, ChevronDown } from '@lucide/svelte';
+	import { ArrowUpRight, ArrowDownLeft, QrCode, ChevronDown, CircleAlert } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import Avatar from '../Avatar.svelte';
@@ -26,8 +26,16 @@
 		actor,
 		run,
 		busy,
-		groupId
-	}: { appState: AppState; actor: string; run: RunCommand; busy: boolean; groupId: string } = $props();
+		groupId,
+		onEditAccount
+	}: {
+		appState: AppState;
+		actor: string;
+		run: RunCommand;
+		busy: boolean;
+		groupId: string;
+		onEditAccount: () => void;
+	} = $props();
 	let filter = $state('all');
 	let expanded = $state<string[]>([]);
 	let billOpen = $state(false);
@@ -203,6 +211,16 @@
 		</select>
 	</label>
 </div>
+{#if isOwnAccount && account && (!account.bankCode.trim() || !account.bankAccount.trim())}
+	<div class="notice bank-account-notice" role="status">
+		<CircleAlert size={20} aria-hidden="true" />
+		<div>
+			<strong>Chưa có đủ thông tin ngân hàng</strong>
+			<p>Cập nhật ngân hàng và số tài khoản để nhận tiền qua mã QR.</p>
+		</div>
+		<Button variant="outline" onclick={onEditAccount}>Cập nhật ngay</Button>
+	</div>
+{/if}
 <div class="stat-grid balance-stat-grid">
 	<div class="stat-card">
 		<div class="stat-label">{subject} đang nợ <ArrowUpRight size={19} /></div>

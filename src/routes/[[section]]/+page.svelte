@@ -2,6 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import { DropdownMenu } from 'bits-ui';
 	import {
 		LayoutDashboard,
 		Wallet,
@@ -21,11 +22,14 @@
 		Check,
 		AlertCircle,
 		Camera,
-		Crown
+		Crown,
+		Pencil,
+		LogOut
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import MemberProfileDialog from '$lib/components/MemberProfileDialog.svelte';
 	import DatabaseReset from '$lib/components/DatabaseReset.svelte';
 	import Overview from '$lib/components/views/Overview.svelte';
 	import BillComposer from '$lib/components/views/BillComposer.svelte';
@@ -68,6 +72,7 @@
 	let mobileMenu = $state(false);
 	let releaseOpen = $state(false);
 	let accountOpen = $state(false);
+	let profileOpen = $state(false);
 	let resetOpen = $state(false);
 	let mainContent = $state<HTMLElement>();
 	let mobilePageAnimation: Animation | undefined;
@@ -191,6 +196,8 @@
 		}
 	}
 	async function changeGroup(id: string) {
+		profileOpen = false;
+		accountOpen = false;
 		busy = true;
 		error = '';
 		try {
@@ -260,6 +267,7 @@
 		selectedGroupId = '';
 		actor = '';
 		accountOpen = false;
+		profileOpen = false;
 	}
 	async function run(
 		command: string,
@@ -408,10 +416,38 @@
 						>{#if preferences.theme === 'dark'}<Sun size={19} />{:else}<Moon size={19} />{/if}</button
 					>
 					<div class="topbar-divider"></div>
-					<button class="account-button" onclick={() => (accountOpen = true)} aria-label="Tài khoản"
-						><Avatar member={accountMember} size="small" /><span>{accountMember?.name || 'Đang kết nối'}</span
-						><ChevronDown size={14} /></button
-					>
+					<DropdownMenu.Root bind:open={accountOpen}>
+						<DropdownMenu.Trigger class="account-button" aria-label="Tài khoản">
+							<Avatar member={accountMember} size="small" /><span
+								>{accountMember?.name || 'Đang kết nối'}</span
+							><ChevronDown size={14} />
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Portal>
+							<DropdownMenu.Content
+								class="account-menu"
+								sideOffset={8}
+								align="end"
+								collisionPadding={12}
+								onCloseAutoFocus={(event) => {
+									if (profileOpen) event.preventDefault();
+								}}
+							>
+								<DropdownMenu.Item
+									class="account-menu-item"
+									disabled={!currentMember?.active}
+									onSelect={() => {
+										profileOpen = true;
+									}}><Pencil size={16} aria-hidden="true" />Thông tin tài khoản</DropdownMenu.Item
+								>
+								<DropdownMenu.Item
+									class="account-menu-item"
+									onSelect={() => {
+										void signOutUser();
+									}}><LogOut size={16} aria-hidden="true" />Đăng xuất</DropdownMenu.Item
+								>
+							</DropdownMenu.Content>
+						</DropdownMenu.Portal>
+					</DropdownMenu.Root>
 				</div>
 			</header>
 			<main id="main-content" bind:this={mainContent}>
@@ -465,6 +501,7 @@
 									{run}
 									{busy}
 									groupId={selectedGroupId}
+									onEditAccount={() => (profileOpen = true)}
 								/>{/key}
 						{:else if section === '/activity'}<Activity
 								{appState}
@@ -550,17 +587,17 @@
 				onclick={() => (toast = '')}><X size={15} /></button
 			>
 		</div>{/if}
-	<Modal bind:open={accountOpen} title="Tài khoản">
-		{#if sessionData}<div class="account-current">
-				<Avatar member={sessionData.user} />
-				<div>
-					<strong>{sessionData.user.name}</strong><small
-						>{sessionData.user.role === 'admin' ? 'Quản trị viên hệ thống' : 'Thành viên hệ thống'}</small
-					>
-				</div>
-			</div>{/if}
-		<Button onclick={signOutUser}>Đăng xuất</Button>
-	</Modal><Modal bind:open={releaseOpen} title="Changelog" description="Chia tiền ăn · Phiên bản 0.2.0">
+	<MemberProfileDialog
+		bind:open={profileOpen}
+		member={currentMember}
+		{actor}
+		canManageRoles={currentMember?.role === 'admin'}
+		{run}
+		{busy}
+		title="Thông tin tài khoản"
+		description={`Nhóm: ${group?.name ?? ''}. Thông tin ngân hàng dùng để tạo QR.`}
+	/>
+	<Modal bind:open={releaseOpen} title="Changelog" description="Chia tiền ăn · Phiên bản 0.2.0">
 		<div class="release-note">
 			<ul>
 				<li>Giao diện tối và lịch chi tiêu theo ngày kèm âm lịch.</li>

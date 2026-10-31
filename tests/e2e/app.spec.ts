@@ -58,7 +58,7 @@ test('Discord OAuth handoff is single-use; unauthenticated and cross-origin requ
 	expect(session.user.role).toBe('admin');
 	expect((await request.post(API + '/auth/exchange', { data: auth.exchange })).status()).toBe(401);
 	await page.getByRole('button', { name: 'Tài khoản', exact: true }).click();
-	await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Đăng xuất', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'Đăng nhập bằng Discord', exact: true })).toBeVisible();
 });
 
@@ -324,8 +324,8 @@ test('system reset requires confirmation and can be cancelled without deleting d
 		if (request.url() === API + '/api/admin/database-reset') resetRequests++;
 	});
 	await page.getByRole('button', { name: 'Tài khoản', exact: true }).click();
-	await expect(page.getByRole('dialog')).not.toContainText(AN);
-	await expect(page.getByRole('dialog')).toContainText('Quản trị viên hệ thống');
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await expect(page.getByRole('menu').getByRole('menuitem')).toHaveCount(2);
 	await page.keyboard.press('Escape');
 	await page.getByRole('link', { name: 'Nhóm', exact: true }).click();
 	await page.getByRole('button', { name: 'Xóa toàn bộ cơ sở dữ liệu', exact: true }).click();

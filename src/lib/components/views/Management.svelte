@@ -20,11 +20,11 @@
 	import { Switch } from '$lib/components/ui/switch';
 	import Avatar from '../Avatar.svelte';
 	import Modal from '../Modal.svelte';
+	import MemberProfileDialog from '../MemberProfileDialog.svelte';
 	import type { AppState, Member } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, dateTimeLabel, localDate } from '$lib/domain/ledger';
-	import { bankNames, resolveBank } from '$lib/domain/qr';
-	import { banks } from '$lib/domain/banks';
+	import { bankNames } from '$lib/domain/qr';
 	import { parseLedgerImport, summarizeImport, type ImportedEntry } from '$lib/domain/import';
 	let {
 		appState,
@@ -42,20 +42,11 @@
 	let tab = $state('members');
 	let search = $state('');
 	let memberOpen = $state(false);
-	let bankInput = $state('');
-	let memberDraft = $state<Member>({
-		id: '',
-		name: '',
-		active: true,
-		role: 'member',
-		bankCode: '970436',
-		bankAccount: '',
-		color: '#6c8b70'
-	});
+	let selectedMemberId = $state('');
+	const selectedMember = $derived(appState.members.find((member) => member.id === selectedMemberId));
 	let archiveOpen = $state(false);
 	let archiveName = $state('');
 	let archiveUrl = $state('');
-	let validation = $state('');
 	let importOpen = $state(false);
 	let importEntries = $state<ImportedEntry[]>([]);
 	let importError = $state('');
@@ -95,9 +86,7 @@
 		saveAiSettings: 'Cập nhật cài đặt AI'
 	};
 	function editMember(member: Member) {
-		memberDraft = structuredClone($state.snapshot(member));
-		bankInput = memberDraft.bankLabel ?? bankNames[memberDraft.bankCode] ?? memberDraft.bankCode;
-		validation = '';
+		selectedMemberId = member.id;
 		memberOpen = true;
 	}
 	async function setMemberActive(member: Member, active: boolean) {
@@ -114,22 +103,6 @@
 		} finally {
 			delete activationChanges[member.id];
 		}
-	}
-	async function saveMember() {
-		validation = '';
-		if (!memberDraft.id || !memberDraft.name) {
-			validation = 'Điền đầy đủ ID và tên.';
-			return;
-		}
-		try {
-			const bank = resolveBank(bankInput);
-			await run(
-				'saveMember',
-				{ ...memberDraft, bankCode: bank.code, bankLabel: bank.label },
-				'Đã lưu hồ sơ thành viên.'
-			);
-			memberOpen = false;
-		} catch {}
 	}
 	async function saveArchive() {
 		try {
@@ -332,46 +305,14 @@
 				Các thay đổi tiếp theo sẽ được ghi lại tại đây.
 			</div>{/if}{/if}
 </section>
-<Modal
+<MemberProfileDialog
 	bind:open={memberOpen}
-	title="Chỉnh sửa hồ sơ"
-	description="ID là định danh cố định. Thông tin ngân hàng dùng để tạo QR."
-	wide
-	><div class="form-two-columns">
-		<label class="field">ID<Input bind:value={memberDraft.id} disabled={true} maxlength={100} /></label><label
-			class="field"
-			>Vai trò<select bind:value={memberDraft.role} disabled={!isAdmin || memberDraft.id === actor}
-				><option value="member">Thành viên</option><option value="admin">Quản trị viên</option></select
-			></label
-		><label class="field">Tên<Input bind:value={memberDraft.name} maxlength={100} /></label><label
-			class="field"
-			>Ngân hàng<Input
-				bind:value={bankInput}
-				list="member-bank-options"
-				placeholder="Nhập tên ngân hàng"
-				autocomplete="off"
-				maxlength={100}
-			/>
-			<datalist id="member-bank-options"
-				>{#each banks as bank}<option value={bank.shortName} label={`${bank.name} (${bank.code})`}
-					></option>{/each}</datalist
-			></label
-		><label class="field">Số tài khoản<Input bind:value={memberDraft.bankAccount} maxlength={40} /></label>
-	</div>
-	<div class="button-row">
-		<label class="checkbox-label"
-			><Switch
-				bind:checked={memberDraft.active}
-				disabled={!isAdmin || memberDraft.id === actor}
-				aria-label="Thành viên đang hoạt động"
-			/>Đang hoạt động</label
-		>
-	</div>
-	{#if validation}<p class="validation-error">{validation}</p>{/if}<Button
-		onclick={saveMember}
-		disabled={busy}>Lưu hồ sơ</Button
-	></Modal
->
+	member={selectedMember}
+	{actor}
+	canManageRoles={isAdmin}
+	{run}
+	{busy}
+/>
 <Modal
 	bind:open={archiveOpen}
 	title="Thêm liên kết lưu trữ"

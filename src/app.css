@@ -453,6 +453,36 @@ aside nav a.active:before {
 .account-button > svg {
 	color: light-dark(#6e7865, #a3ab9c);
 }
+.account-menu {
+	z-index: 100;
+	width: 270px;
+	max-width: calc(100vw - 24px);
+	padding: 6px;
+	border: 1px solid light-dark(#e4e5dc, #2b2c26);
+	border-radius: 10px;
+	background: var(--background);
+	color: var(--foreground);
+	box-shadow: 0 8px 24px #0002;
+	outline: none;
+}
+.account-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 10px 12px;
+	border-radius: 6px;
+	font-size: 14px;
+	cursor: pointer;
+	outline: none;
+	user-select: none;
+}
+.account-menu-item[data-highlighted] {
+	background: light-dark(#eef2e8, #293329);
+}
+.account-menu-item[data-disabled] {
+	opacity: 0.5;
+	cursor: default;
+}
 main {
 	padding: 34px 38px 40px;
 	flex: 1;
@@ -1678,6 +1708,22 @@ footer {
 	margin-left: auto;
 	white-space: nowrap;
 }
+.bank-account-notice {
+	align-items: center;
+	flex-wrap: wrap;
+	color: light-dark(#805718, #eac27e);
+	background: light-dark(#fff7e6, #302519);
+	border-color: light-dark(#eed6a5, #70522b);
+}
+.bank-account-notice > svg {
+	flex-shrink: 0;
+}
+.bank-account-notice > div {
+	flex: 1 1 200px;
+}
+.bank-account-notice p {
+	margin: 0;
+}
 .qr-content {
 	text-align: center;
 	display: flex;
@@ -2031,6 +2077,35 @@ footer {
 }
 .matrix-table td.self-cell {
 	background: light-dark(#f4f5ee, #1f1f1b);
+}
+.matrix-cell-trigger {
+	display: inline-block;
+	width: auto;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	color: inherit;
+	text-align: inherit;
+	cursor: help;
+}
+.matrix-cell-trigger:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 3px;
+	border-radius: 2px;
+}
+.matrix-cell-tooltip {
+	z-index: 100;
+	max-width: min(320px, calc(100vw - 24px));
+	padding: 8px 12px;
+	border-radius: 6px;
+	background: var(--foreground);
+	color: var(--background);
+	font-size: 13px;
+	line-height: 1.5;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	box-shadow: 0 4px 12px #0003;
 }
 .matrix-table td.debt-cell {
 	background: light-dark(#eff4e7, #1f221a);
@@ -3582,22 +3657,6 @@ select[aria-invalid='true'] {
 .theme-button:hover {
 	background: light-dark(#eef0e6, #262a24);
 }
-.account-current {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	padding: 12px;
-	border-radius: 10px;
-	border: 1px solid light-dark(#e5e6dc, #2b2b25);
-}
-.account-current > span {
-	display: flex;
-	flex-direction: column;
-}
-.account-current small {
-	font-size: 12px;
-	color: light-dark(#6e7865, #a3ab9c);
-}
 
 /* ---- Overview: spending calendar (fixed-height cells, green → red severity) ---- */
 .calendar-panel {
@@ -4322,10 +4381,6 @@ select[aria-invalid='true'] {
 }
 
 /* ---- Balances & matrix ---- */
-.counterpart-history {
-	max-height: 260px;
-	overflow-y: auto;
-}
 .matrix-table td.credit-cell {
 	color: var(--amount-owed);
 	background: light-dark(#fff1f0, #321e1d);
@@ -4832,10 +4887,6 @@ button.payment-history-row {
 }
 .group-selector select:disabled {
 	cursor: default;
-}
-.account-current small {
-	display: block;
-	font-size: 12px;
 }
 .avatar img {
 	width: 100%;

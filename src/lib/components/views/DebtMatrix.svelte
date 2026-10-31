@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Scale, ShieldCheck, Clock, Undo2 } from '@lucide/svelte';
+	import { Tooltip } from 'bits-ui';
 	import { Button } from '$lib/components/ui/button';
 	import Modal from '../Modal.svelte';
 	import Avatar from '../Avatar.svelte';
@@ -14,6 +15,7 @@
 	let undoOpen = $state(false);
 	let undoBatchId = $state('');
 	let historyLimit = $state(5);
+	const matrixTooltip = Tooltip.createTether<string>();
 	const settlementHistory = $derived([...appState.settlements].sort((a, b) => b.date.localeCompare(a.date)));
 	const undoBatch = $derived(appState.settlements.find((batch) => batch.id === undoBatchId));
 	const members = $derived(appState.members.filter((m) => m.active));
@@ -70,55 +72,85 @@
 	</div>
 </div>
 {#if planError}<p class="notice warm" role="alert"><Clock size={18} />{planError}</p>{/if}
-<section class="panel matrix-panel">
-	<div class="table-scroll">
-		<table class="matrix-table">
-			<thead>
-				<tr>
-					<th class="matrix-corner" aria-label="Hàng: Con nợ. Cột: Chủ nợ.">
-						<span class="matrix-column-label">Chủ nợ</span>
-						<span class="matrix-row-label">Con nợ</span>
-					</th>
-					{#each members as member}
-						<th scope="col" title={member.name} aria-label={member.name}>
-							<div class="matrix-member-heading">
-								<Avatar {member} size="small" />
-								<span class="matrix-member-name">{member.name.split(' ').slice(-1)[0]}</span>
-							</div>
-						</th>
-					{/each}
-				</tr>
-				<tr class="matrix-net-row">
-					<th scope="row">Tổng cộng</th>
-					{#each members as member, index}
-						{@const net = columnTotals[index]}
-						<th scope="col" aria-label={`${member.name}, Tổng cộng: ${currency(net)}`}>
-							<strong
-								class="matrix-net"
-								class:net-owing={net > 0}
-								class:net-owed={net < 0}
-								class:net-lowest={net < 0 && net === lowestTotal}
-								class:net-highest={net > 0 && net === highestTotal}>{currency(net)}</strong
-							>
-						</th>
-					{/each}
-				</tr>
-			</thead>
-			<tbody
-				>{#each members as row}<tr
-						><th scope="row" title={row.name}><span>{row.name}</span></th
-						>{#each members as column}{@const balance = pairBalance(appState.ledger, row.id, column.id)}<td
-								class:self-cell={row.id === column.id}
-								class:debt-cell={balance > 0}
-								class:credit-cell={balance < 0}
-								title={`${row.name} → ${column.name}: ${currency(balance)}`}
-								>{row.id === column.id ? '—' : currency(balance)}</td
-							>{/each}</tr
-					>{/each}</tbody
+<Tooltip.Provider delayDuration={150}>
+	<Tooltip.Root tether={matrixTooltip}>
+		{#snippet children({ payload })}
+			<section class="panel matrix-panel">
+				<div class="table-scroll">
+					<table class="matrix-table">
+						<thead>
+							<tr>
+								<th class="matrix-corner" aria-label="Hàng: Con nợ. Cột: Chủ nợ.">
+									<span class="matrix-column-label">Chủ nợ</span>
+									<span class="matrix-row-label">Con nợ</span>
+								</th>
+								{#each members as member}
+									<th scope="col" title={member.name} aria-label={member.name}>
+										<div class="matrix-member-heading">
+											<Avatar {member} size="small" />
+											<span class="matrix-member-name">{member.name.split(' ').slice(-1)[0]}</span>
+										</div>
+									</th>
+								{/each}
+							</tr>
+							<tr class="matrix-net-row">
+								<th scope="row">Tổng cộng</th>
+								{#each members as member, index}
+									{@const net = columnTotals[index]}
+									<th scope="col" aria-label={`${member.name}, Tổng cộng: ${currency(net)}`}>
+										<strong
+											class="matrix-net"
+											class:net-owing={net > 0}
+											class:net-owed={net < 0}
+											class:net-lowest={net < 0 && net === lowestTotal}
+											class:net-highest={net > 0 && net === highestTotal}>{currency(net)}</strong
+										>
+									</th>
+								{/each}
+							</tr>
+						</thead>
+						<tbody
+							>{#each members as row}<tr
+									><th scope="row" title={row.name}><span>{row.name}</span></th
+									>{#each members as column}{@const balance = pairBalance(
+											appState.ledger,
+											row.id,
+											column.id
+										)}<td
+											class:self-cell={row.id === column.id}
+											class:debt-cell={balance > 0}
+											class:credit-cell={balance < 0}
+											>{#if row.id === column.id}—{:else if balance === 0}{currency(
+													0
+												)}{:else}{@const message =
+													balance > 0
+														? `${row.name} nợ ${column.name} ${currency(balance)}`
+														: `${column.name} nợ ${row.name} ${currency(-balance)}`}
+												<Tooltip.Trigger
+													tether={matrixTooltip}
+													payload={message}
+													class="matrix-cell-trigger"
+													aria-label={message}>{currency(balance)}</Tooltip.Trigger
+												>
+											{/if}</td
+										>{/each}</tr
+								>{/each}</tbody
+						>
+					</table>
+				</div>
+			</section>
+			<Tooltip.Portal
+				><Tooltip.Content
+					role="tooltip"
+					class="matrix-cell-tooltip"
+					side="right"
+					sideOffset={4}
+					collisionPadding={12}>{payload}</Tooltip.Content
+				></Tooltip.Portal
 			>
-		</table>
-	</div>
-</section>
+		{/snippet}
+	</Tooltip.Root>
+</Tooltip.Provider>
 {#if isAdmin}<Button class="simplify-button" onclick={preview} disabled={busy}
 		><Scale size={20} /> Tối giản nợ</Button
 	>{/if}

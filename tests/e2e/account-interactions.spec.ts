@@ -158,6 +158,144 @@ for (const width of [1280, 390]) {
 			await expect(page).toHaveURL(/\/$/);
 		});
 
+		test('account dropdown edits this group profile in a popup and supports logout', async ({ page }) => {
+			const { state } = await openFixture(page, '/balances', (state) => {
+				Object.assign(
+					state.members.find((member) => member.id === ACTOR)!,
+					{ role: 'member', name: 'Minh An trong nhóm' }
+				);
+			});
+			let saves = 0;
+			await page.route('**/api/groups/local/commands/saveMember', async (route) => {
+				saves++;
+				if (saves === 1)
+					return route.fulfill({ status: 503, json: { message: 'Chưa lưu được hồ sơ. Thử lại.' } });
+				const input = route.request().postDataJSON();
+				expect(input).toMatchObject({
+					id: ACTOR,
+					role: 'member',
+					active: true,
+					name: 'Minh An của nhóm',
+					bankCode: '970436',
+					bankAccount: '123456789'
+				});
+				const result = applyCommand(state, ACTOR, 'saveMember', input, now);
+				await route.fulfill({ json: { state, result } });
+			});
+			const trigger = page.getByRole('button', { name: 'Tài khoản', exact: true });
+			const menu = page.getByRole('menu');
+			await trigger.click();
+			await expect(menu.getByRole('menuitem')).toHaveCount(2);
+			await expect(menu.getByRole('menuitem', { name: 'Thông tin tài khoản', exact: true })).toBeVisible();
+			await expect(menu.getByRole('menuitem', { name: 'Đăng xuất', exact: true })).toBeVisible();
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+			const bounds = (await menu.boundingBox())!;
+			expect(bounds.x).toBeGreaterThanOrEqual(0);
+			expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+			await page.keyboard.press('Escape');
+			await expect(menu).toHaveCount(0);
+			await expect(trigger).toBeFocused();
+			await trigger.click();
+			const heading = (await page
+				.getByRole('heading', { name: 'Tài khoản của bạn', exact: true })
+				.boundingBox())!;
+			await page.mouse.click(heading.x + 2, heading.y + heading.height / 2);
+			await expect(menu).toHaveCount(0);
+			await trigger.focus();
+			await page.keyboard.press('ArrowDown');
+			await expect(menu.getByRole('menuitem', { name: 'Thông tin tài khoản', exact: true })).toBeFocused();
+			await page.keyboard.press('Enter');
+			await expect(page).toHaveURL(/\/balances$/);
+			await expect(menu).toHaveCount(0);
+			const profile = page.getByRole('dialog', { name: 'Thông tin tài khoản', exact: true });
+			await expect(profile).toBeVisible();
+			await expect(profile).toContainText('Nhóm mẫu');
+			await expect(profile.getByLabel('Tên', { exact: true })).toHaveValue('Minh An trong nhóm');
+			await expect(profile.getByLabel('ID', { exact: true })).toBeDisabled();
+			await expect(profile.getByLabel('Vai trò', { exact: true })).toBeDisabled();
+			await expect(
+				profile.getByRole('switch', { name: 'Thành viên đang hoạt động', exact: true })
+			).toBeDisabled();
+			await profile.getByLabel('Tên', { exact: true }).fill('Minh An của nhóm');
+			await profile.getByLabel('Ngân hàng', { exact: true }).fill('Vietcombank');
+			await profile.getByLabel('Số tài khoản', { exact: true }).fill('123456789');
+			const refreshed = page.waitForResponse((response) =>
+				response.url().includes('/api/groups/local/state')
+			);
+			state.version++;
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await refreshed;
+			await expect(profile.getByLabel('Tên', { exact: true })).toHaveValue('Minh An của nhóm');
+			await profile.getByRole('button', { name: 'Lưu hồ sơ', exact: true }).click();
+			await expect(page.locator('.error-toast')).toContainText('Thử lại');
+			await expect(profile.getByLabel('Tên', { exact: true })).toHaveValue('Minh An của nhóm');
+			await profile.getByRole('button', { name: 'Lưu hồ sơ', exact: true }).click();
+			await expect(profile).toHaveCount(0);
+			await expect(page).toHaveURL(/\/balances$/);
+			await trigger.click();
+			await menu.getByRole('menuitem', { name: 'Thông tin tài khoản', exact: true }).click();
+			await expect(profile.getByLabel('Tên', { exact: true })).toHaveValue('Minh An của nhóm');
+			await page.keyboard.press('Escape');
+			await trigger.click();
+			await menu.getByRole('menuitem', { name: 'Đăng xuất', exact: true }).click();
+			await expect(page.getByRole('button', { name: 'Đăng nhập bằng Discord', exact: true })).toBeVisible();
+			await expect(trigger).toHaveCount(0);
+		});
+
+		for (const missingField of ['bankCode', 'bankAccount'] as const) {
+			test(`missing ${missingField} shows an actionable warning on your own account`, async ({ page }) => {
+				const { state } = await openFixture(page, '/balances', (state) => {
+					state.members.find((member) => member.id === ACTOR)![missingField] = '   ';
+				});
+				await page.route('**/api/groups/local/commands/saveMember', async (route) => {
+					const input = route.request().postDataJSON();
+					const result = applyCommand(state, ACTOR, 'saveMember', input, now);
+					await route.fulfill({ json: { state, result } });
+				});
+				const warning = page.getByRole('status').filter({ hasText: 'Chưa có đủ thông tin ngân hàng' });
+				await expect(warning).toBeVisible();
+				if (missingField === 'bankCode')
+					await page.screenshot({ path: `artifacts/bank-account-warning-${width}.png` });
+				const warningBounds = (await warning.boundingBox())!;
+				const statsBounds = (await page.locator('.balance-stat-grid').boundingBox())!;
+				expect(warningBounds.y + warningBounds.height).toBeLessThanOrEqual(statsBounds.y);
+				expect(warningBounds.x + warningBounds.width).toBeLessThanOrEqual(width);
+				const picker = page.getByRole('combobox', { name: 'Xem tài khoản', exact: true });
+				await picker.selectOption('linh');
+				await expect(warning).toHaveCount(0);
+				await picker.selectOption(ACTOR);
+				await warning.getByRole('button', { name: 'Cập nhật ngay', exact: true }).click();
+				const profile = page.getByRole('dialog', { name: 'Thông tin tài khoản', exact: true });
+				await expect(profile).toBeVisible();
+				await profile.getByLabel('Ngân hàng', { exact: true }).fill('Vietcombank');
+				await profile.getByLabel('Số tài khoản', { exact: true }).fill('123456789');
+				await profile.getByRole('button', { name: 'Lưu hồ sơ', exact: true }).click();
+				await expect(profile).toHaveCount(0);
+				await expect(warning).toHaveCount(0);
+				await expect(page).toHaveURL(/\/balances$/);
+			});
+		}
+
+		test('member management retains its shared profile editor and admin permissions', async ({ page }) => {
+			const { state } = await openFixture(page, '/members');
+			await page.route('**/api/groups/local/commands/saveMember', async (route) => {
+				const input = route.request().postDataJSON();
+				expect(input).toMatchObject({ id: 'linh', name: 'Thảo Linh cập nhật', role: 'member' });
+				const result = applyCommand(state, ACTOR, 'saveMember', input, now);
+				await route.fulfill({ json: { state, result } });
+			});
+			await page.getByRole('button', { name: 'Sửa hồ sơ Thảo Linh', exact: true }).click();
+			const profile = page.getByRole('dialog', { name: 'Chỉnh sửa hồ sơ', exact: true });
+			await expect(profile.getByLabel('Tên', { exact: true })).toHaveValue('Thảo Linh');
+			await expect(profile.getByLabel('Vai trò', { exact: true })).toBeEnabled();
+			await profile.getByLabel('Tên', { exact: true }).fill('Thảo Linh cập nhật');
+			await profile.getByRole('button', { name: 'Lưu hồ sơ', exact: true }).click();
+			await expect(profile).toHaveCount(0);
+			await expect(
+				page.getByRole('button', { name: 'Sửa hồ sơ Thảo Linh cập nhật', exact: true })
+			).toBeVisible();
+		});
+
 		test('royal leaderboard follows the matrix in navigation and opens real member balances', async ({
 			page
 		}) => {
@@ -829,6 +967,55 @@ for (const width of [1280, 390]) {
 				await page.screenshot({ path: 'artifacts/iphone6-matrix-dark.png' });
 			});
 		}
+
+		test('matrix tooltips explain actual debts on hover and keyboard focus', async ({ page }) => {
+			await openFixture(page, '/matrix');
+			const row = page
+				.locator('.matrix-table tbody tr')
+				.filter({ has: page.getByRole('rowheader', { name: 'Minh An', exact: true }) });
+			const owing = row.getByRole('button', { name: 'Minh An nợ Thảo Linh 40.000 ₫', exact: true });
+			const tooltip = page.getByRole('tooltip');
+			await owing.scrollIntoViewIfNeeded();
+			const numberBounds = (await owing.boundingBox())!;
+			const textWidth = await owing.evaluate((button) => {
+				const text = document.createRange();
+				text.selectNodeContents(button);
+				return text.getBoundingClientRect().width;
+			});
+			expect(numberBounds.width - textWidth).toBeLessThan(1);
+			await page.mouse.move(
+				numberBounds.x + numberBounds.width + 2,
+				numberBounds.y + numberBounds.height / 2
+			);
+			await expect(tooltip).toHaveCount(0);
+			await owing.hover();
+			await expect(tooltip).toHaveText('Minh An nợ Thảo Linh 40.000 ₫');
+			const bounds = (await tooltip.boundingBox())!;
+			expect(bounds.x).toBeGreaterThanOrEqual(0);
+			expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+			const side = await tooltip.getAttribute('data-side');
+			expect(['right', 'left']).toContain(side);
+			const gap =
+				side === 'right'
+					? bounds.x - numberBounds.x - numberBounds.width
+					: numberBounds.x - bounds.x - bounds.width;
+			expect(gap).toBeCloseTo(4, 0);
+			const owed = row.getByRole('button', { name: 'Quang Huy nợ Minh An 20.000 ₫', exact: true });
+			await owed.scrollIntoViewIfNeeded();
+			await page.mouse.move(0, 0);
+			await owed.hover();
+			await expect(tooltip).toHaveText('Quang Huy nợ Minh An 20.000 ₫');
+			const zero = row.getByRole('cell', { name: '0 ₫', exact: true }).first();
+			await expect(zero.getByRole('button')).toHaveCount(0);
+			await zero.hover();
+			await expect(tooltip).toHaveCount(0);
+			await page.mouse.move(0, 0);
+			await owing.scrollIntoViewIfNeeded();
+			await owing.focus();
+			await expect(tooltip).toHaveText('Minh An nợ Thảo Linh 40.000 ₫');
+			await page.keyboard.press('Escape');
+			await expect(tooltip).toHaveCount(0);
+		});
 
 		test('matrix total extremes use cyan and purple, including ties but excluding zero', async ({ page }) => {
 			const { state } = await openFixture(page, '/matrix', (state) => {
