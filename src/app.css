@@ -1972,6 +1972,12 @@ footer {
 .matrix-net.net-owed {
 	color: var(--amount-owed);
 }
+.matrix-net.net-lowest {
+	color: light-dark(#007d99, #5ee4ef);
+}
+.matrix-net.net-highest {
+	color: light-dark(#982ac7, #d68aff);
+}
 .matrix-table th:first-child {
 	text-align: left;
 	padding-left: 24px;

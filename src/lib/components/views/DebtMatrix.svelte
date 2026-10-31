@@ -22,6 +22,8 @@
 			members.reduce((sum, row) => sum + pairBalance(appState.ledger, row.id, column.id), 0)
 		)
 	);
+	const lowestTotal = $derived(Math.min(0, ...columnTotals));
+	const highestTotal = $derived(Math.max(0, ...columnTotals));
 	const isAdmin = $derived(appState.members.some((m) => m.id === actor && m.active && m.role === 'admin'));
 	const hubName = $derived(appState.members.find((m) => m.id === plan?.hub)?.name ?? '');
 	const previewPositions = $derived(
@@ -91,8 +93,12 @@
 					{#each members as member, index}
 						{@const net = columnTotals[index]}
 						<th scope="col" aria-label={`${member.name}, Tổng cộng: ${currency(net)}`}>
-							<strong class="matrix-net" class:net-owing={net > 0} class:net-owed={net < 0}
-								>{currency(net)}</strong
+							<strong
+								class="matrix-net"
+								class:net-owing={net > 0}
+								class:net-owed={net < 0}
+								class:net-lowest={net < 0 && net === lowestTotal}
+								class:net-highest={net > 0 && net === highestTotal}>{currency(net)}</strong
 							>
 						</th>
 					{/each}

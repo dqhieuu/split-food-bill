@@ -830,6 +830,29 @@ for (const width of [1280, 390]) {
 			});
 		}
 
+		test('matrix total extremes use cyan and purple, including ties but excluding zero', async ({ page }) => {
+			const { state } = await openFixture(page, '/matrix', (state) => {
+				state.ledger = [
+					{ ...state.ledger[0], id: 'first-extreme', from: ACTOR, to: 'linh', amount: 100000 },
+					{ ...state.ledger[0], id: 'second-extreme', from: 'huy', to: 'nam', amount: 100000 }
+				];
+			});
+			const lowest = page.locator('.matrix-net.net-lowest');
+			const highest = page.locator('.matrix-net.net-highest');
+			await expect(lowest).toHaveCount(2);
+			await expect(highest).toHaveCount(2);
+			await page.evaluate(() => (document.documentElement.dataset.theme = 'light'));
+			await expect(lowest.first()).toHaveCSS('color', 'rgb(0, 125, 153)');
+			await expect(highest.first()).toHaveCSS('color', 'rgb(152, 42, 199)');
+			await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+			await expect(lowest.first()).toHaveCSS('color', 'rgb(94, 228, 239)');
+			await expect(highest.first()).toHaveCSS('color', 'rgb(214, 138, 255)');
+			state.ledger = [];
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await expect(lowest).toHaveCount(0);
+			await expect(highest).toHaveCount(0);
+		});
+
 		test('admins can cancel, retry and undo a simplification from its history', async ({ page }) => {
 			let originalPairs: number[] = [];
 			const { state } = await openFixture(page, '/matrix', (state) => {
