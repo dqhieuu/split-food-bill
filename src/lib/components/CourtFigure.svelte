@@ -7,15 +7,17 @@
 		entry,
 		enthroned = false,
 		compact = false,
+		kneeling: kneelingPose = false,
 		onselect
 	}: {
 		entry: CourtRank;
 		enthroned?: boolean;
 		compact?: boolean;
+		kneeling?: boolean;
 		onselect: (entry: CourtRank) => void;
 	} = $props();
 	const uid = $props.id();
-	const kneeling = $derived(entry.credit < 0);
+	const kneeling = $derived(kneelingPose || entry.credit < 0);
 	const variation = $derived([...entry.member.id].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 3);
 	let canvas = $state<HTMLCanvasElement>();
 	let modelReady = $state(false);
@@ -26,6 +28,7 @@
 	const appearance = $derived(
 		JSON.stringify({
 			tier: entry.tier,
+			kneeling,
 			member: {
 				id: entry.member.id,
 				name: entry.member.name,

@@ -3,16 +3,18 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import type { CourtTier } from '$lib/domain/leaderboard';
 import type { Member } from '$lib/domain/types';
+import { courtTug } from './court-motion';
 
 export type CourtAppearance = {
 	member: Pick<Member, 'id' | 'name' | 'color' | 'avatarUrl'>;
 	tier: CourtTier;
+	kneeling?: boolean;
 };
 
 type Point = [number, number, number];
 type RenderState = { x: number; y: number; avatar: boolean };
 
-// All figures share one WebGL context and a 30fps animation loop. Hidden and paused
+// All figures share one WebGL context and a 60fps animation loop. Hidden and paused
 // figures cost no animation frames; mobile browsers don't need six contexts.
 let renderer: THREE.WebGLRenderer | undefined;
 let clients = 0;
@@ -21,8 +23,10 @@ let animationFrame = 0;
 let lastFrame = 0;
 function animateFigures(time: number) {
 	animationFrame = 0;
-	if (time - lastFrame >= 1000 / 30) {
-		lastFrame = time;
+	const frameDuration = 1000 / 60;
+	const elapsed = time - lastFrame;
+	if (elapsed >= frameDuration - 0.5) {
+		lastFrame = time - (elapsed >= frameDuration ? elapsed % frameDuration : 0);
 		animations.forEach((animate) => animate(time));
 	}
 	if (animations.size) animationFrame = requestAnimationFrame(animateFigures);
@@ -80,7 +84,8 @@ export async function createCourtModel(
 	const model = new THREE.Group();
 	scene.add(model);
 	// Match the sprite's occupied height and floor, including its shorter kneeling pose.
-	const top = entry.tier === 'sovereign' ? 1.7 : entry.tier === 'servant' ? 1.6 : 1.98;
+	const kneeling = entry.tier === 'servant' || entry.kneeling === true;
+	const top = entry.tier === 'sovereign' ? 1.7 : kneeling ? 1.6 : 1.98;
 	const bottom = -0.06;
 	const halfWidth = (top - bottom) / 3;
 	const camera = new THREE.OrthographicCamera(-halfWidth, halfWidth, top, bottom, 0.1, 20);
@@ -101,6 +106,7 @@ export async function createCourtModel(
 		return result;
 	}
 	const debtor = entry.tier === 'servant';
+	const courtier = entry.kneeling === true && !debtor;
 	const royal = entry.tier === 'sovereign' || entry.tier === 'noble';
 	const skin = material('#d8aa85');
 	const gold = material(royal ? '#dfb65f' : '#a29478', 0.72, 0.28);
@@ -206,7 +212,23 @@ export async function createCourtModel(
 		aim(a, b, elbow);
 		aim(b, c, goal);
 	}
-	function pose(seconds: number) {
+	function orientHand(side: string, fingersDown: boolean, resting = false) {
+		const palm = resting ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(0, 0, 1);
+		const fingers = resting ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, fingersDown ? -1 : 1, 0);
+		const rotation = new THREE.Quaternion().setFromRotationMatrix(
+			new THREE.Matrix4().makeBasis(palm, fingers, new THREE.Vector3().crossVectors(palm, fingers))
+		);
+		const joint = bone(`hand_${side}`);
+		joint.quaternion.copy(
+			joint
+				.parent!.getWorldQuaternion(new THREE.Quaternion())
+				.invert()
+				.multiply(model.getWorldQuaternion(new THREE.Quaternion()))
+				.multiply(rotation)
+		);
+	}
+	function pose(seconds: number, clock = seconds) {
+		const { pull, reaction } = courtTug(clock);
 		for (const [name, joint] of bones) {
 			joint.position.copy(bind.get(name)!.position);
 			joint.quaternion.copy(bind.get(name)!.rotation);
@@ -214,14 +236,24 @@ export async function createCourtModel(
 		const breath = Math.sin(seconds * 1.7),
 			sway = Math.sin(seconds * 0.9);
 		// A seated hip stays on the cushion; breathing comes from the spine, not hovering.
-		bone('pelvis').position.z = origin.z - (debtor ? 0.4 : seated ? 0.45 : 0) + (seated ? 0 : breath * 0.012);
-		bone('spine_01').rotateX((debtor ? 0.16 : -0.02) + breath * 0.035);
-		bone('spine_02').rotateZ(sway * (debtor ? 0.045 : 0.025));
+		bone('pelvis').position.z =
+			origin.z - (courtier ? 0.47 : kneeling ? 0.4 : seated ? 0.45 : 0) + (seated ? 0 : breath * 0.012);
+		if (debtor) bone('pelvis').position.z += Math.max(0, reaction) * 0.055;
+		bone('spine_01').rotateX(
+			(debtor ? 0.16 - reaction * 0.3 : seated ? -0.02 + pull * 0.09 : courtier ? 0.18 : -0.02) +
+				breath * 0.035
+		);
+		bone('spine_02').rotateZ(sway * (debtor ? 0.045 : 0.025) + (debtor ? reaction * 0.1 : 0));
 		bone('spine_03').rotateY(Math.sin(seconds * 0.7) * 0.05);
 		outfit.updateMatrixWorld(true);
 		for (const side of ['l', 'r']) {
 			const sign = side === 'l' ? 1 : -1;
-			const foot: Point = [sign * (seated ? 0.2 : 0.1), 0.085, debtor ? -0.28 : seated ? 0.43 : -0.085];
+			// Courtiers take a formal one-knee stance; debtors remain on both knees.
+			const foot: Point = [
+				sign * (seated ? 0.2 : courtier ? 0.13 : 0.1),
+				0.085,
+				courtier ? (side === 'l' ? 0.43 : -0.42) : kneeling ? -0.28 : seated ? 0.43 : -0.085
+			];
 			solveLimb(`thigh_${side}`, `calf_${side}`, `foot_${side}`, foot, [sign * 0.2, 0.3, 1]);
 			const joint = bone(`foot_${side}`);
 			joint.quaternion.copy(
@@ -229,54 +261,140 @@ export async function createCourtModel(
 			);
 		}
 		outfit.updateMatrixWorld(true);
+		// Follow the actual knee joint so breathing cannot lift the hands off its surface.
+		const knee = courtier
+			? model.worldToLocal(bone('calf_l').getWorldPosition(new THREE.Vector3()))
+			: undefined;
 		const reach = Math.sin(seconds * 1.25);
-		const height = debtor ? 0.81 : seated ? 0.82 : 1.13;
+		const height = debtor ? 0.81 + reaction * 0.17 : seated ? 0.82 : kneeling ? 0.76 : 1.13;
 		solveLimb(
 			'upperarm_l',
 			'lowerarm_l',
 			'hand_l',
-			debtor
-				? [0.07 + sway * 0.018, height + breath * 0.035, 0.32 + reach * 0.025]
-				: [0.46 + reach * 0.035, height + breath * 0.05, 0.24],
+			courtier
+				? [knee!.x + 0.045, knee!.y + 0.08, knee!.z - 0.15]
+				: debtor
+					? [0.07 + sway * 0.018, height + breath * 0.035, 0.32 + reach * 0.025]
+					: [
+							0.46 + reach * 0.035 - (seated ? pull * 0.2 : 0),
+							height + breath * 0.05 + (seated ? pull * 0.12 : 0),
+							0.24 - (seated ? pull * 0.22 : 0)
+						],
 			[0.65, height, -0.15]
 		);
 		solveLimb(
 			'upperarm_r',
 			'lowerarm_r',
 			'hand_r',
-			debtor
-				? [-0.07 + sway * 0.018, height + breath * 0.035, 0.32 + reach * 0.025]
-				: [-0.34 + sway * 0.035, seated ? 0.76 + reach * 0.025 : 0.96 + reach * 0.05, 0.18],
+			courtier
+				? [knee!.x - 0.065, knee!.y + 0.12, knee!.z - 0.16]
+				: debtor
+					? [-0.07 + sway * 0.018, height + breath * 0.035, 0.32 + reach * 0.025]
+					: [
+							-0.34 + sway * 0.035,
+							seated ? 0.76 + reach * 0.025 : kneeling ? 0.68 + reach * 0.025 : 0.96 + reach * 0.05,
+							0.18
+						],
 			[-0.65, height, -0.15]
 		);
+		if (seated) orientHand('l', true);
+		if (courtier) {
+			orientHand('l', false, true);
+			orientHand('r', false, true);
+		}
+		if (debtor) {
+			orientHand('l', false);
+			orientHand('r', false);
+		}
 		for (const side of ['l', 'r']) {
 			for (const digit of ['index', 'middle', 'ring', 'pinky'])
 				for (const segment of ['01', '02', '03']) {
-					bone(`${digit}_${segment}_${side}`).rotateX((debtor || side === 'l' ? 0.8 : 0.25) + breath * 0.06);
+					bone(`${digit}_${segment}_${side}`).rotateX(
+						(courtier
+							? 0.12
+							: seated && side === 'l'
+								? segment === '01'
+									? 1.15
+									: 1.35
+								: debtor
+									? 0.65
+									: side === 'l'
+										? 0.8
+										: 0.25) +
+							breath * 0.025
+					);
 				}
+			if (debtor || (seated && side === 'l')) {
+				bone(`thumb_01_${side}`).rotateZ(-0.4);
+				bone(`thumb_02_${side}`).rotateX(0.7);
+				bone(`thumb_03_${side}`).rotateX(0.5);
+			}
 		}
 		outfit.updateMatrixWorld(true);
+		if (debtor) updateBindings();
+		const gesture =
+			seated && pull > 0.15 ? 'pulling' : debtor && Math.abs(reaction) > 0.12 ? 'jerked' : 'idle';
+		if (canvas.dataset.gesture !== gesture) canvas.dataset.gesture = gesture;
 	}
 	function wristLoop(side: string) {
-		const loop = mesh(
-			new THREE.TorusGeometry(0.035, 0.007, 12, 48),
+		const turns = Array.from({ length: 145 }, (_, i) => {
+			const angle = (i / 144) * Math.PI * 6;
+			return new THREE.Vector3(Math.cos(angle) * 0.043, -0.015 + (i / 144) * 0.045, Math.sin(angle) * 0.043);
+		});
+		mesh(
+			new THREE.TubeGeometry(new THREE.CatmullRomCurve3(turns), 144, 0.009, 8, false),
 			rope,
-			[0, 0.018, 0],
+			[0, 0, 0],
 			[1, 1, 1],
 			bone(`hand_${side}`)
 		);
-		loop.rotation.x = Math.PI / 2;
 	}
+	const knot = new THREE.Group();
+	const ties: THREE.Mesh[] = [];
 	if (debtor) {
 		wristLoop('l');
 		wristLoop('r');
+		model.add(knot);
+		for (let i = 0; i < 3; i++) {
+			const turn = mesh(
+				new THREE.TorusGeometry(0.025, 0.011, 10, 32),
+				rope,
+				[0, i * 0.005, 0],
+				[1, 0.7, 1],
+				knot
+			);
+			turn.rotation.set(0.4, i * 1.1, i * 0.7);
+		}
+		for (let i = 0; i < 4; i++)
+			ties.push(mesh(new THREE.CylinderGeometry(0.009, 0.009, 1, 10), rope, [0, 0, 0]));
+		const tail = new THREE.CatmullRomCurve3([
+			new THREE.Vector3(0, 0, 0),
+			new THREE.Vector3(0.035, -0.035, 0.01),
+			new THREE.Vector3(0.025, -0.09, 0.005)
+		]);
+		mesh(new THREE.TubeGeometry(tail, 20, 0.009, 8, false), rope, [0, 0, 0], [1, 1, 1], knot);
+	}
+	function updateBindings() {
+		const wrists = ['l', 'r'].map((side) =>
+			model.worldToLocal(bone(`hand_${side}`).localToWorld(new THREE.Vector3(0.04, 0.008, 0)))
+		);
+		knot.position.copy(wrists[0]).add(wrists[1]).multiplyScalar(0.5);
+		knot.position.z += 0.035;
+		ties.forEach((tie, index) => {
+			const start = wrists[index % 2].clone();
+			start.y += index < 2 ? -0.015 : 0.015;
+			const delta = knot.position.clone().sub(start);
+			tie.position.copy(start).addScaledVector(delta, 0.5);
+			tie.scale.y = delta.length();
+			tie.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
+		});
 	}
 
 	// Avatar is a curved face surface on a solid head, rather than a floating portrait.
 	const head = new THREE.Group();
 	head.position.set(0, 0.11, 0.01);
 	head.scale.setScalar(0.74);
-	head.rotation.set(debtor ? 0.17 : -0.025, -0.09, debtor ? -0.2 : 0);
+	head.rotation.set(courtier ? 0.15 : debtor ? 0.17 : -0.025, -0.09, debtor ? -0.2 : 0);
 	bone('Head').add(head);
 	oval([0, -0.22, 0], [0.075, 0.13, 0.07], skin, head);
 	oval([0, 0, 0], [0.215, 0.265, 0.185], skin, head);
@@ -428,10 +546,31 @@ export async function createCourtModel(
 		mesh(new THREE.BoxGeometry(0.035, 0.009, 0.009), gold, [0, 0.36, 0], [1, 1, 1], crown);
 	}
 	const marker = new THREE.Object3D();
-	marker.position.set(0, 0.025, 0);
-	bone('hand_l').add(marker);
-	model.rotation.y = debtor ? -0.4 : seated ? -0.18 : -0.22;
+	if (debtor) {
+		marker.position.z = 0.018;
+		knot.add(marker);
+	} else {
+		// Rope passes through the curled fingers; the external rope starts at its exit.
+		marker.position.set(0.038, 0.12, 0.08);
+		bone('hand_l').add(marker);
+		if (seated) {
+			const grip = new THREE.CatmullRomCurve3([
+				new THREE.Vector3(0.038, 0.12, -0.07),
+				new THREE.Vector3(0.038, 0.12, 0),
+				marker.position.clone()
+			]);
+			mesh(new THREE.TubeGeometry(grip, 16, 0.014, 10, false), rope, [0, 0, 0], [1, 1, 1], bone('hand_l'));
+		}
+	}
+	model.rotation.y = courtier ? 0 : kneeling ? -0.4 : seated ? -0.18 : -0.22;
+	const cameraFacing = new THREE.Quaternion();
+	function faceCamera() {
+		// Cancel the body's turn and the neck's idle motion for a level, forward gaze.
+		head.parent!.getWorldQuaternion(cameraFacing);
+		head.quaternion.copy(cameraFacing.invert());
+	}
 	pose(0);
+	if (courtier) faceCamera();
 	canvas.dataset.modelId = model.uuid;
 	let triangles = 0;
 	model.traverse((object) => {
@@ -440,6 +579,8 @@ export async function createCourtModel(
 	});
 	canvas.dataset.triangles = String(triangles);
 	canvas.dataset.rig = 'skinned';
+	canvas.dataset.pose = seated ? 'seated' : kneeling ? 'kneeling' : 'standing';
+	if (courtier) canvas.dataset.kneeling = 'formal';
 
 	function render() {
 		if (disposed || engine.getContext().isContextLost()) return;
@@ -513,11 +654,15 @@ export async function createCourtModel(
 	let visible = false;
 	function idle(time: number) {
 		const seconds = time / 1000 + phase;
-		pose(seconds);
+		pose(seconds, time / 1000);
 		head.position.y = restPosition.y + Math.sin(seconds * 1.7) * 0.008;
 		head.rotation.y = rest.y + Math.sin(seconds * 1.1) * 0.14;
-		head.rotation.x = rest.x + Math.sin(seconds * 1.4) * (debtor ? 0.09 : 0.05);
+		head.rotation.x =
+			rest.x +
+			Math.sin(seconds * 1.4) * (debtor ? 0.09 : 0.05) -
+			(debtor ? courtTug(time / 1000).reaction * 0.2 : 0);
 		head.rotation.z = rest.z + Math.sin(seconds * 1.2) * 0.025;
+		if (courtier) faceCamera();
 		safeRender();
 	}
 

@@ -18,6 +18,7 @@
 	import { courtRanking, type CourtRank, type CourtTier } from '$lib/domain/leaderboard';
 	import { currency, pairBalance } from '$lib/domain/ledger';
 	import type { createCourtRopes, Rope } from '$lib/graphics/court-ropes';
+	import { courtTug } from '$lib/graphics/court-motion';
 
 	let { appState, actor, groupName }: { appState: AppState; actor: string; groupName: string } = $props();
 	let filter = $state<'all' | 'creditors' | 'commoner' | 'servant'>('all');
@@ -75,9 +76,10 @@
 				const inverse = matrix.inverse();
 				const { x, y } = grip.matrixTransform(inverse);
 				const ropes: Rope[] = [];
+				const { pull } = courtTug(performance.now() / 1000);
 				ropePaths = Array.from(node.querySelectorAll<HTMLElement>('.servant .rope-anchor')).map((anchor) => {
 					const { x: endX, y: endY } = point(anchor).matrixTransform(inverse);
-					ropes.push({ start: [x, y], end: [endX, endY] });
+					ropes.push({ start: [x, y], end: [endX, endY], tension: pull });
 					const bend = Math.min(origin.width - 12, x + 100);
 					const approach = Math.min(origin.width - 12, endX + 65);
 					return `M ${x} ${y} C ${bend} ${y + 100}, ${approach} ${endY + 30}, ${endX} ${endY}`;
@@ -294,7 +296,7 @@
 						class="courtier"
 						class:courtier-right={index === 1}
 					>
-						<CourtFigure {entry} onselect={summon} />
+						<CourtFigure {entry} kneeling onselect={summon} />
 					</div>{/each}
 				<div class="court-gathering">
 					{#each gathering as entry (entry.member.id)}<div>

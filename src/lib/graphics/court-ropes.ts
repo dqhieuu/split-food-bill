@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export type Rope = { start: [number, number]; end: [number, number] };
+export type Rope = { start: [number, number]; end: [number, number]; tension?: number };
 
 // The camera uses CSS-pixel coordinates so these lit meshes follow the figure hands.
 export function createCourtRopes(canvas: HTMLCanvasElement, onfailure: () => void) {
@@ -58,12 +58,21 @@ export function createCourtRopes(canvas: HTMLCanvasElement, onfailure: () => voi
 		}
 		while (meshes.length < ropes.length * 3) makeStrand();
 		meshes.forEach((mesh, i) => (mesh.visible = i < ropes.length * 3));
-		ropes.forEach(({ start: [x, y], end: [endX, endY] }, index) => {
+		ropes.forEach(({ start: [x, y], end: [endX, endY], tension = 0 }, index) => {
+			const start = new THREE.Vector3(x, height - y, 0),
+				end = new THREE.Vector3(endX, height - endY, 0);
+			const tighten = Math.min(0.88, Math.max(0, tension) * 0.88);
 			const curve = new THREE.CubicBezierCurve3(
-				new THREE.Vector3(x, height - y, 0),
-				new THREE.Vector3(Math.min(width - 12, x + 100), height - y - 100, 24),
-				new THREE.Vector3(Math.min(width - 12, endX + 65), height - endY - 30, -16),
-				new THREE.Vector3(endX, height - endY, 0)
+				start,
+				new THREE.Vector3(Math.min(width - 12, x + 100), height - y - 100, 24).lerp(
+					start.clone().lerp(end, 1 / 3),
+					tighten
+				),
+				new THREE.Vector3(Math.min(width - 12, endX + 65), height - endY - 30, -16).lerp(
+					start.clone().lerp(end, 2 / 3),
+					tighten
+				),
+				end
 			);
 			const turns = curve.getLength() / 15;
 			for (let strand = 0; strand < 3; strand++) {

@@ -170,6 +170,7 @@ for (const width of [1280, 390]) {
 			await expect(page.locator('.throne-occupant')).toContainText('Thảo Linh');
 			await expect(page.locator('.debt-ropes .rope-strand')).toHaveCount(2);
 			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(6);
+			await expect(page.locator('.courtier .figure-model[data-pose="kneeling"]')).toHaveCount(2);
 			const ropes = page.locator('.rope-model');
 			await expect(ropes).toHaveAttribute('data-renderer', '3d');
 			await expect(ropes).toHaveAttribute('data-ropes', '2');
@@ -342,6 +343,53 @@ for (const width of [1280, 390]) {
 			await page.goBack();
 			await expect(figure).toHaveAttribute('data-avatar', 'photo');
 			expect(errors).toEqual([]);
+		});
+
+		test('royal court synchronizes a rope pull with bound hands and a delayed body reaction', async ({
+			page
+		}) => {
+			await page.clock.install();
+			await openFixture(page, '/leaderboard');
+			await expect(page.locator('.figure-model[data-renderer="3d"]')).toHaveCount(6);
+			await page.locator('.palace-stage').scrollIntoViewIfNeeded();
+			const king = page.locator('.throne-occupant .figure-model');
+			const servants = page.locator('.servant .figure-model');
+			await expect(king).toHaveAttribute('data-motion', 'idle');
+			for (const servant of await servants.all())
+				await expect(servant).toHaveAttribute('data-motion', 'idle');
+			const advanceTo = async (phase: number) => {
+				const current = await page.evaluate(() => (performance.now() / 1000) % 5);
+				await page.clock.fastForward(((phase - current + 5) % 5) * 1000);
+				await page.clock.runFor(33);
+			};
+			await advanceTo(1.9);
+			const rest = await king.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+			await expect(king).toHaveAttribute('data-gesture', 'idle');
+			await advanceTo(2.1);
+			await expect(king).toHaveAttribute('data-gesture', 'pulling');
+			for (const servant of await servants.all())
+				await expect(servant).toHaveAttribute('data-gesture', 'idle');
+			await advanceTo(2.25);
+			await expect(king).toHaveAttribute('data-gesture', 'pulling');
+			for (const servant of await servants.all())
+				await expect(servant).toHaveAttribute('data-gesture', 'jerked');
+			expect(await king.evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL())).not.toBe(rest);
+			await page.locator('.palace-stage').screenshot({ path: `artifacts/court-pulling-${width}.png` });
+			await advanceTo(3.9);
+			await expect(king).toHaveAttribute('data-gesture', 'idle');
+			for (const servant of await servants.all())
+				await expect(servant).toHaveAttribute('data-gesture', 'idle');
+			const frames = await page.locator('.throne-occupant .rope-anchor').evaluateHandle((anchor) => {
+				const result = { count: 0 };
+				const observer = new MutationObserver(() => {
+					result.count++;
+				});
+				observer.observe(anchor, { attributes: true, attributeFilter: ['style'] });
+				return { result, stop: () => observer.disconnect() };
+			});
+			await page.clock.runFor(1000);
+			expect(await frames.evaluate((state) => state.result.count)).toBeGreaterThanOrEqual(50);
+			await frames.evaluate((state) => state.stop());
 		});
 
 		test('royal court retains models across 15-second polls and balance updates', async ({ page }) => {
