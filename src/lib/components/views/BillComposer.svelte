@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
@@ -324,6 +324,36 @@
 		else if (total > 1_000_000_000) validation = 'Tổng hóa đơn tối đa là 1 tỷ đồng.';
 		else confirmOpen = true;
 	}
+	async function clearSubmittedBill() {
+		description = '';
+		date = localDate(new Date());
+		selected = [actor];
+		payerId = actor;
+		amounts = {};
+		descriptions = {};
+		mode = 'manual';
+		totalInput = null;
+		discountInput = null;
+		rounding = DEFAULT_ROUNDING;
+		unit = 1000;
+		alreadyPaid = false;
+		imageId = '';
+		imageError = '';
+		scanNotice = '';
+		scannedImageId = '';
+		aiChanges = { name: false, date: false, total: false };
+		confirmOpen = false;
+		previewOpen = false;
+		previewRecipient = '';
+		attempted = false;
+		validation = '';
+		notificationPreferenceError = '';
+		submissionId = crypto.randomUUID();
+		// Flush the cleared form and its autosave before removing the submitted draft.
+		// Autosave stays active if the user remains here or starts another bill.
+		await tick();
+		localStorage.removeItem(`lunchroom-draft-${groupId}-${actor}`);
+	}
 	async function submit() {
 		if (savingNotificationPreference) return;
 		try {
@@ -343,9 +373,7 @@
 					? 'Đã lưu hóa đơn đã thanh toán; số dư nợ không thay đổi.'
 					: 'Đã ghi hóa đơn và cập nhật nợ.'
 			);
-			localStorage.removeItem(`lunchroom-draft-${groupId}-${actor}`);
-			draftReady = false;
-			confirmOpen = false;
+			await clearSubmittedBill();
 			await goto('/activity', { replace: true });
 		} catch {
 			/* Preserve draft and submission ID for a safe retry. */

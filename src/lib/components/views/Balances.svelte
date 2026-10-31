@@ -8,6 +8,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import Avatar from '../Avatar.svelte';
 	import Modal from '../Modal.svelte';
+	import BillDetail from '../BillDetail.svelte';
 	import EmptyState from '../EmptyState.svelte';
 	import type { AppState, Member } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
@@ -20,10 +21,18 @@
 		type BankPlatform
 	} from '$lib/domain/bank-apps';
 	import { preferences } from '$lib/client/preferences.svelte';
-	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
-		$props();
+	let {
+		appState,
+		actor,
+		run,
+		busy,
+		groupId
+	}: { appState: AppState; actor: string; run: RunCommand; busy: boolean; groupId: string } = $props();
 	let filter = $state('all');
 	let expanded = $state<string[]>([]);
+	let billOpen = $state(false);
+	let selectedBillId = $state('');
+	const selectedBill = $derived(appState.bills.find((bill) => bill.id === selectedBillId));
 	let qrOpen = $state(false);
 	let qrPayment = $state<{
 		id: string;
@@ -59,6 +68,8 @@
 			expanded = [];
 			qrOpen = false;
 			qrPayment = null;
+			billOpen = false;
+			selectedBillId = '';
 		}
 		const to = page.url.searchParams.get('to');
 		if (to && to !== openedRecipient) {
@@ -279,7 +290,21 @@
 					<div class="counterpart-history-heading">
 						<span>Các khoản nợ gần đây</span><small>{entries.length} khoản</small>
 					</div>
-					{#each entries as entry}<div class="counterpart-history-entry">
+					{#each entries as entry}{@const bill =
+							entry.source === 'bill'
+								? appState.bills.find((bill) => bill.id === entry.reference)
+								: undefined}
+						<div class="counterpart-history-entry" class:counterpart-bill-entry={!!bill}>
+							{#if bill}<button
+									type="button"
+									class="counterpart-bill-toggle"
+									aria-label={`Xem hóa đơn ${bill.description}`}
+									aria-haspopup="dialog"
+									onclick={() => {
+										selectedBillId = bill.id;
+										billOpen = true;
+									}}
+								></button>{/if}
 							<div class="counterpart-history-info">
 								<strong>{entry.description || 'Khoản nợ'}</strong>
 								<small
@@ -302,6 +327,7 @@
 			description="Không có nợ trong phạm vi bạn đã chọn."
 		/>{/if}
 </section>
+<BillDetail bind:open={billOpen} bill={selectedBill} {appState} {actor} {run} {busy} {groupId} />
 <Modal
 	bind:open={qrOpen}
 	title="Chuyển tiền bằng QR"

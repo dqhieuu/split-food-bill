@@ -871,6 +871,48 @@ for (const width of [1280, 390]) {
 			await expect(huy.locator('.counterpart-history')).toBeVisible();
 		});
 
+		test('recent debt entries open their original bill when it is available', async ({ page }) => {
+			await openFixture(page, '/balances', (state) => {
+				state.bills.push({
+					...state.bills[0],
+					id: 'owe-linh',
+					organizer: 'linh',
+					creator: 'linh',
+					description: 'Bữa trưa văn phòng',
+					total: 100000,
+					undoneAt: undefined,
+					undoneBy: undefined,
+					lines: [{ memberId: ACTOR, amount: 100000, description: 'Cơm gà và nước', note: '' }]
+				});
+				state.ledger[0].description = 'Cơm gà và nước';
+				state.ledger[1].source = 'manual';
+				state.ledger[1].reference = 'owe-linh';
+				state.ledger[1].description = 'Khoản nợ ghi tay';
+			});
+			const linh = page.locator('.counterpart').filter({ hasText: 'Thảo Linh' });
+			await linh.getByRole('button', { name: 'Xem lịch sử với Thảo Linh', exact: true }).click();
+			const openBill = linh.getByRole('button', { name: 'Xem hóa đơn Bữa trưa văn phòng', exact: true });
+			await openBill.focus();
+			await page.keyboard.press('Enter');
+			const detail = page.getByRole('dialog', { name: 'Bữa trưa văn phòng', exact: true });
+			await expect(detail).toBeVisible();
+			await expect(detail).toContainText('Thảo Linh thanh toán');
+			await expect(detail).toContainText('Cơm gà và nước');
+			await expect(detail.locator('.summary-total strong')).toHaveText('100.000 ₫');
+			await expect(detail.locator('.bill-image img')).toBeVisible();
+			await expect(page).toHaveURL(/\/balances$/);
+			await page.keyboard.press('Escape');
+			await expect(detail).toHaveCount(0);
+			await expect(linh.locator('.counterpart-history')).toBeVisible();
+			await expect(
+				linh.locator('.counterpart-history-entry').filter({ hasText: 'Khoản nợ ghi tay' }).getByRole('button')
+			).toHaveCount(0);
+			const huy = page.locator('.counterpart').filter({ hasText: 'Quang Huy' });
+			await huy.getByRole('button', { name: 'Xem lịch sử với Quang Huy', exact: true }).click();
+			await expect(huy.locator('.counterpart-history-entry')).toHaveCount(1);
+			await expect(huy.locator('.counterpart-history-entry').getByRole('button')).toHaveCount(0);
+		});
+
 		test('admin views another member’s balances and pays with the correct payer and audit creator', async ({
 			page
 		}) => {
@@ -1099,6 +1141,99 @@ for (const width of [1280, 390]) {
 			await page.keyboard.press('Escape');
 			await expect(toggle).not.toBeChecked();
 			await expect(page.locator('.clickable-bill-row')).toHaveCount(1);
+		});
+
+		test('successful bill submission clears the form and draft while a failed save preserves them', async ({
+			page
+		}) => {
+			const { state } = await openFixture(page, '/new-bill');
+			const draftKey = `lunchroom-draft-local-${ACTOR}`;
+			const draft = {
+				description: 'Hóa đơn cần xóa sau khi lưu',
+				date: '2026-10-15',
+				selected: [ACTOR, 'huy'],
+				payerId: 'linh',
+				amounts: { [ACTOR]: 45000, huy: 55000 },
+				descriptions: { [ACTOR]: 'Cơm gà', huy: 'Cơm cá' },
+				mode: 'manual',
+				totalInput: 90000,
+				discountInput: 80001,
+				rounding: 0,
+				unit: 1,
+				alreadyPaid: true,
+				imageId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301.png',
+				submissionId: 'bill-reset-regression'
+			};
+			await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), {
+				key: draftKey,
+				value: draft
+			});
+			await page.reload();
+			const name = page.getByLabel('Tên hóa đơn', { exact: true });
+			await expect(name).toHaveValue(draft.description);
+			const originalNameField = await name.elementHandle();
+			const ids: string[] = [];
+			await page.route('**/api/groups/local/commands/createBill', async (route) => {
+				const input = route.request().postDataJSON();
+				ids.push(input.id);
+				if (ids.length === 1)
+					return route.fulfill({ status: 503, json: { message: 'Không lưu được hóa đơn. Thử lại.' } });
+				const result = applyCommand(state, ACTOR, 'createBill', input, now);
+				await route.fulfill({ json: { state, result } });
+			});
+			await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
+			const confirmation = page.getByRole('dialog', { name: 'Xác nhận hóa đơn', exact: true });
+			await confirmation.getByRole('button', { name: 'Xác nhận', exact: true }).click();
+			await expect(page.locator('.error-toast')).toContainText('Thử lại');
+			await expect(confirmation).toBeVisible();
+			await expect(name).toHaveValue(draft.description);
+			expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), draftKey)).toMatchObject(
+				draft
+			);
+			await confirmation.getByRole('button', { name: 'Xác nhận', exact: true }).click();
+			await expect(page).toHaveURL(/\/activity$/);
+			expect(ids).toEqual([draft.submissionId, draft.submissionId]);
+			expect(await page.evaluate((key) => localStorage.getItem(key), draftKey)).toBeNull();
+			// Clear the live form before navigation, as well as the stored draft.
+			expect(await originalNameField!.evaluate((input) => (input as HTMLInputElement).value)).toBe('');
+			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
+			await page.locator('aside nav a[href="/new-bill"]').click();
+			await expect(name).toHaveValue('');
+			await expect(page.getByLabel('Ngày thanh toán', { exact: true })).toHaveValue(localDate(new Date()));
+			await expect(page.getByRole('combobox', { name: 'Người thanh toán', exact: true })).toHaveValue(ACTOR);
+			await expect(page.locator('.member-picker button[aria-pressed="true"]')).toHaveCount(1);
+			await expect(page.locator('.member-picker button[aria-pressed="true"]')).toContainText('Minh An');
+			await expect(page.getByLabel('Số tiền của Minh An', { exact: true })).toHaveValue('');
+			await expect(page.getByLabel('Món ăn của Minh An', { exact: true })).toHaveValue('');
+			await expect(page.getByLabel('Giá sau khi giảm giá', { exact: true })).toHaveValue('');
+			await expect(page.getByRole('combobox', { name: 'Đơn vị', exact: true })).toHaveValue('1000');
+			await expect(
+				page.getByRole('switch', { name: 'Mọi người đã thanh toán', exact: true })
+			).not.toBeChecked();
+			await expect(page.getByRole('button', { name: 'Bỏ ảnh hóa đơn', exact: true })).toHaveCount(0);
+			await expect(page.locator('.bill-summary .summary-total strong')).toHaveText('0 ₫');
+			await expect
+				.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), draftKey))
+				.toMatchObject({
+					amounts: {},
+					descriptions: {},
+					totalInput: null,
+					discountInput: null,
+					imageId: '',
+					rounding: 3,
+					mode: 'manual'
+				});
+			const freshId = await page.evaluate(
+				(key) => JSON.parse(localStorage.getItem(key)!).submissionId,
+				draftKey
+			);
+			expect(freshId).not.toBe(draft.submissionId);
+			await name.fill('Hóa đơn tiếp theo');
+			await expect
+				.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).description, draftKey))
+				.toBe('Hóa đơn tiếp theo');
+			await page.reload();
+			await expect(name).toHaveValue('Hóa đơn tiếp theo');
 		});
 
 		test('admin can choose another payer, persist the draft and retain their own creator identity', async ({

@@ -459,7 +459,13 @@
 										true}
 									onDiscordNotificationPreferenceChange={changeDiscordNotificationPreference}
 								/>{/key}
-						{:else if section === '/balances'}{#key actor}<Balances {appState} {actor} {run} {busy} />{/key}
+						{:else if section === '/balances'}{#key actor}<Balances
+									{appState}
+									{actor}
+									{run}
+									{busy}
+									groupId={selectedGroupId}
+								/>{/key}
 						{:else if section === '/activity'}<Activity
 								{appState}
 								{actor}

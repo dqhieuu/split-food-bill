@@ -1594,6 +1594,26 @@ footer {
 .counterpart-history-entry:last-child {
 	border-bottom: 0;
 }
+.counterpart-bill-entry {
+	position: relative;
+}
+.counterpart-bill-toggle {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	cursor: pointer;
+}
+.counterpart-bill-toggle:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+.counterpart-bill-entry .counterpart-history-info strong {
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
 .counterpart-history-info {
 	min-width: 0;
 }
