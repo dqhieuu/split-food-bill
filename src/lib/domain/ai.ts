@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 export type BillScan = { billName: string; totalCost: number; billDate: string | null };
 
+export const REASONING_EFFORTS = ['', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 /** Structured-output schema; strict mode requires every property listed and no extras. */
 export const BILL_SCAN_SCHEMA = {
 	type: 'object',

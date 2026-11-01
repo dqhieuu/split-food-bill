@@ -5,6 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { fetchAiSettings, requestJson, sendCommand } from '$lib/client/api';
 	import type { Group, GroupSummary } from '$lib/domain/types';
+	import { REASONING_EFFORTS, type ReasoningEffort } from '$lib/domain/ai';
 	import Modal from './Modal.svelte';
 	let {
 		open = $bindable(true),
@@ -24,10 +25,11 @@
 	let guilds = $state<{ id: string; name: string }[]>([]);
 	let guildsLoading = $state(false);
 	let aiLoading = $state(false);
-	let aiSaved = $state({ endpoint: '', model: '' });
+	let aiSaved = $state({ endpoint: '', model: '', reasoningEffort: '' as ReasoningEffort });
 	let aiError = $state('');
 	let aiEndpoint = $state('');
 	let aiModel = $state('');
+	let aiReasoningEffort = $state<ReasoningEffort>('');
 	let aiKey = $state('');
 	let aiHasKey = $state(false);
 	async function run(command: string, input: unknown) {
@@ -61,8 +63,9 @@
 			const settings = await fetchAiSettings(groupId);
 			aiEndpoint = settings.endpoint;
 			aiModel = settings.model;
+			aiReasoningEffort = settings.reasoningEffort ?? '';
 			aiHasKey = settings.hasApiKey;
-			aiSaved = { endpoint: settings.endpoint, model: settings.model };
+			aiSaved = { endpoint: settings.endpoint, model: settings.model, reasoningEffort: aiReasoningEffort };
 		} catch (cause) {
 			aiError = (cause as Error).message;
 		} finally {
@@ -74,7 +77,10 @@
 		const name = groupNameDraft.trim();
 		const changed = !!name && (name !== groupName || guildId !== group.discordGuildId);
 		const aiChanged =
-			aiEndpoint.trim() !== aiSaved.endpoint || aiModel.trim() !== aiSaved.model || !!aiKey.trim();
+			aiEndpoint.trim() !== aiSaved.endpoint ||
+			aiModel.trim() !== aiSaved.model ||
+			aiReasoningEffort !== aiSaved.reasoningEffort ||
+			!!aiKey.trim();
 		busy = true;
 		aiError = '';
 		try {
@@ -83,6 +89,7 @@
 				await run('saveAiSettings', {
 					endpoint: aiEndpoint.trim(),
 					model: aiModel.trim(),
+					reasoningEffort: aiReasoningEffort,
 					apiKey: aiKey.trim()
 				});
 			open = false;
@@ -98,8 +105,9 @@
 		try {
 			await run('saveAiSettings', { endpoint: '', model: '', clearApiKey: true });
 			aiEndpoint = aiModel = aiKey = '';
+			aiReasoningEffort = '';
 			aiHasKey = false;
-			aiSaved = { endpoint: '', model: '' };
+			aiSaved = { endpoint: '', model: '', reasoningEffort: '' };
 		} catch (cause) {
 			aiError = (cause as Error).message;
 		} finally {
@@ -155,6 +163,12 @@
 					maxlength={100}
 					disabled={aiLoading}
 				/></label
+			>
+			<label class="field"
+				>Reasoning effort<select bind:value={aiReasoningEffort} disabled={aiLoading}>
+					{#each REASONING_EFFORTS as effort}<option value={effort}>{effort || 'Mặc định của model'}</option
+						>{/each}
+				</select></label
 			>
 			<label class="field"
 				>API key<Input

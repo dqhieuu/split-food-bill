@@ -145,7 +145,12 @@ export async function uploadBillImage(groupId: string, image: Blob): Promise<str
 	});
 	return imageId;
 }
-export type AiSettings = { endpoint: string; model: string; hasApiKey: boolean };
+export type AiSettings = {
+	endpoint: string;
+	model: string;
+	reasoningEffort?: import('$lib/domain/ai').ReasoningEffort;
+	hasApiKey: boolean;
+};
 export async function fetchAiSettings(groupId: string): Promise<AiSettings> {
 	return requestJson(`/api/groups/${groupId}/ai-settings`);
 }

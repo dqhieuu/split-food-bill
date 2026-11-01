@@ -137,6 +137,44 @@ for (const width of [1280, 390]) {
 	test.describe(`viewport ${width}px`, () => {
 		test.use({ viewport: { width, height: 844 } });
 
+		test('AI effort can be changed by itself, reopened, and reset to model default', async ({ page }) => {
+			let settings = {
+				endpoint: 'https://ai.example/v1',
+				model: 'example-model',
+				hasApiKey: true,
+				reasoningEffort: ''
+			};
+			await page.route('**/api/discord/guilds*', (route) =>
+				route.fulfill({ json: { guilds: [{ id: 'guild', name: 'Máy chủ mẫu' }] } })
+			);
+			await page.route('**/api/groups/local/ai-settings', (route) => route.fulfill({ json: settings }));
+			const saved: unknown[] = [];
+			await page.route('**/api/groups/local/commands/saveAiSettings', (route) => {
+				const input = route.request().postDataJSON();
+				saved.push(input);
+				settings = { ...settings, reasoningEffort: input.reasoningEffort };
+				return route.fulfill({ json: {} });
+			});
+			await openFixture(page, '/groups');
+			const dialog = page.getByRole('dialog', { name: 'Cấu hình nhóm', exact: true });
+			for (const value of ['high', '']) {
+				await page.locator('.group-choice').filter({ hasText: 'Nhóm mẫu' }).click();
+				const effort = dialog.getByRole('combobox', { name: /^Reasoning effort/ });
+				await expect(effort).toHaveValue(settings.reasoningEffort);
+				await effort.selectOption(value);
+				await dialog.getByRole('button', { name: 'Lưu cấu hình', exact: true }).click();
+				await expect(dialog).toHaveCount(0);
+				expect(saved.at(-1)).toEqual({
+					endpoint: settings.endpoint,
+					model: settings.model,
+					reasoningEffort: value,
+					apiKey: ''
+				});
+			}
+			await page.locator('.group-choice').filter({ hasText: 'Nhóm mẫu' }).click();
+			await expect(dialog.getByRole('combobox', { name: /^Reasoning effort/ })).toHaveValue('');
+		});
+
 		test('home opens your account and the picker keeps focus through repeated changes', async ({ page }) => {
 			await openFixture(page, '/');
 			await expect(page.getByRole('heading', { name: 'Tài khoản của bạn', exact: true })).toBeVisible();
@@ -242,10 +280,14 @@ for (const width of [1280, 390]) {
 			await expect(trigger).toHaveCount(0);
 		});
 
-		for (const missingField of ['bankCode', 'bankAccount'] as const) {
+		for (const missingField of ['bankCode', 'bankAccount', 'both'] as const) {
 			test(`missing ${missingField} shows an actionable warning on your own account`, async ({ page }) => {
 				const { state } = await openFixture(page, '/balances', (state) => {
-					state.members.find((member) => member.id === ACTOR)![missingField] = '   ';
+					const member = state.members.find((member) => member.id === ACTOR)!;
+					if (missingField === 'both') {
+						member.bankCode = '';
+						member.bankAccount = '';
+					} else member[missingField] = '   ';
 				});
 				await page.route('**/api/groups/local/commands/saveMember', async (route) => {
 					const input = route.request().postDataJSON();
@@ -267,6 +309,14 @@ for (const width of [1280, 390]) {
 				await warning.getByRole('button', { name: 'Cập nhật ngay', exact: true }).click();
 				const profile = page.getByRole('dialog', { name: 'Thông tin tài khoản', exact: true });
 				await expect(profile).toBeVisible();
+				const missingInput = profile.getByLabel(
+					missingField === 'bankAccount' ? 'Số tài khoản' : 'Ngân hàng',
+					{ exact: true }
+				);
+				await expect(missingInput).toBeFocused();
+				await page.keyboard.press('Escape');
+				await warning.getByRole('button', { name: 'Cập nhật ngay', exact: true }).click();
+				await expect(missingInput).toBeFocused();
 				await profile.getByLabel('Ngân hàng', { exact: true }).fill('Vietcombank');
 				await profile.getByLabel('Số tài khoản', { exact: true }).fill('123456789');
 				await profile.getByRole('button', { name: 'Lưu hồ sơ', exact: true }).click();

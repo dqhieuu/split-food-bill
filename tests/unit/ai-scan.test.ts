@@ -151,15 +151,58 @@ describe('AI settings', () => {
 		expect(await readAiSettings(store, 'group', admin)).toEqual({
 			endpoint: configured.endpoint,
 			model: configured.model,
+			reasoningEffort: '',
 			hasApiKey: true
 		});
 		await expect(readAiSettings(store, 'group', member)).rejects.toMatchObject({ status: 403 });
+	});
+	it('saves and reads effort, preserves it for older clients, and allows resetting it', async () => {
+		const settings = { ...configured, reasoningEffort: 'high' };
+		expect(await readAiSettings(fakeStore(groupDocs(settings)).store, 'group', admin)).toMatchObject({
+			reasoningEffort: 'high'
+		});
+		for (const [input, expected] of [
+			[{ reasoningEffort: 'low' }, 'low'],
+			[{}, 'high'],
+			[{ reasoningEffort: '' }, '']
+		] as const) {
+			const { store, committed } = fakeStore(groupDocs(settings));
+			await saveAiSettings(store, production, 'group', admin, { ...configured, ...input });
+			expect(committed.find((write) => write.path === 'groupAiSettings/group')?.value?.reasoningEffort).toBe(
+				expected
+			);
+		}
+		await expect(
+			saveAiSettings(fakeStore(groupDocs()).store, production, 'group', admin, {
+				...configured,
+				reasoningEffort: 'invalid'
+			})
+		).rejects.toThrow();
 	});
 });
 
 describe('scanning a bill', () => {
 	const env = (claimed = true) =>
 		({ APP_ENV: 'production', BILL_IMAGES: bucket(), AUTH_SESSIONS: sessions(claimed) }) as unknown as Env;
+	it.each([undefined, '', 'low', 'medium', 'high', 'xhigh', 'max'])(
+		'forwards effort %s only when explicitly configured',
+		async (reasoningEffort) => {
+			const fetch = vi.fn(async () => completion('{"billName":"Cơm","totalCost":100000,"billDate":null}'));
+			vi.stubGlobal('fetch', fetch);
+			await scanBill(
+				fakeStore(groupDocs({ ...configured, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) }))
+					.store,
+				env(),
+				'group',
+				member,
+				imageId
+			);
+			const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+			const body = JSON.parse(init.body as string);
+			if (reasoningEffort) expect(body.reasoning_effort).toBe(reasoningEffort);
+			else expect(body).not.toHaveProperty('reasoning_effort');
+		}
+	);
 	it('sends the photo with a strict JSON schema and returns the parsed result', async () => {
 		const fetch = vi.fn(async () =>
 			completion('{"billName":"Bún ở Bún Chả Hương Liên","totalCost":250000,"billDate":"2026-10-25"}')

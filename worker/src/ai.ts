@@ -2,9 +2,11 @@ import { z } from 'zod';
 import {
 	BILL_SCAN_PROMPT,
 	BILL_SCAN_SCHEMA,
+	REASONING_EFFORTS,
 	chatCompletionsUrl,
 	parseBillScan,
-	type BillScan
+	type BillScan,
+	type ReasoningEffort
 } from '../../src/lib/domain/ai';
 import { DomainError } from '../../src/lib/domain/ledger';
 import type { Group } from '../../src/lib/domain/types';
@@ -15,7 +17,14 @@ import { billImageAttachment, requireUploadedImage } from './images';
 import type { DataStore as Store } from './store';
 
 /** Kept outside the group document so the key never reaches clients with group state. */
-type AiSettings = { endpoint: string; model: string; apiKey: string; updatedBy: string; updatedAt: string };
+type AiSettings = {
+	endpoint: string;
+	model: string;
+	reasoningEffort?: ReasoningEffort;
+	apiKey: string;
+	updatedBy: string;
+	updatedAt: string;
+};
 const settingsPath = (groupId: string) => `groupAiSettings/${groupId}`;
 const SCAN_COOLDOWN_MS = 5000;
 const SCAN_TIMEOUT_MS = 45000;
@@ -24,6 +33,7 @@ const settingsInput = z
 	.object({
 		endpoint: z.string().trim().max(300),
 		model: z.string().trim().max(100),
+		reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
 		apiKey: z.string().trim().max(500).optional(),
 		clearApiKey: z.boolean().optional()
 	})
@@ -44,7 +54,12 @@ function requireSafeEndpoint(env: Env, endpoint: string) {
 export async function readAiSettings(store: Store, groupId: string, uid: string) {
 	await requireGroup(store, groupId, uid, true);
 	const settings = await store.get<AiSettings>(settingsPath(groupId));
-	return { endpoint: settings?.endpoint ?? '', model: settings?.model ?? '', hasApiKey: !!settings?.apiKey };
+	return {
+		endpoint: settings?.endpoint ?? '',
+		model: settings?.model ?? '',
+		reasoningEffort: settings?.reasoningEffort ?? '',
+		hasApiKey: !!settings?.apiKey
+	};
 }
 
 /** A blank key keeps the saved one; AI is enabled only while endpoint, key and model are all set. */
@@ -67,6 +82,7 @@ export async function saveAiSettings(
 				store.write(settingsPath(groupId), {
 					endpoint: data.endpoint,
 					model: data.model,
+					reasoningEffort: data.reasoningEffort ?? existing?.reasoningEffort ?? '',
 					apiKey,
 					updatedBy: uid,
 					updatedAt: new Date().toISOString()
@@ -104,6 +120,7 @@ async function requestCompletion(settings: AiSettings, imageUrl: string) {
 			headers: { 'content-type': 'application/json', authorization: `Bearer ${settings.apiKey}` },
 			body: JSON.stringify({
 				model: settings.model,
+				...(settings.reasoningEffort ? { reasoning_effort: settings.reasoningEffort } : {}),
 				messages: [
 					{ role: 'system', content: BILL_SCAN_PROMPT },
 					{
