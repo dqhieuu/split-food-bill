@@ -185,7 +185,7 @@
 		</div>
 	</div>
 	{#if tab === 'bills'}<div class="table-scroll">
-			<table class="data-table">
+			<table class="data-table bills-table">
 				<thead
 					><tr
 						><th>Hóa đơn</th><th>Người trả</th><th>Thành viên</th><th class="align-right">Tổng tiền</th><th

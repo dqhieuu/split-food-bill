@@ -4,6 +4,7 @@ import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import type { CourtTier } from '$lib/domain/leaderboard';
 import type { Member } from '$lib/domain/types';
 import { courtTug } from './court-motion';
+import { createRoyalMantle } from './royal-mantle';
 
 export type CourtAppearance = {
 	member: Pick<Member, 'id' | 'name' | 'color' | 'avatarUrl'>;
@@ -137,10 +138,22 @@ export async function createCourtModel(
 		if (object instanceof THREE.Bone) bones.set(object.name, object);
 		if (!(object instanceof THREE.Mesh)) return;
 		if (object.name.includes('Head_Hood')) object.visible = false;
+		if (entry.tier === 'sovereign' && object.name.includes('Acc_Pauldron')) object.visible = false;
 		const source = Array.isArray(object.material) ? object.material : [object.material];
 		const copies = source.map((original) => {
 			const copy = original.clone() as THREE.MeshStandardMaterial;
-			if (copy.name.includes('Ranger')) copy.color.set(entry.tier === 'sovereign' ? '#d8a49d' : '#b7a4d4');
+			if (copy.name.includes('Ranger')) {
+				copy.color.set(entry.tier === 'sovereign' ? '#793345' : '#b7a4d4');
+				if (entry.tier === 'sovereign') {
+					if (/(?:Body|Arms|Legs)(?:_\d+)?$/.test(object.name)) {
+						copy.map = null;
+						copy.color.set('#640d2b');
+					} else if (object.name.includes('Belt')) {
+						copy.color.set('#d3ad65');
+						copy.metalness = 0.55;
+					}
+				}
+			}
 			copy.roughness = 0.8;
 			materials.push(copy);
 			return copy;
@@ -166,6 +179,7 @@ export async function createCourtModel(
 	);
 	const origin = bone('pelvis').position.clone();
 	const seated = entry.tier === 'sovereign';
+	const mantle = seated ? createRoyalMantle(bone('spine_03')) : undefined;
 	const shadow = new THREE.MeshBasicMaterial({
 		color: '#09060d',
 		transparent: true,
@@ -691,6 +705,7 @@ export async function createCourtModel(
 			engine.domElement.removeEventListener('webglcontextrestored', safeRender);
 			geometries.forEach((geometry) => geometry.dispose());
 			skeletons.forEach((skeleton) => skeleton.dispose());
+			mantle?.dispose();
 			materials.forEach((mat) => mat.dispose());
 			faceTexture.dispose();
 			scene.clear();

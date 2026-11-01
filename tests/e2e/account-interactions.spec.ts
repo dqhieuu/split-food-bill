@@ -252,7 +252,7 @@ for (const width of [1280, 390]) {
 					const result = applyCommand(state, ACTOR, 'saveMember', input, now);
 					await route.fulfill({ json: { state, result } });
 				});
-				const warning = page.getByRole('status').filter({ hasText: 'Chưa có đủ thông tin ngân hàng' });
+				const warning = page.getByRole('status').filter({ hasText: 'Bạn chưa điền thông tin ngân hàng' });
 				await expect(warning).toBeVisible();
 				if (missingField === 'bankCode')
 					await page.screenshot({ path: `artifacts/bank-account-warning-${width}.png` });
@@ -1085,7 +1085,7 @@ for (const width of [1280, 390]) {
 			await expect(history).toContainText('Đã hoàn tác bởi Minh An');
 			await expect(openUndo).toHaveCount(0);
 			await page.goto('/members');
-			await page.getByRole('button', { name: 'Nhật ký thay đổi', exact: true }).click();
+			await page.getByRole('button', { name: 'Lịch sử thay đổi', exact: true }).click();
 			await expect(page.locator('.audit-table')).toContainText('Hoàn tác tối giản nợ');
 		});
 

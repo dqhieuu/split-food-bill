@@ -215,8 +215,8 @@
 	<div class="notice bank-account-notice" role="status">
 		<CircleAlert size={20} aria-hidden="true" />
 		<div>
-			<strong>Chưa có đủ thông tin ngân hàng</strong>
-			<p>Cập nhật ngân hàng và số tài khoản để nhận tiền qua mã QR.</p>
+			<strong>Bạn chưa điền thông tin ngân hàng</strong>
+			<p>Cập nhật ngân hàng và số tài khoản để mọi người có thể chuyển tiền cho bạn qua mã QR.</p>
 		</div>
 		<Button variant="outline" onclick={onEditAccount}>Cập nhật ngay</Button>
 	</div>

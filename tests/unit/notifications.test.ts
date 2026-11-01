@@ -82,6 +82,7 @@ describe('bill Discord notifications', () => {
 		const embed = message.embeds[0];
 		expect(embed.title).toBe('Nhóm: Hội ăn trưa');
 		expect(embed.description).toContain('**Hoá đơn:** Bữa trưa ngày Thứ Hai');
+		expect(embed.description).toContain('**Người trả hóa đơn:** Thảo Linh');
 		expect(embed.description).toContain('**Bạn phải trả: 55.000 ₫** cho Phở');
 		expect(embed.description).toContain('**Người khác:**\n- Thảo Linh trả 45.000 ₫ cho Cơm');
 		expect(embed.description).not.toContain('Minh An trả');

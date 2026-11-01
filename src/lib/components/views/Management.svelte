@@ -174,9 +174,9 @@
 	<div class="filter-toolbar">
 		<div class="segmented-control">
 			<button class:active={tab === 'members'} onclick={() => (tab = 'members')}>Thành viên</button><button
-				class:active={tab === 'data'}
-				onclick={() => (tab = 'data')}>Dữ liệu & lưu trữ</button
-			><button class:active={tab === 'audit'} onclick={() => (tab = 'audit')}>Nhật ký thay đổi</button>
+				class:active={tab === 'audit'}
+				onclick={() => (tab = 'audit')}>Lịch sử thay đổi</button
+			><button class:active={tab === 'data'} onclick={() => (tab = 'data')}>Dữ liệu & lưu trữ</button>
 		</div>
 		{#if isAdmin}<Button
 				onclick={() => run('syncDiscordMembers', {}, 'Đã đồng bộ thành viên Discord.').catch(() => {})}
@@ -196,7 +196,7 @@
 			>
 		</div>
 		<div class="table-scroll">
-			<table class="data-table">
+			<table class="data-table members-table">
 				<thead><tr><th>Thành viên</th><th>Vai trò</th><th>Ngân hàng</th><th></th></tr></thead><tbody
 					>{#each members as member (member.id)}<tr class:inactive-member={!member.active}
 							><td

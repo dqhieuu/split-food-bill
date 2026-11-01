@@ -81,23 +81,27 @@
 				><option value="member">Thành viên</option><option value="admin">Quản trị viên</option></select
 			></label
 		>
-		<label class="field">Tên<Input bind:value={draft.name} disabled={busy} maxlength={100} /></label>
-		<label class="field"
-			>Ngân hàng<Input
-				bind:value={bankInput}
-				disabled={busy}
-				list={`${uid}-banks`}
-				placeholder="Nhập tên ngân hàng"
-				autocomplete="off"
-				maxlength={100}
-			/><datalist id={`${uid}-banks`}
-				>{#each banks as bank}<option value={bank.shortName} label={`${bank.name} (${bank.code})`}
-					></option>{/each}</datalist
-			></label
+		<label class="field profile-name"
+			>Tên<Input bind:value={draft.name} disabled={busy} maxlength={100} /></label
 		>
-		<label class="field"
-			>Số tài khoản<Input bind:value={draft.bankAccount} disabled={busy} maxlength={40} /></label
-		>
+		<div class="profile-bank-fields">
+			<label class="field" class:bank-field-missing={!bankInput.trim()}
+				>Ngân hàng<Input
+					bind:value={bankInput}
+					disabled={busy}
+					list={`${uid}-banks`}
+					placeholder="Nhập tên ngân hàng"
+					autocomplete="off"
+					maxlength={100}
+				/><datalist id={`${uid}-banks`}
+					>{#each banks as bank}<option value={bank.shortName} label={`${bank.name} (${bank.code})`}
+						></option>{/each}</datalist
+				></label
+			>
+			<label class="field" class:bank-field-missing={!draft.bankAccount.trim()}
+				>Số tài khoản<Input bind:value={draft.bankAccount} disabled={busy} maxlength={40} /></label
+			>
+		</div>
 	</div>
 	<div class="button-row">
 		<label class="checkbox-label"
@@ -111,3 +115,22 @@
 	{#if validation}<p class="validation-error" role="alert">{validation}</p>{/if}
 	<Button onclick={save} disabled={busy || !member}>Lưu hồ sơ</Button>
 </Modal>
+
+<style>
+	.profile-name,
+	.profile-bank-fields {
+		grid-column: 1 / -1;
+	}
+	.profile-bank-fields {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+		gap: inherit;
+	}
+	.bank-field-missing {
+		color: light-dark(#805718, #eac27e);
+	}
+	.bank-field-missing :global(input) {
+		border-color: light-dark(#c99742, #b78e48);
+		background: light-dark(#fff7e6, #302519);
+	}
+</style>
