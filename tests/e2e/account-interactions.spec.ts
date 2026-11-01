@@ -1649,7 +1649,11 @@ for (const width of [1280, 390]) {
 			await expect(page.getByLabel('Số tiền của Minh An', { exact: true })).toHaveValue('');
 			await expect(page.getByLabel('Món ăn của Minh An', { exact: true })).toHaveValue('');
 			await expect(page.getByLabel('Giá sau khi giảm giá', { exact: true })).toHaveValue('');
-			await expect(page.getByRole('combobox', { name: 'Đơn vị', exact: true })).toHaveValue('1000');
+			await expect(
+				page
+					.getByRole('group', { name: 'Đơn vị', exact: true })
+					.getByRole('button', { name: 'Nghìn đồng', exact: true })
+			).toHaveAttribute('aria-pressed', 'true');
 			await expect(
 				page.getByRole('switch', { name: 'Mọi người đã thanh toán', exact: true })
 			).not.toBeChecked();
@@ -1806,7 +1810,10 @@ for (const width of [1280, 390]) {
 			const discount = page.getByLabel('Giá sau khi giảm giá', { exact: true });
 			await expect(discount).toHaveValue('100.001');
 			await expect(individual).toHaveValue('120');
-			await page.getByRole('combobox', { name: 'Đơn vị', exact: true }).selectOption('1');
+			await page
+				.getByRole('group', { name: 'Đơn vị', exact: true })
+				.getByRole('button', { name: 'Đồng', exact: true })
+				.click();
 			await discount.fill('80001');
 			await page.getByRole('button', { name: 'Chia đều', exact: true }).click();
 			await expect(equal).toHaveValue('80001');

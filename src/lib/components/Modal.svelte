@@ -8,7 +8,8 @@
 		children,
 		wide = false,
 		compact = false,
-		locked = false
+		locked = false,
+		onOpenAutoFocus
 	}: {
 		open: boolean;
 		title: string;
@@ -17,11 +18,13 @@
 		wide?: boolean;
 		compact?: boolean;
 		locked?: boolean;
+		onOpenAutoFocus?: (event: Event) => void;
 	} = $props();
 </script>
 
 <Dialog.Root bind:open>
 	<Dialog.Content
+		{onOpenAutoFocus}
 		showCloseButton={!locked}
 		onEscapeKeydown={(event) => {
 			if (locked) event.preventDefault();

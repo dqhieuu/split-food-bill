@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import {
 		Plus,
+		UsersRound,
 		ArrowLeft,
 		ArrowRight,
 		Check,
@@ -500,14 +501,23 @@
 						>Nhập từng người</button
 					><button class:active={mode === 'equal'} onclick={() => changeMode('equal')}>Chia đều</button>
 				</div>
-				<label class="unit-control"
-					>Đơn vị <select
-						aria-label="Đơn vị"
-						value={unit}
-						onchange={(event) => changeUnit(Number(event.currentTarget.value))}
-						><option value={1000}>Nghìn đồng</option><option value={1}>Đồng</option></select
-					></label
-				>
+				<div class="unit-control">
+					<span>Đơn vị</span>
+					<div class="segmented-control" role="group" aria-label="Đơn vị">
+						<button
+							type="button"
+							class:active={unit === 1000}
+							aria-pressed={unit === 1000}
+							onclick={() => changeUnit(1000)}>Nghìn đồng</button
+						>
+						<button
+							type="button"
+							class:active={unit === 1}
+							aria-pressed={unit === 1}
+							onclick={() => changeUnit(1)}>Đồng</button
+						>
+					</div>
+				</div>
 			</div>
 			<div class="split-totals" class:form-two-columns={mode === 'equal' || hasDiscount}>
 				{#if mode === 'equal'}
@@ -561,9 +571,13 @@
 								maxlength={300}
 							/>
 						</div>
-					</div>{/each}{#if !selected.length}<p class="inline-empty">
-						Chọn ít nhất một thành viên để chia hóa đơn.
-					</p>{/if}
+					</div>{/each}{#if !selected.length}<div class="split-empty" role="status">
+						<span class="split-empty-icon"><UsersRound size={20} aria-hidden="true" /></span>
+						<div>
+							<strong>Chưa chọn thành viên</strong>
+							<p>Chọn người tham gia ở trên để bắt đầu chia tiền.</p>
+						</div>
+					</div>{/if}
 			</div>
 		</section>
 	</div>

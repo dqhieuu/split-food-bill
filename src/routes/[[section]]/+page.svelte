@@ -70,6 +70,7 @@
 	let mobileMenu = $state(false);
 	let accountOpen = $state(false);
 	let profileOpen = $state(false);
+	let focusMissingBank = $state(false);
 	let resetOpen = $state(false);
 	let mainContent = $state<HTMLElement>();
 	let mobilePageAnimation: Animation | undefined;
@@ -432,6 +433,7 @@
 									class="account-menu-item"
 									disabled={!currentMember?.active}
 									onSelect={() => {
+										focusMissingBank = false;
 										profileOpen = true;
 									}}><Pencil size={16} aria-hidden="true" />Thông tin tài khoản</DropdownMenu.Item
 								>
@@ -497,7 +499,10 @@
 									{run}
 									{busy}
 									groupId={selectedGroupId}
-									onEditAccount={() => (profileOpen = true)}
+									onEditAccount={() => {
+										focusMissingBank = true;
+										profileOpen = true;
+									}}
 								/>{/key}
 						{:else if section === '/activity'}<Activity
 								{appState}
@@ -579,6 +584,7 @@
 		</div>{/if}
 	<MemberProfileDialog
 		bind:open={profileOpen}
+		{focusMissingBank}
 		member={currentMember}
 		{actor}
 		canManageRoles={currentMember?.role === 'admin'}

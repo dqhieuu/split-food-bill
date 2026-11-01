@@ -124,9 +124,12 @@ select {
 	font-size: 14px;
 	max-width: 100%;
 }
+input[data-slot='input'],
+.bill-image-picker {
+	background: light-dark(#fffefa, #1c211d);
+}
 input[data-slot='input'] {
 	height: 42px;
-	background: light-dark(#fffefa, #1c211d);
 	border-color: light-dark(#dce3d2, #2c3124);
 	padding-inline: 12px;
 }
@@ -1111,10 +1114,8 @@ footer {
 	align-items: center;
 	gap: 6px;
 }
-.unit-control select {
-	height: 32px;
+.unit-control .segmented-control button {
 	font-size: 13px;
-	padding: 4px 22px 4px 8px;
 }
 .total-entry {
 	max-width: 340px;
@@ -1709,6 +1710,19 @@ footer {
 }
 .bank-account-notice p {
 	margin: 0;
+}
+.bank-account-notice .bank-account-warning-title {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	white-space: normal;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	cursor: pointer;
 }
 .qr-content {
 	text-align: center;
@@ -2349,6 +2363,35 @@ footer {
 	line-height: 1.9;
 	color: light-dark(#6e7865, #a3ab9c);
 	padding: 30px 23px;
+}
+.split-empty {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 18px;
+	border: 1px dashed var(--color-border);
+	border-radius: var(--radius-md);
+	background: light-dark(#f8f9f4, #1b211b);
+}
+.split-empty-icon {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	color: var(--primary);
+	background: light-dark(#edf1e5, #28342a);
+}
+.split-empty strong {
+	font-size: 14px;
+	font-weight: 500;
+}
+.split-empty p {
+	margin-top: 3px;
+	font-size: 13px;
+	line-height: 1.5;
+	color: light-dark(#6e7865, #a3ab9c);
 }
 .toast {
 	position: fixed;
@@ -4156,7 +4199,6 @@ select[aria-invalid='true'] {
 		border-color 150ms ease;
 }
 .bill-image-picker:hover {
-	background: light-dark(#f1f2eb, #21211d);
 	border-color: var(--primary);
 }
 .bill-image-picker:focus-visible,
@@ -4280,7 +4322,6 @@ select[aria-invalid='true'] {
 .ai-scan-picker {
 	border-style: solid;
 	border-color: var(--color-border);
-	background: var(--background);
 	color: var(--foreground);
 }
 .ai-scan-notice {

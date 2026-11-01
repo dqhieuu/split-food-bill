@@ -16,6 +16,7 @@
 		canManageRoles = false,
 		run,
 		busy,
+		focusMissingBank = false,
 		title = 'Chỉnh sửa hồ sơ',
 		description = 'Thông tin ngân hàng dùng để tạo QR.'
 	}: {
@@ -25,6 +26,7 @@
 		canManageRoles?: boolean;
 		run: RunCommand;
 		busy: boolean;
+		focusMissingBank?: boolean;
 		title?: string;
 		description?: string;
 	} = $props();
@@ -41,6 +43,8 @@
 	});
 	let bankInput = $state('');
 	let validation = $state('');
+	let bankField = $state<HTMLInputElement | null>(null);
+	let accountField = $state<HTMLInputElement | null>(null);
 	$effect(() => {
 		if (open && memberId)
 			untrack(() => {
@@ -70,7 +74,25 @@
 	}
 </script>
 
-<Modal bind:open {title} {description} wide>
+<Modal
+	bind:open
+	{title}
+	{description}
+	wide
+	onOpenAutoFocus={(event) => {
+		if (!focusMissingBank) return;
+		const field =
+			!bankInput.trim() || !member?.bankCode.trim()
+				? bankField
+				: !draft.bankAccount.trim()
+					? accountField
+					: null;
+		if (field && !field.disabled) {
+			event.preventDefault();
+			field.focus();
+		}
+	}}
+>
 	<div class="form-two-columns">
 		<label class="field">ID<Input value={draft.id} disabled maxlength={100} /></label>
 		<label class="field"
@@ -87,6 +109,7 @@
 		<div class="profile-bank-fields">
 			<label class="field" class:bank-field-missing={!bankInput.trim()}
 				>Ngân hàng<Input
+					bind:ref={bankField}
 					bind:value={bankInput}
 					disabled={busy}
 					list={`${uid}-banks`}
@@ -99,7 +122,12 @@
 				></label
 			>
 			<label class="field" class:bank-field-missing={!draft.bankAccount.trim()}
-				>Số tài khoản<Input bind:value={draft.bankAccount} disabled={busy} maxlength={40} /></label
+				>Số tài khoản<Input
+					bind:ref={accountField}
+					bind:value={draft.bankAccount}
+					disabled={busy}
+					maxlength={40}
+				/></label
 			>
 		</div>
 	</div>
