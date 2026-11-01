@@ -387,7 +387,7 @@
 					</div>{/if}
 			</div>
 		</aside>
-		<div class="main-shell" use:sidebarSwipe={() => (mobileMenu = true)}>
+		<div class="main-shell">
 			<header class="topbar">
 				<div class="breadcrumb">
 					<button
@@ -446,7 +446,7 @@
 					</DropdownMenu.Root>
 				</div>
 			</header>
-			<main id="main-content" bind:this={mainContent}>
+			<main id="main-content" bind:this={mainContent} use:sidebarSwipe={() => (mobileMenu = true)}>
 				{#if loading}
 					<div class="loading-panel">
 						<h1>Đang tải dữ liệu…</h1>

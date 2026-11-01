@@ -2842,6 +2842,10 @@ footer {
 	}
 	.mobile-toggle {
 		display: flex;
+		width: 44px;
+		height: 44px;
+		flex-shrink: 0;
+		margin-inline: -7px;
 	}
 	.topbar {
 		position: fixed;

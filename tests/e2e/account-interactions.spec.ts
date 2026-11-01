@@ -756,6 +756,15 @@ for (const width of [1280, 390]) {
 				await expect(sidebar).toHaveClass(/mobile-open/);
 				await page.keyboard.press('Escape');
 				await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+				const hitArea = (await toggle.boundingBox())!;
+				expect(hitArea.width).toBeGreaterThanOrEqual(44);
+				expect(hitArea.height).toBeGreaterThanOrEqual(44);
+				await toggle.tap({ position: { x: 4, y: 22 } });
+				await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+				await page.keyboard.press('Escape');
+				await toggle.locator('svg').tap();
+				await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+				await page.keyboard.press('Escape');
 				await swipe([34, 300], [94, 345], { selector: '.counterpart-row-toggle' });
 				await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 				await page.keyboard.press('Escape');
@@ -787,7 +796,7 @@ for (const width of [1280, 390]) {
 				await page.getByRole('button', { name: 'Tài khoản', exact: true }).click();
 				await page.getByRole('menuitem', { name: 'Thông tin tài khoản', exact: true }).click();
 				await expect(page.getByRole('dialog', { name: 'Thông tin tài khoản', exact: true })).toBeVisible();
-				expect(await swipe([10, 240], [140, 245], { selector: '.main-shell' })).toBe(false);
+				expect(await swipe([10, 240], [140, 245], { selector: 'main' })).toBe(false);
 				await expect(sidebar).not.toHaveClass(/mobile-open/);
 			});
 		});
