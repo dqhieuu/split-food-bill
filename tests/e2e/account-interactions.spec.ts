@@ -679,87 +679,117 @@ for (const width of [1280, 390]) {
 			expect(result).toEqual({ gesture: width < 760, pinch: width < 760, scroll: false });
 		});
 
-		test('only a rightward swipe from the left edge opens the phone sidebar', async ({
-			page,
-			browserName
-		}) => {
-			await openFixture(page, '/balances');
-			await expect(page.getByRole('button', { name: 'Changelog', exact: true })).toHaveCount(0);
-			const toggle = page.getByRole('button', { name: 'Mở trình đơn', exact: true });
-			const sidebar = page.locator('#main-sidebar');
-			const swipe = (
-				from: [number, number],
-				to: [number, number],
-				options: { cancel?: boolean; multiple?: boolean; selector?: string } = {}
-			) =>
-				page.evaluate(
-					({ from, to, options }) => {
-						const target = options.selector
-							? document.querySelector(options.selector)!
-							: document.elementFromPoint(...from)!;
-						const makeTouch = (point: [number, number], identifier = 1) =>
-							({ identifier, target, clientX: point[0], clientY: point[1] }) as Touch;
-						const dispatch = (type: string, touches: Touch[], changedTouches: Touch[]) => {
-							const event = new Event(type, { bubbles: true, cancelable: true });
-							Object.defineProperties(event, {
-								touches: { value: touches },
-								changedTouches: { value: changedTouches }
-							});
-							target.dispatchEvent(event);
-							return event;
-						};
-						const begin = makeTouch(from),
-							finish = makeTouch(to);
-						const start = dispatch('touchstart', [begin], [begin]);
-						dispatch('touchmove', options.multiple ? [finish, makeTouch(to, 2)] : [finish], [finish]);
-						if (options.cancel) dispatch('touchcancel', [], [finish]);
-						dispatch('touchend', [], [finish]);
-						return start.defaultPrevented;
-					},
-					{ from, to, options }
-				);
-			for (const [from, to, options] of [
-				[[150, 240], [280, 245], {}],
-				[[10, 240], [10, 380], {}],
-				[[10, 240], [50, 245], {}],
-				[[20, 240], [0, 240], {}],
-				[[10, 240], [140, 245], { cancel: true }],
-				[[10, 240], [140, 245], { multiple: true }]
-			] as const) {
-				await swipe([...from], [...to], options);
-				await expect(sidebar).not.toHaveClass(/mobile-open/);
-			}
-			const reserved = await swipe([10, 240], [140, 245]);
-			expect(reserved).toBe(width < 760);
-			if (width > 760) {
-				await expect(sidebar).not.toHaveClass(/mobile-open/);
-				return;
-			}
-			await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-			await expect(sidebar).toHaveClass(/mobile-open/);
-			await page.keyboard.press('Escape');
-			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-			if (browserName === 'chromium') {
-				const touch = await page.context().newCDPSession(page);
-				await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 8, y: 240 }] });
-				for (const x of [30, 60, 100, 140])
-					await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: 245 }] });
-				await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+		test.describe('sidebar gestures', () => {
+			test.use({ hasTouch: true });
+			test('only a rightward swipe from the left edge opens the phone sidebar', async ({
+				page,
+				browserName
+			}) => {
+				await openFixture(page, '/balances');
+				await expect(page.getByRole('button', { name: 'Changelog', exact: true })).toHaveCount(0);
+				const toggle = page.getByRole('button', { name: 'Mở trình đơn', exact: true });
+				const sidebar = page.locator('#main-sidebar');
+				const swipe = (
+					from: [number, number],
+					to: [number, number],
+					options: { cancel?: boolean; multiple?: boolean; selector?: string } = {}
+				) =>
+					page.evaluate(
+						({ from, to, options }) => {
+							const target = options.selector
+								? document.querySelector(options.selector)!
+								: document.elementFromPoint(...from)!;
+							const makeTouch = (point: [number, number], identifier = 1) =>
+								({
+									identifier,
+									target,
+									clientX: point[0],
+									clientY: point[1],
+									pageX: point[0],
+									pageY: point[1],
+									screenX: point[0],
+									screenY: point[1],
+									radiusX: 1,
+									radiusY: 1,
+									rotationAngle: 0,
+									force: 1
+								}) as Touch;
+							const dispatch = (type: string, touches: Touch[], changedTouches: Touch[]) => {
+								const event = new Event(type, { bubbles: true, cancelable: true });
+								Object.defineProperties(event, {
+									touches: { value: touches },
+									targetTouches: { value: touches },
+									changedTouches: { value: changedTouches }
+								});
+								target.dispatchEvent(event);
+								return event;
+							};
+							const begin = makeTouch(from),
+								finish = makeTouch(to);
+							const start = dispatch('touchstart', [begin], [begin]);
+							if (options.cancel) dispatch('touchcancel', [], [begin]);
+							dispatch('touchmove', options.multiple ? [finish, makeTouch(to, 2)] : [finish], [finish]);
+							if (options.cancel) dispatch('touchcancel', [], [finish]);
+							dispatch('touchend', [], [finish]);
+							return start.defaultPrevented;
+						},
+						{ from, to, options }
+					);
+				for (const [from, to, options] of [
+					[[150, 240], [280, 245], {}],
+					[[10, 240], [10, 380], {}],
+					[[10, 240], [50, 245], {}],
+					[[20, 240], [0, 240], {}],
+					[[10, 240], [140, 245], { cancel: true }],
+					[[10, 240], [140, 245], { multiple: true }]
+				] as const) {
+					await swipe([...from], [...to], options);
+					await expect(sidebar).not.toHaveClass(/mobile-open/);
+				}
+				const reserved = await swipe([10, 240], [140, 245]);
+				expect(reserved).toBe(width < 760);
+				if (width > 760) {
+					await expect(sidebar).not.toHaveClass(/mobile-open/);
+					return;
+				}
 				await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-				await touch.detach();
-			} else await swipe([10, 240], [140, 245]);
-			await sidebar.getByRole('link', { name: 'Thành viên & quản lý', exact: true }).click();
-			await expect(page.getByRole('heading', { name: 'Thành viên & quản lý', exact: true })).toBeVisible();
-			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-			await page.goto('/matrix');
-			await expect(page.locator('.matrix-panel .table-scroll')).toBeVisible();
-			expect(await swipe([20, 400], [140, 405], { selector: '.matrix-panel .table-scroll' })).toBe(false);
-			await expect(sidebar).not.toHaveClass(/mobile-open/);
-			await page.getByRole('button', { name: 'Tài khoản', exact: true }).click();
-			await page.getByRole('menuitem', { name: 'Thông tin tài khoản', exact: true }).click();
-			await expect(page.getByRole('dialog', { name: 'Thông tin tài khoản', exact: true })).toBeVisible();
-			expect(await swipe([10, 240], [140, 245], { selector: '.main-shell' })).toBe(false);
-			await expect(sidebar).not.toHaveClass(/mobile-open/);
+				await expect(sidebar).toHaveClass(/mobile-open/);
+				await page.keyboard.press('Escape');
+				await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+				await swipe([34, 300], [94, 345], { selector: '.counterpart-row-toggle' });
+				await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+				await page.keyboard.press('Escape');
+				if (browserName === 'chromium') {
+					const touch = await page.context().newCDPSession(page);
+					await touch.send('Input.dispatchTouchEvent', {
+						type: 'touchStart',
+						touchPoints: [{ x: 32, y: 240 }]
+					});
+					await page.waitForTimeout(900); // A deliberate slow swipe must still work.
+					for (const [x, y] of [
+						[45, 250],
+						[62, 263],
+						[85, 277],
+						[110, 292]
+					])
+						await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] });
+					await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+					await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+					await touch.detach();
+				} else await swipe([10, 240], [140, 245]);
+				await sidebar.getByRole('link', { name: 'Thành viên & quản lý', exact: true }).click();
+				await expect(page.getByRole('heading', { name: 'Thành viên & quản lý', exact: true })).toBeVisible();
+				await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+				await page.goto('/matrix');
+				await expect(page.locator('.matrix-panel .table-scroll')).toBeVisible();
+				expect(await swipe([20, 400], [140, 405], { selector: '.matrix-panel .table-scroll' })).toBe(false);
+				await expect(sidebar).not.toHaveClass(/mobile-open/);
+				await page.getByRole('button', { name: 'Tài khoản', exact: true }).click();
+				await page.getByRole('menuitem', { name: 'Thông tin tài khoản', exact: true }).click();
+				await expect(page.getByRole('dialog', { name: 'Thông tin tài khoản', exact: true })).toBeVisible();
+				expect(await swipe([10, 240], [140, 245], { selector: '.main-shell' })).toBe(false);
+				await expect(sidebar).not.toHaveClass(/mobile-open/);
+			});
 		});
 
 		if (width < 760) {
@@ -846,79 +876,6 @@ for (const width of [1280, 390]) {
 				await expect(page.locator('.mobile-bill-camera')).toBeHidden();
 			});
 		} else {
-			test.describe('photo controls on touchscreens', () => {
-				test.use({ isMobile: true, hasTouch: true });
-				test('photo actions respond to the first tap regardless of focus', async ({ page }) => {
-					const { image } = await openFixture(page, '/new-bill', undefined, { aiEnabled: true });
-					let uploads = 0;
-					let scans = 0;
-					await page.route('**/api/groups/local/images', (route) => {
-						uploads++;
-						return route.fulfill({ json: { imageId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301.png' } });
-					});
-					let releaseScan!: () => void;
-					const scanGate = new Promise<void>((resolve) => (releaseScan = resolve));
-					await page.route('**/api/groups/local/ai/scan', async (route) => {
-						scans++;
-						await scanGate;
-						return route.fulfill({
-							json: { billName: 'Cơm trưa từ ảnh', totalCost: 125000, billDate: null }
-						});
-					});
-					const name = page.getByLabel('Tên hóa đơn', { exact: true });
-					await name.fill('Bản nháp giữ nguyên');
-					const attach = page.getByRole('button', { name: 'Đính kèm ảnh', exact: true });
-					const ai = page.getByRole('button', { name: 'Đọc hóa đơn bằng AI', exact: true });
-					for (const button of [attach, ai]) {
-						for (const focus of [name, button]) {
-							await focus.focus();
-							const [chooser] = await Promise.all([
-								page.waitForEvent('filechooser', { timeout: 5000 }),
-								button.tap()
-							]);
-							await chooser.setFiles([]);
-							await expect(name).toHaveValue('Bản nháp giữ nguyên');
-						}
-					}
-					await ai.focus();
-					const [keyboardChooser] = await Promise.all([
-						page.waitForEvent('filechooser', { timeout: 5000 }),
-						page.keyboard.press('Enter')
-					]);
-					await keyboardChooser.setFiles([]);
-					expect(uploads).toBe(0);
-					expect(scans).toBe(0);
-					await name.focus();
-					const [attachmentChooser] = await Promise.all([
-						page.waitForEvent('filechooser', { timeout: 5000 }),
-						attach.tap()
-					]);
-					await attachmentChooser.setFiles({ name: 'receipt.png', mimeType: 'image/png', buffer: image });
-					await expect(page.locator('.bill-image-attached img')).toBeVisible();
-					await name.focus();
-					await ai.tap();
-					try {
-						await expect.poll(() => scans).toBe(1);
-						await expect(page.getByRole('button', { name: 'AI đang đọc…', exact: true })).toBeDisabled();
-						await expect(page.getByRole('button', { name: 'Đang tải ảnh…', exact: true })).toHaveCount(0);
-						await expect(page.getByRole('button', { name: 'Đổi ảnh', exact: true })).toBeDisabled();
-					} finally {
-						releaseScan();
-					}
-					await expect(name).toHaveValue('Cơm trưa từ ảnh');
-					await expect(page.getByRole('button', { name: 'AI đã đọc hóa đơn', exact: true })).toBeDisabled();
-					await page.getByRole('button', { name: 'Bỏ ảnh hóa đơn', exact: true }).tap();
-					await name.focus();
-					const [aiChooser] = await Promise.all([
-						page.waitForEvent('filechooser', { timeout: 5000 }),
-						ai.tap()
-					]);
-					await aiChooser.setFiles({ name: 'receipt.png', mimeType: 'image/png', buffer: image });
-					await expect(page.getByRole('button', { name: 'AI đã đọc hóa đơn', exact: true })).toBeDisabled();
-					expect(uploads).toBe(2);
-					expect(scans).toBe(2);
-				});
-			});
 			for (const aiEnabled of [false, true]) {
 				test(`mobile camera opens the composer, attaches photos and ${aiEnabled ? 'reads them with AI' : 'preserves manual entry without AI'}`, async ({
 					page

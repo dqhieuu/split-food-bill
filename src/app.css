@@ -4174,24 +4174,28 @@ select[aria-invalid='true'] {
 	font-weight: 600;
 	font-size: 14px;
 	cursor: pointer;
-	touch-action: manipulation;
 	transition:
 		background-color 150ms ease,
 		border-color 150ms ease;
 }
-@media (hover: hover) and (pointer: fine) {
-	.bill-image-picker:not(:disabled):hover {
-		background: light-dark(#f1f2eb, #21211d);
-		border-color: var(--primary);
-	}
+.bill-image-picker:hover {
+	background: light-dark(#f1f2eb, #21211d);
+	border-color: var(--primary);
 }
-.bill-image-picker:focus-visible {
+.bill-image-picker:focus-visible,
+.bill-image-picker:has(input:focus-visible) {
 	outline: 2px solid var(--color-ring);
 	outline-offset: 2px;
 }
-.bill-image-picker:disabled {
+.bill-image-picker[aria-disabled='true'] {
 	opacity: 0.6;
 	cursor: progress;
+}
+.bill-image-picker input {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	cursor: inherit;
 }
 .bill-image-attached {
 	position: relative;

@@ -75,8 +75,6 @@
 	let draftReady = $state(false);
 	let submissionId = $state(crypto.randomUUID());
 	let imageId = $state('');
-	let attachmentInput = $state<HTMLInputElement>();
-	let scanInput = $state<HTMLInputElement>();
 	let uploadingImage = $state(false);
 	let scanning = $state(false);
 	let imageError = $state('');
@@ -435,49 +433,40 @@
 								onclick={() => (imageId = '')}><X size={14} /></button
 							>
 						</div>{/if}
-					<input
-						bind:this={attachmentInput}
-						type="file"
-						accept="image/*"
-						aria-label="Chọn ảnh hóa đơn"
-						hidden
-						disabled={imageBusy}
-						onchange={attachImage}
-					/>
-					<button
-						type="button"
-						class="bill-image-picker"
-						disabled={imageBusy}
-						onclick={() => attachmentInput?.click()}
+					<label class="bill-image-picker" aria-disabled={imageBusy}
 						>{#if uploadingImage && !scanning}<LoaderCircle class="spin" size={17} />Đang tải ảnh…{:else}<ImagePlus
 								size={17}
-							/>{imageId ? 'Đổi ảnh' : 'Đính kèm ảnh'}{/if}</button
-					>
-					{#if aiEnabled}
-						<input
-							bind:this={scanInput}
+							/>{imageId ? 'Đổi ảnh' : 'Đính kèm ảnh'}{/if}<input
 							type="file"
 							accept="image/*"
-							aria-label="Chọn ảnh để AI đọc hóa đơn"
-							hidden
+							aria-label="Chọn ảnh hóa đơn"
 							disabled={imageBusy}
-							onchange={scanImage}
-						/>
+							onchange={attachImage}
+						/></label
+					>
+					{#if aiEnabled && imageId}
 						<button
 							type="button"
 							class="bill-image-picker ai-scan-picker"
 							class:ai-scan-complete={scanComplete}
 							disabled={imageBusy || scanComplete}
-							onclick={() => {
-								if (imageId) void scanAttachedImage();
-								else scanInput?.click();
-							}}
+							onclick={scanAttachedImage}
 						>
 							{#if scanning}<LoaderCircle class="spin" size={17} />AI đang đọc…{:else if scanComplete}<Check
 									size={17}
 								/>AI đã đọc hóa đơn{:else}<Sparkles size={17} />Đọc hóa đơn bằng AI{/if}
 						</button>
-					{/if}
+					{:else if aiEnabled}<label class="bill-image-picker ai-scan-picker" aria-disabled={imageBusy}
+							>{#if scanning}<LoaderCircle class="spin" size={17} />AI đang đọc…{:else}<Sparkles
+									size={17}
+								/>Đọc hóa đơn bằng AI{/if}<input
+								type="file"
+								accept="image/*"
+								aria-label="Chọn ảnh để AI đọc hóa đơn"
+								disabled={imageBusy}
+								onchange={scanImage}
+							/></label
+						>{/if}
 				</div>
 				{#if imageError}<small class="validation-error" role="alert">{imageError}</small>{/if}
 				{#if scanNotice}<small class="ai-scan-notice" role="status">{scanNotice}</small>{/if}

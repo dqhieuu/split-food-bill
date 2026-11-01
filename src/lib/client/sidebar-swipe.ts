@@ -1,20 +1,16 @@
-/** Reserves a narrow left-edge gesture for opening the phone sidebar. */
+import { DragGesture } from '@use-gesture/vanilla';
+
+/** Recognize edge drags without imposing a speed limit or a strict vertical cutoff. */
 export function sidebarSwipe(node: HTMLElement, open: () => void) {
 	const mobile = matchMedia('(max-width: 760px)');
-	let start: { id: number; x: number; y: number; time: number } | undefined;
-	function reset() {
-		start = undefined;
-	}
+	let eligible = false;
 	function touchStart(event: TouchEvent) {
-		reset();
-		if (!mobile.matches || event.touches.length !== 1) return;
-		const touch = event.touches[0];
-		if (touch.clientX > 24) return;
+		eligible = false;
+		if (!mobile.matches || event.touches.length !== 1 || event.touches[0].clientX > 40) return;
 		const target = event.target;
 		if (!(target instanceof Element)) return;
-		if (target.closest('button, a, input, select, textarea, [contenteditable], [role="slider"]')) return;
+		if (target.closest('input, select, textarea, [contenteditable], [role="slider"]')) return;
 		if (document.querySelector('[role="dialog"], [role="menu"]')) return;
-		// Horizontal table scrolling must keep its own gesture, even at the edge.
 		for (let element: Element | null = target; element && element !== node; element = element.parentElement) {
 			if (
 				element.scrollWidth > element.clientWidth + 1 &&
@@ -22,43 +18,45 @@ export function sidebarSwipe(node: HTMLElement, open: () => void) {
 			)
 				return;
 		}
-		start = { id: touch.identifier, x: touch.clientX, y: touch.clientY, time: event.timeStamp };
-		// Safari's browser-back gesture must yield to this app gesture at the left edge.
+		eligible = true;
+		// Reserve the edge for the drawer instead of Safari's browser-back gesture.
 		if (event.cancelable) event.preventDefault();
 	}
 	function touchMove(event: TouchEvent) {
-		if (!start) return;
-		const touch = Array.from(event.touches).find((touch) => touch.identifier === start!.id);
-		if (
-			event.touches.length !== 1 ||
-			!touch ||
-			Math.abs(touch.clientY - start.y) > 40 ||
-			touch.clientX < start.x - 12
-		)
-			reset();
+		if (event.touches.length !== 1) eligible = false;
 	}
-	function touchEnd(event: TouchEvent) {
-		const began = start;
-		reset();
-		if (!began || !mobile.matches || event.touches.length) return;
-		const touch = Array.from(event.changedTouches).find((touch) => touch.identifier === began.id);
-		if (!touch) return;
-		const dx = touch.clientX - began.x,
-			dy = Math.abs(touch.clientY - began.y);
-		if (dx < 70 || dy > 40 || dx < dy * 2 || event.timeStamp - began.time > 800) return;
-		if (event.cancelable) event.preventDefault();
-		open();
+	function reset() {
+		eligible = false;
 	}
-	node.addEventListener('touchstart', touchStart, { passive: false });
-	node.addEventListener('touchmove', touchMove, { passive: true });
-	node.addEventListener('touchend', touchEnd, { passive: false });
-	node.addEventListener('touchcancel', reset, { passive: true });
+	node.addEventListener('touchstart', touchStart, { passive: false, capture: true });
+	node.addEventListener('touchmove', touchMove, { passive: true, capture: true });
+	node.addEventListener('touchcancel', reset, { passive: true, capture: true });
+	const config = {
+		axis: 'x' as const,
+		threshold: 12,
+		filterTaps: true,
+		pointer: { touch: true, keys: false },
+		eventOptions: { passive: false }
+	};
+	const drag = new DragGesture(
+		node,
+		({ active, intentional, values, initial }) => {
+			if (!eligible || !active || !intentional || !mobile.matches) return;
+			if (values[0] - initial[0] < 45) return;
+			eligible = false;
+			open();
+		},
+		{ ...config, enabled: mobile.matches }
+	);
+	const resize = () => drag.setConfig({ ...config, enabled: mobile.matches });
+	mobile.addEventListener('change', resize);
 	return {
 		destroy() {
-			node.removeEventListener('touchstart', touchStart);
-			node.removeEventListener('touchmove', touchMove);
-			node.removeEventListener('touchend', touchEnd);
-			node.removeEventListener('touchcancel', reset);
+			drag.destroy();
+			mobile.removeEventListener('change', resize);
+			node.removeEventListener('touchstart', touchStart, true);
+			node.removeEventListener('touchmove', touchMove, true);
+			node.removeEventListener('touchcancel', reset, true);
 		}
 	};
 }
