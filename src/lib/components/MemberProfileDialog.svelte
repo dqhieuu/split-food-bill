@@ -117,7 +117,9 @@
 					autocomplete="off"
 					maxlength={100}
 				/><datalist id={`${uid}-banks`}
-					>{#each banks as bank}<option value={bank.shortName} label={`${bank.name} (${bank.code})`}
+					>{#each banks as bank}<option
+							value={bank.shortName}
+							label={`${bank.shortName} · ${bank.name} (${bank.code})`}
 						></option>{/each}</datalist
 				></label
 			>

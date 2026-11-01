@@ -255,7 +255,11 @@ for (const width of [1280, 390]) {
 				profile.getByRole('switch', { name: 'Thành viên đang hoạt động', exact: true })
 			).toBeDisabled();
 			await profile.getByLabel('Tên', { exact: true }).fill('Minh An của nhóm');
-			await profile.getByLabel('Ngân hàng', { exact: true }).fill('Vietcombank');
+			await expect(profile.locator('datalist option[value="Vietcombank"]')).toHaveAttribute(
+				'label',
+				/^Vietcombank ·/
+			);
+			await profile.getByLabel('Ngân hàng', { exact: true }).fill('vietcombank');
 			await profile.getByLabel('Số tài khoản', { exact: true }).fill('123456789');
 			const refreshed = page.waitForResponse((response) =>
 				response.url().includes('/api/groups/local/state')
