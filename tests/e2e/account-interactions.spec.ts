@@ -2191,6 +2191,8 @@ for (const width of [1280, 390]) {
 				delete bill.undoneAt;
 				delete bill.undoneBy;
 				bill.date = `${currentMonth}-05T12:00:00Z`;
+				bill.memberNames = { [ACTOR]: 'Tên cũ' };
+				state.members.find((member) => member.id === ACTOR)!.name = 'Tên hiện tại';
 				state.bills.push({
 					...bill,
 					id: 'old-month',
@@ -2206,6 +2208,9 @@ for (const width of [1280, 390]) {
 			await expect(monthLabel).toHaveText(monthText(oldestMonth));
 			await expect(page.locator('.cal-subtitle')).toHaveText('30.000 ₫');
 			await expect(page.locator('.cal-bill')).toContainText('Hóa đơn tháng cũ');
+			await expect(page.locator('.cal-bill')).toHaveAttribute('title', /Người trả: Tên hiện tại/);
+			await expect(page.locator('.cal-payer')).toHaveText('tại');
+			await expect(page.getByRole('button', { name: 'Tên hiện tại', exact: true })).toBeVisible();
 			await expect(bars.first()).toHaveAttribute('aria-pressed', 'true');
 			await page.getByRole('button', { name: 'Tháng sau', exact: true }).click();
 			await expect(bars.first()).toHaveAttribute('aria-pressed', 'false');

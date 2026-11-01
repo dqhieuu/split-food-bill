@@ -38,7 +38,7 @@
 	});
 	const memberOf = (id: string) => members.find((m) => m.id === id);
 	const payerName = (bill: Bill) =>
-		bill.memberNames?.[bill.organizer] || memberOf(bill.organizer)?.name || bill.organizer;
+		memberOf(bill.organizer)?.name || bill.memberNames?.[bill.organizer] || bill.organizer;
 	const colorOf = (id: string) => memberOf(id)?.color || FALLBACK_COLOR;
 	const monthPayers = $derived.by(() => {
 		const seen = new Map<string, string>();
