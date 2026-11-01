@@ -9,13 +9,11 @@
 		ReceiptText,
 		Utensils,
 		Users,
-		ArrowUpRight,
 		Plus,
 		RefreshCw,
 		Sun,
 		Moon,
 		ChevronDown,
-		CircleHelp,
 		LoaderCircle,
 		Menu,
 		X,
@@ -28,7 +26,7 @@
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import Avatar from '$lib/components/Avatar.svelte';
-	import Modal from '$lib/components/Modal.svelte';
+	import { sidebarSwipe } from '$lib/client/sidebar-swipe';
 	import MemberProfileDialog from '$lib/components/MemberProfileDialog.svelte';
 	import DatabaseReset from '$lib/components/DatabaseReset.svelte';
 	import Overview from '$lib/components/views/Overview.svelte';
@@ -70,7 +68,6 @@
 	let toast = $state('');
 	let toastIsError = $state(false);
 	let mobileMenu = $state(false);
-	let releaseOpen = $state(false);
 	let accountOpen = $state(false);
 	let profileOpen = $state(false);
 	let resetOpen = $state(false);
@@ -336,7 +333,7 @@
 				aria-label="Đóng trình đơn bên"
 				onclick={() => (mobileMenu = false)}
 			></button>{/if}
-		<aside class:mobile-open={mobileMenu}>
+		<aside id="main-sidebar" class:mobile-open={mobileMenu}>
 			<a class="brand" href="/overview" onclick={() => (mobileMenu = false)}
 				><span class="brand-mark"><Utensils size={23} /></span><span>Chia tiền ăn</span></a
 			>
@@ -374,9 +371,6 @@
 				{/each}
 			</nav>
 			<div class="sidebar-bottom">
-				<button class="help-link" onclick={() => (releaseOpen = true)}
-					><CircleHelp size={17} /> Changelog <ArrowUpRight size={15} /></button
-				>
 				{#if isTestEnv}<div class="env-toggle">
 						<button type="button" tabindex="-1" onclick={() => setTestView(!preferences.testView)}
 							><strong>Giao diện thử nghiệm</strong><small
@@ -393,12 +387,14 @@
 					</div>{/if}
 			</div>
 		</aside>
-		<div class="main-shell">
+		<div class="main-shell" use:sidebarSwipe={() => (mobileMenu = true)}>
 			<header class="topbar">
 				<div class="breadcrumb">
 					<button
 						class="icon-button mobile-toggle"
 						aria-label="Mở trình đơn"
+						aria-expanded={mobileMenu}
+						aria-controls="main-sidebar"
 						onclick={() => (mobileMenu = true)}><Menu size={21} /></button
 					><span>{group?.name || 'Chọn nhóm'}</span><span class="slash">/</span><strong
 						>{section === '/new-bill'
@@ -597,17 +593,6 @@
 		title="Thông tin tài khoản"
 		description={`Nhóm: ${group?.name ?? ''}. Thông tin ngân hàng dùng để tạo QR.`}
 	/>
-	<Modal bind:open={releaseOpen} title="Changelog" description="Chia tiền ăn · Phiên bản 0.2.0">
-		<div class="release-note">
-			<ul>
-				<li>Giao diện tối và lịch chi tiêu theo ngày kèm âm lịch.</li>
-				<li>Chia đều có làm tròn lên; nhập từng người hỗ trợ giá sau khi giảm giá.</li>
-				<li>Tối giản nợ theo đúng thuật toán của bảng tính cũ.</li>
-				{#if preferences.testView}<li>Thông báo Discord được mô phỏng trong môi trường cục bộ.</li>{/if}
-			</ul>
-		</div>
-		<Button onclick={() => (releaseOpen = false)}>Đóng</Button>
-	</Modal>
 {/if}
 <DatabaseReset
 	bind:open={resetOpen}
