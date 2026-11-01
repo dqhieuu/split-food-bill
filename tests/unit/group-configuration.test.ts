@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { configureGroup, renameGroup } from '../../worker/src/groups';
+import { configureGroup } from '../../worker/src/groups';
 import { Discord } from '../../worker/src/discord';
 import type { Env } from '../../worker/src/env';
 import type { Store, Write } from '../../worker/src/store';
@@ -37,27 +37,6 @@ function fakeStore(role: 'admin' | 'member') {
 	return { store, committed, indexes };
 }
 afterEach(() => vi.restoreAllMocks());
-
-describe('renaming a group', () => {
-	it('lets a group admin rename the group, bumping the version and auditing it', async () => {
-		const { store, committed } = fakeStore('admin');
-		const renamed = await renameGroup(store, 'group', actor, 'Cà phê chiều');
-		expect(renamed).toMatchObject({ name: 'Cà phê chiều', version: 5, discordGuildId: group.discordGuildId });
-		expect(committed.find((write) => write.path === 'groups/group')?.value).toMatchObject({
-			name: 'Cà phê chiều',
-			version: 5
-		});
-		expect(committed.find((write) => write.path.startsWith('groups/group/audit/'))?.value).toMatchObject({
-			action: 'renameGroup',
-			actor
-		});
-	});
-	it('refuses members who are not group admins', async () => {
-		const { store, committed } = fakeStore('member');
-		await expect(renameGroup(store, 'group', actor, 'Khác')).rejects.toMatchObject({ status: 403 });
-		expect(committed).toHaveLength(0);
-	});
-});
 
 describe('configuring the Discord server', () => {
 	const target = '300000000000000002';

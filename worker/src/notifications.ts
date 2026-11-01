@@ -27,8 +27,7 @@ export async function deliverBillNotifications(
 	env: Env,
 	groupId: string,
 	actor: string,
-	billId: string,
-	retry = false
+	billId: string
 ) {
 	const path = `groups/${groupId}/receipts/${billId}`;
 	const batch = await store.transaction(async (tx, writes) => {
@@ -37,16 +36,11 @@ export async function deliverBillNotifications(
 		if (!bill) throw new DomainError('Không tìm thấy hóa đơn.', 404);
 		if (bill.undoneAt) throw new DomainError('Hóa đơn đã được hoàn tác nên không gửi thông báo.', 409);
 		if (bill.organizer !== actor && member.role !== 'admin')
-			throw new DomainError(
-				'Chỉ người thanh toán hóa đơn hoặc quản trị viên nhóm được gửi lại thông báo.',
-				403
-			);
+			throw new DomainError('Chỉ người thanh toán hóa đơn hoặc quản trị viên nhóm được gửi thông báo.', 403);
 		const receipt = await store.get<Receipt>(path, tx);
 		if (!bill.discordNotification || !receipt) return null;
 		if (receipt.status === 'sending') return null;
-		const pending = receipt.deliveries.filter(
-			(delivery) => delivery.status === 'queued' || (retry && delivery.status === 'failed')
-		);
+		const pending = receipt.deliveries.filter((delivery) => delivery.status === 'queued');
 		if (!pending.length) return null;
 		if (
 			pending.some(

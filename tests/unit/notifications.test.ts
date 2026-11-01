@@ -158,7 +158,7 @@ describe('bill Discord notifications', () => {
 		expect(embed.description).toContain('người khác ([xem hóa đơn]');
 		expect(embed.description).toContain('\\*');
 	});
-	it('persists partial failures and retries only failed recipients without changing the bill', async () => {
+	it('persists partial failures without resending messages when bill creation is replayed', async () => {
 		const f = fixture();
 		const dm = vi.spyOn(Discord.prototype, 'dm').mockImplementation(async (id) => {
 			if (id === AN.slice(8)) throw new Error('Discord DM blocked');
@@ -170,14 +170,11 @@ describe('bill Discord notifications', () => {
 		await deliverBillNotifications(f.store, env, 'local', LINH, bill.id);
 		expect(dm).toHaveBeenCalledTimes(2);
 		dm.mockResolvedValue({ status: 'sent' });
-		await deliverBillNotifications(f.store, env, 'local', LINH, bill.id, true);
-		expect(dm).toHaveBeenCalledTimes(3);
-		expect(dm.mock.calls[2][0]).toBe(AN.slice(8));
-		expect(f.receipt().status).toBe('sent');
-		expect(f.receipt().attempts).toBe(2);
+		await deliverBillNotifications(f.store, env, 'local', LINH, bill.id);
+		expect(dm).toHaveBeenCalledTimes(2);
+		expect(f.receipt().status).toBe('failed');
+		expect(f.receipt().attempts).toBe(1);
 		expect(f.records.get('groups/local/bills/bill-1')).toEqual(bill);
-		await deliverBillNotifications(f.store, env, 'local', LINH, bill.id, true);
-		expect(dm).toHaveBeenCalledTimes(3);
 	});
 	it('claims concurrent delivery once and provides stable per-recipient nonces', async () => {
 		const f = fixture();
@@ -197,15 +194,15 @@ describe('bill Discord notifications', () => {
 		const dm = vi.spyOn(Discord.prototype, 'dm');
 		const outsider = 'discord_100000000000000003';
 		f.records.set(`groups/local/members/${outsider}`, { active: true, role: 'member' });
-		await expect(
-			deliverBillNotifications(f.store, env, 'local', outsider, bill.id, true)
-		).rejects.toMatchObject({ status: 403 });
+		await expect(deliverBillNotifications(f.store, env, 'local', outsider, bill.id)).rejects.toMatchObject({
+			status: 403
+		});
 		f.records.get(`groups/local/members/${LINH}`).active = false;
 		await expect(deliverBillNotifications(f.store, env, 'local', LINH, bill.id)).rejects.toMatchObject({
 			status: 403
 		});
 		f.receipt().deliveries.push({ memberId: outsider, status: 'queued', error: '' });
-		await expect(deliverBillNotifications(f.store, env, 'local', AN, bill.id, true)).rejects.toMatchObject({
+		await expect(deliverBillNotifications(f.store, env, 'local', AN, bill.id)).rejects.toMatchObject({
 			status: 400
 		});
 		expect(dm).not.toHaveBeenCalled();

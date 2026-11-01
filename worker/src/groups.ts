@@ -188,25 +188,6 @@ export async function createGroup(store: Store, user: GlobalUser, env: Env, name
 		return group;
 	});
 }
-/** The group name lives on the group document, outside the ledger state, so it has its own write. */
-export async function renameGroup(store: Store, groupId: string, uid: string, name: string): Promise<Group> {
-	return store.transaction(async (tx, writes) => {
-		const { group } = await requireGroup(store, groupId, uid, true, tx);
-		const renamed = { ...group, name, version: group.version + 1 };
-		const id = crypto.randomUUID();
-		writes.push(
-			store.write(`groups/${groupId}`, renamed),
-			store.write(`groups/${groupId}/audit/${id}`, {
-				id,
-				actor: uid,
-				action: 'renameGroup',
-				reference: groupId,
-				date: new Date().toISOString()
-			})
-		);
-		return renamed;
-	});
-}
 /** Changes group metadata and the unique Discord-server association in one transaction. */
 export async function configureGroup(
 	store: Store,

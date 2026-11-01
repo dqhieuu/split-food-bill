@@ -55,13 +55,7 @@ describe('undoing a debt simplification', () => {
 	});
 	it('reverses only the selected batch while preserving later payments, bills and simplifications', () => {
 		const state = withSettlement();
-		applyCommand(
-			state,
-			'an',
-			'recordPayment',
-			{ id: 'later-payment', to: 'linh', amount: 1000, description: 'Trả sau tối giản', note: '' },
-			later
-		);
+		applyCommand(state, 'an', 'confirmQrPayment', { id: 'later-payment', to: 'linh', amount: 1000 }, later);
 		applyCommand(
 			state,
 			'huy',

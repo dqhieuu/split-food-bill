@@ -68,19 +68,15 @@
 	const summary = $derived(summarizeImport(importEntries, appState));
 	const auditHistory = $derived(appState.audit.filter((event) => event.action !== 'markReleaseSeen'));
 	const actionLabels: Record<string, string> = {
-		recordPayments: 'Thêm hoàn tiền nhiều người',
 		createBill: 'Thêm hóa đơn',
-		recordPayment: 'Thêm hoàn tiền',
 		confirmQrPayment: 'Thêm thanh toán QR',
 		settleDebts: 'Tối giản nợ',
 		undoSettlement: 'Hoàn tác tối giản nợ',
 		saveMember: 'Cập nhật thành viên',
-		retryBillNotification: 'Gửi lại thông báo Discord',
 		saveArchive: 'Thêm lưu trữ',
 		importLedger: 'Import lịch sử',
 		syncDiscordMembers: 'Đồng bộ thành viên Discord',
 		undoBill: 'Hoàn tác hóa đơn',
-		renameGroup: 'Đổi tên nhóm',
 		configureGroup: 'Cập nhật cấu hình nhóm',
 		saveAiSettings: 'Cập nhật cài đặt AI'
 	};

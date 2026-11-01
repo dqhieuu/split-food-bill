@@ -664,6 +664,7 @@ for (const width of [1280, 390]) {
 				.filter({ has: page.locator('.counterpart-name', { hasText: longName }) });
 			const main = row.locator('.counterpart-main');
 			await main.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+			const background = await main.evaluate((element) => getComputedStyle(element).backgroundColor);
 			const bounds = (await row.boundingBox())!;
 			const mainBounds = (await main.boundingBox())!;
 			expect(Math.abs(mainBounds.x - bounds.x)).toBeLessThanOrEqual(1);
@@ -671,7 +672,7 @@ for (const width of [1280, 390]) {
 			await page.mouse.move(bounds.x + 2, bounds.y + 2);
 			await expect
 				.poll(() => main.evaluate((element) => getComputedStyle(element).backgroundColor))
-				.toBe('rgba(0, 0, 0, 0)');
+				.toBe(background);
 			if (width < 760) {
 				const actions = (await row.locator('.counterpart-actions').boundingBox())!;
 				const name = (await row.locator('.counterpart-name').boundingBox())!;

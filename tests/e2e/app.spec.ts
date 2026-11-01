@@ -388,13 +388,9 @@ test('ordinary bill creators notify participants once; opt-out and notification 
 		const receipt = first.state.receipts.find((receipt: { id: string }) => receipt.id === input.id);
 		expect(receipt).toMatchObject({ recipients: [LINH, AN], status: 'simulated', attempts: 1 });
 		expect(receipt.deliveries).toHaveLength(2);
-		await call(memberPage, member.token, '/api/groups/local/commands/createBill', input);
-		const retry = await call(memberPage, member.token, '/api/discord/dm', {
-			groupId: 'local',
-			billId: input.id
-		});
-		expect(retry.ok()).toBe(true);
-		const replayed = (await retry.json()).state;
+		const replay = await call(memberPage, member.token, '/api/groups/local/commands/createBill', input);
+		expect(replay.ok()).toBe(true);
+		const replayed = (await replay.json()).state;
 		expect(replayed.receipts.find((item: { id: string }) => item.id === input.id).attempts).toBe(1);
 		expect(replayed.bills.filter((item: { id: string }) => item.id === input.id)).toHaveLength(1);
 		expect(
@@ -409,7 +405,7 @@ test('ordinary bill creators notify participants once; opt-out and notification 
 			(
 				await call(memberPage, member.token, '/api/discord/dm', { groupId: 'local', billId: optedOut.id })
 			).status()
-		).toBe(403);
+		).toBe(404);
 		expect(
 			(
 				await call(memberPage, member.token, '/api/discord/dm', {
@@ -419,7 +415,7 @@ test('ordinary bill creators notify participants once; opt-out and notification 
 					message: 'arbitrary text'
 				})
 			).status()
-		).toBe(400);
+		).toBe(404);
 	} finally {
 		await activate(page, admin.token, false);
 		await context.close();

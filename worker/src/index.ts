@@ -11,7 +11,6 @@ import {
 	configureGroup,
 	groupCommand,
 	loadGroup,
-	renameGroup,
 	requireGroup,
 	session,
 	syncMembers
@@ -139,22 +138,6 @@ async function route(request: Request, env: Env, store: DataStore): Promise<Resp
 				result: { reference: group.id }
 			});
 		}
-		if (command[2] === 'renameGroup') {
-			const { name } = z
-				.object({ name: z.string().trim().min(1).max(100) })
-				.strict()
-				.parse(await request.json());
-			const group = await renameGroup(store, command[1], user.id, name);
-			return Response.json({
-				...(await loadGroup(store, command[1], user.id)),
-				result: { reference: group.id }
-			});
-		}
-		if (command[2] === 'retryBillNotification') {
-			const { id } = z.object({ id: z.string().regex(/^[\w.-]{1,100}$/) }).parse(await request.json());
-			await deliverBillNotifications(store, env, command[1], user.id, id, true);
-			return Response.json({ ...(await loadGroup(store, command[1], user.id)), result: { reference: id } });
-		}
 		if (command[2] === 'syncDiscordMembers')
 			return Response.json({
 				...(await syncMembers(store, env, command[1], user)),
@@ -200,14 +183,6 @@ async function route(request: Request, env: Env, store: DataStore): Promise<Resp
 				name: profile.global_name || profile.username
 			}))
 		});
-	}
-	if (url.pathname === '/api/discord/dm' && request.method === 'POST') {
-		const input = z
-			.object({ groupId: z.string().regex(/^[\w-]{1,100}$/), billId: z.string().regex(/^[\w.-]{1,100}$/) })
-			.strict()
-			.parse(await request.json());
-		await deliverBillNotifications(store, env, input.groupId, user.id, input.billId, true);
-		return Response.json(await loadGroup(store, input.groupId, user.id));
 	}
 	throw new DomainError('Không tìm thấy API.', 404);
 }

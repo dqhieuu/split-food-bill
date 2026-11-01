@@ -111,20 +111,6 @@ describe('creation timestamps', () => {
 	it('timestamps all payment, import and settlement entry creation paths', () => {
 		const state = fresh();
 		const originalIds = new Set(state.ledger.map((entry) => entry.id));
-		applyCommand(
-			state,
-			'an',
-			'recordPayment',
-			{ id: 'single', to: 'linh', amount: 100, description: 'Repayment', note: '' },
-			now
-		);
-		applyCommand(
-			state,
-			'an',
-			'recordPayments',
-			{ id: 'batch', payments: [{ to: 'linh', amount: 100 }], description: 'Repayment', note: '' },
-			now
-		);
 		applyCommand(state, 'an', 'confirmQrPayment', { id: 'qr-time', to: 'linh', amount: 100 }, now);
 		const rows = parseLedgerImport(
 			JSON.stringify([
@@ -298,43 +284,15 @@ describe('member profile permissions', () => {
 	});
 });
 describe('payments', () => {
-	it('records multiple repayments together and is idempotent', () => {
-		const state = fresh();
-		const before = state.ledger.length;
-		const input = {
-			id: 'repayment-batch',
-			description: 'Repayment batch',
-			note: '',
-			payments: [
-				{ to: 'linh', amount: 55000 },
-				{ to: 'huy', amount: 35000 }
-			]
-		};
-		applyCommand(state, 'an', 'recordPayments', input, now);
-		applyCommand(state, 'an', 'recordPayments', input, now);
-		expect(state.ledger.length).toBe(before + 2);
-		expect(
-			state.ledger
-				.filter((entry) => entry.reference === input.id)
-				.reduce((sum, entry) => sum + entry.amount, 0)
-		).toBe(90000);
-		expect(() =>
-			applyCommand(
-				state,
-				'an',
-				'recordPayments',
-				{
-					...input,
-					id: 'invalid',
-					payments: [
-						{ to: 'linh', amount: 1 },
-						{ to: 'linh', amount: 2 }
-					]
-				},
-				now
-			)
-		).toThrow();
-	});
+	it.each(['recordPayment', 'recordPayments', 'renameGroup', 'retryBillNotification'])(
+		'rejects the removed %s command without changing state',
+		(command) => {
+			const state = fresh();
+			const before = structuredClone(state);
+			expect(() => applyCommand(state, 'an', command, {}, now)).toThrow('Thao tác không được hỗ trợ.');
+			expect(state).toEqual(before);
+		}
+	);
 	function prepare() {
 		const state = fresh();
 		state.ledger = [
@@ -366,13 +324,7 @@ describe('payments', () => {
 	});
 	it('records the scanned amount after intervening ledger changes and settlement', () => {
 		const state = prepare();
-		applyCommand(
-			state,
-			'an',
-			'recordPayment',
-			{ id: 'partial', to: 'linh', amount: 1000, description: 'Part', note: '' },
-			now
-		);
+		applyCommand(state, 'an', 'confirmQrPayment', { id: 'partial', to: 'linh', amount: 1000 }, now);
 		applyCommand(state, 'an', 'settleDebts', { id: 'settlement', version: state.version }, now);
 		const before = netBalance(state.ledger, 'an');
 		applyCommand(state, 'an', 'confirmQrPayment', { id: 'qr-payment', to: 'linh', amount: 65000 }, now);
