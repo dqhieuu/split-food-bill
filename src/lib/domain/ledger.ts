@@ -170,7 +170,7 @@ export function compareLedgerEntries(a: LedgerEntry, b: LedgerEntry): number {
 }
 
 /**
- * Port of `minimizeTransactions` in lunchsheet.gs (Proof-of-Anti-Stake):
+ * Debt simplification using Proof-of-Anti-Stake:
  * 1. every pairwise balance is zeroed with a payment from the debtor to the creditor;
  * 2. each net debtor owes the hub (the member with the lowest net position);
  * 3. the hub owes each net creditor.

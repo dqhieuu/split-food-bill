@@ -276,6 +276,37 @@ for (const width of [1280, 390]) {
 			});
 		}
 
+		test('change history excludes obsolete release-view events before limiting rows', async ({ page }) => {
+			const { state } = await openFixture(page, '/members', (state) => {
+				state.audit = [
+					...Array.from({ length: 120 }, (_, index) => ({
+						id: `obsolete-${index}`,
+						actor: ACTOR,
+						action: 'markReleaseSeen',
+						reference: 'old-version',
+						date: now
+					})),
+					{
+						id: 'member-edit',
+						actor: ACTOR,
+						action: 'saveMember',
+						reference: ACTOR,
+						date: '2026-10-26T05:00:00.000Z'
+					}
+				];
+			});
+			await page.getByRole('button', { name: 'Lịch sử thay đổi', exact: true }).click();
+			await expect(page.locator('.audit-table tbody tr')).toHaveCount(1);
+			await expect(page.locator('.audit-table')).toContainText('Cập nhật thành viên');
+			state.audit = state.audit.filter((event) => event.action === 'markReleaseSeen');
+			state.version++;
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await expect(page.locator('.audit-table tbody tr')).toHaveCount(0);
+			await expect(
+				page.getByText('Các thay đổi tiếp theo sẽ được ghi lại tại đây.', { exact: true })
+			).toBeVisible();
+		});
+
 		test('member management retains its shared profile editor and admin permissions', async ({ page }) => {
 			const { state } = await openFixture(page, '/members');
 			await page.route('**/api/groups/local/commands/saveMember', async (route) => {

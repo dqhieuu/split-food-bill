@@ -17,7 +17,7 @@
 		run,
 		busy,
 		title = 'Chỉnh sửa hồ sơ',
-		description = 'ID là định danh cố định. Thông tin ngân hàng dùng để tạo QR.'
+		description = 'Thông tin ngân hàng dùng để tạo QR.'
 	}: {
 		open: boolean;
 		member?: Member;

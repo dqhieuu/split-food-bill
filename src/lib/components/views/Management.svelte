@@ -12,7 +12,6 @@
 		ExternalLink,
 		History,
 		FileJson,
-		CircleAlert,
 		ChevronRight
 	} from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -67,18 +66,18 @@
 			)
 	);
 	const summary = $derived(summarizeImport(importEntries, appState));
+	const auditHistory = $derived(appState.audit.filter((event) => event.action !== 'markReleaseSeen'));
 	const actionLabels: Record<string, string> = {
-		recordPayments: 'Ghi hoàn tiền nhiều người',
-		createBill: 'Ghi hóa đơn',
-		recordPayment: 'Ghi hoàn tiền',
-		confirmQrPayment: 'Ghi thanh toán QR',
+		recordPayments: 'Thêm hoàn tiền nhiều người',
+		createBill: 'Thêm hóa đơn',
+		recordPayment: 'Thêm hoàn tiền',
+		confirmQrPayment: 'Thêm thanh toán QR',
 		settleDebts: 'Tối giản nợ',
 		undoSettlement: 'Hoàn tác tối giản nợ',
 		saveMember: 'Cập nhật thành viên',
 		retryBillNotification: 'Gửi lại thông báo Discord',
 		saveArchive: 'Thêm lưu trữ',
-		markReleaseSeen: 'Đã xem cập nhật',
-		importLedger: 'Nhập lịch sử',
+		importLedger: 'Import lịch sử',
 		syncDiscordMembers: 'Đồng bộ thành viên Discord',
 		undoBill: 'Hoàn tác hóa đơn',
 		renameGroup: 'Đổi tên nhóm',
@@ -282,18 +281,11 @@
 				>{/each}{#if !appState.archives.length}<div class="inline-empty">
 					Chưa có liên kết lưu trữ. Bạn có thể thêm sổ lịch sử của nhóm.
 				</div>{/if}
-			<div class="notice">
-				<CircleAlert size={18} />
-				<p>
-					Bản sao chứa thông tin ngân hàng của nhóm. Các bản sao trên máy thuộc quyền quản lý của bạn. Tệp sao
-					lưu có thể nhập lại phần sổ giao dịch; đây chưa phải công cụ khôi phục toàn bộ dữ liệu.
-				</p>
-			</div>
 		</div>
 	{:else}<div class="table-scroll">
 			<table class="data-table audit-table">
 				<thead><tr><th>Thời gian</th><th>Thành viên</th><th>Thao tác</th></tr></thead><tbody
-					>{#each [...appState.audit].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 100) as event}<tr
+					>{#each [...auditHistory].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 100) as event}<tr
 							><td>{dateTimeLabel(event.date)}</td><td
 								>{appState.members.find((m) => m.id === event.actor)?.name || event.actor}</td
 							><td>{actionLabels[event.action] || 'Cập nhật dữ liệu'}</td></tr
@@ -301,7 +293,7 @@
 				>
 			</table>
 		</div>
-		{#if !appState.audit.length}<div class="inline-empty">
+		{#if !auditHistory.length}<div class="inline-empty">
 				Các thay đổi tiếp theo sẽ được ghi lại tại đây.
 			</div>{/if}{/if}
 </section>

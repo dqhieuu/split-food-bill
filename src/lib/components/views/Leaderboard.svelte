@@ -165,7 +165,6 @@
 		<header class="court-heading">
 			<p class="court-eyebrow"><span></span> ĐẠI ĐIỆN HOÀNG GIA <span></span></p>
 			<h1>Bảng xếp hạng</h1>
-			<p>Ngai vàng đổi chủ. Sổ nợ lên ngôi.</p>
 		</header>
 		<div class="palace-stage">
 			<div class="palace-world" use:connectRopes={ranks}>

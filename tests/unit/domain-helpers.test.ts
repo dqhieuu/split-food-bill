@@ -54,7 +54,7 @@ describe('bill splitting', () => {
 	});
 });
 
-describe('debt simplification (lunchsheet.gs minimizeTransactions)', () => {
+describe('debt simplification (Proof-of-Anti-Stake)', () => {
 	it('zeroes pairs, routes debtors through the lowest net position and preserves every net', () => {
 		const state = createDemoState(new Date('2026-10-25T12:00:00.000Z'));
 		const before = Object.fromEntries(state.members.map((m) => [m.id, netBalance(state.ledger, m.id)]));
