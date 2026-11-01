@@ -2267,33 +2267,6 @@ footer {
 	color: light-dark(#6e7865, #a3ab9c);
 	margin-bottom: 20px;
 }
-.management-data .panel-heading {
-	padding-inline: 0;
-}
-.archive-row {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	border-bottom: 1px solid light-dark(#e8ecdd, #26281f);
-	padding: 17px 0;
-	color: light-dark(#6e7865, #a3ab9c);
-}
-.archive-row > div {
-	flex: 1;
-	min-width: 0;
-}
-.archive-row strong {
-	font-size: 14px;
-	display: block;
-}
-.archive-row small {
-	font-size: 12px;
-	color: light-dark(#6e7865, #a3ab9c);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	display: block;
-}
 .color-field {
 	display: flex;
 	align-items: center;

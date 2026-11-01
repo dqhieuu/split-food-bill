@@ -1,19 +1,5 @@
 <script lang="ts">
-	import {
-		Users,
-		Search,
-		Plus,
-		Pencil,
-		Archive,
-		Download,
-		Upload,
-		ShieldCheck,
-		Check,
-		ExternalLink,
-		History,
-		FileJson,
-		ChevronRight
-	} from '@lucide/svelte';
+	import { Users, Search, Pencil, Download, Upload, ShieldCheck, FileBraces } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Switch } from '$lib/components/ui/switch';
@@ -29,23 +15,18 @@
 		appState,
 		actor,
 		run,
-		busy,
-		groupId
+		busy
 	}: {
 		appState: AppState;
 		actor: string;
 		run: RunCommand;
 		busy: boolean;
-		groupId: string;
 	} = $props();
 	let tab = $state('members');
 	let search = $state('');
 	let memberOpen = $state(false);
 	let selectedMemberId = $state('');
 	const selectedMember = $derived(appState.members.find((member) => member.id === selectedMemberId));
-	let archiveOpen = $state(false);
-	let archiveName = $state('');
-	let archiveUrl = $state('');
 	let importOpen = $state(false);
 	let importEntries = $state<ImportedEntry[]>([]);
 	let importError = $state('');
@@ -73,7 +54,6 @@
 		settleDebts: 'Tối giản nợ',
 		undoSettlement: 'Hoàn tác tối giản nợ',
 		saveMember: 'Cập nhật thành viên',
-		saveArchive: 'Thêm lưu trữ',
 		importLedger: 'Import lịch sử',
 		syncDiscordMembers: 'Đồng bộ thành viên Discord',
 		undoBill: 'Hoàn tác hóa đơn',
@@ -98,16 +78,6 @@
 		} finally {
 			delete activationChanges[member.id];
 		}
-	}
-	async function saveArchive() {
-		try {
-			await run(
-				'saveArchive',
-				{ id: crypto.randomUUID(), name: archiveName, url: archiveUrl, date: localDate(new Date()) },
-				'Đã thêm liên kết lưu trữ.'
-			);
-			archiveOpen = false;
-		} catch {}
 	}
 	function downloadBackup() {
 		const url = URL.createObjectURL(
@@ -228,7 +198,7 @@
 	{:else if tab === 'data'}<div class="management-data">
 			<div class="two-panels">
 				<div class="data-action-card">
-					<FileJson size={25} />
+					<FileBraces size={25} />
 					<h2>Sao lưu dữ liệu</h2>
 					<p>Tải bản JSON gồm thành viên, hóa đơn, sổ giao dịch, thông báo và nhật ký.</p>
 					{#if isAdmin}<Button variant="outline" onclick={downloadBackup}
@@ -252,31 +222,6 @@
 						>{:else}<p class="fine-print">Chỉ quản trị viên được nhập lịch sử.</p>{/if}
 				</div>
 			</div>
-			<div class="panel-heading">
-				<div>
-					<h2>Liên kết lưu trữ</h2>
-					<p>Tham chiếu sổ cũ, không tự nhập dữ liệu từ liên kết.</p>
-				</div>
-				{#if isAdmin}<Button
-						variant="outline"
-						onclick={() => {
-							archiveName = '';
-							archiveUrl = '';
-							archiveOpen = true;
-						}}><Plus size={16} /> Thêm liên kết</Button
-					>{/if}
-			</div>
-			{#each appState.archives as archive}<a
-					href={archive.url}
-					target="_blank"
-					rel="noopener noreferrer"
-					class="archive-row"
-					><Archive size={20} />
-					<div><strong>{archive.name}</strong><small>{archive.url}</small></div>
-					<ExternalLink size={16} /></a
-				>{/each}{#if !appState.archives.length}<div class="inline-empty">
-					Chưa có liên kết lưu trữ. Bạn có thể thêm sổ lịch sử của nhóm.
-				</div>{/if}
 		</div>
 	{:else}<div class="table-scroll">
 			<table class="data-table audit-table">
@@ -301,17 +246,6 @@
 	{run}
 	{busy}
 />
-<Modal
-	bind:open={archiveOpen}
-	title="Thêm liên kết lưu trữ"
-	description="Giữ đường dẫn đến sổ lịch sử để cả nhóm tham khảo."
-	><label class="field"
-		>Tên lưu trữ<Input bind:value={archiveName} placeholder="Ví dụ: Sổ ăn trưa năm 2025" /></label
-	><label class="field">Đường dẫn<Input type="url" bind:value={archiveUrl} placeholder="https://…" /></label
-	><Button onclick={saveArchive} disabled={busy || !archiveName.trim() || !archiveUrl.trim()}
-		>Lưu liên kết</Button
-	></Modal
->
 <Modal
 	bind:open={importOpen}
 	title="Kiểm tra và nhập sổ cũ"

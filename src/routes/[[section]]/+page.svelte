@@ -18,7 +18,7 @@
 		Menu,
 		X,
 		Check,
-		AlertCircle,
+		CircleAlert,
 		Camera,
 		Crown,
 		Pencil,
@@ -454,7 +454,7 @@
 					</div>
 				{:else if error}
 					<div class="loading-panel">
-						<AlertCircle size={35} />
+						<CircleAlert size={35} />
 						<h1>Chưa kết nối được dữ liệu</h1>
 						<p>{error}</p>
 						<Button onclick={initialize}><RefreshCw size={16} /> Kết nối lại</Button>
@@ -506,13 +506,7 @@
 								{busy}
 								groupId={selectedGroupId}
 							/>
-						{:else if section === '/members'}<Management
-								{appState}
-								{actor}
-								{run}
-								{busy}
-								groupId={selectedGroupId}
-							/>
+						{:else if section === '/members'}<Management {appState} {actor} {run} {busy} />
 						{:else if section === '/matrix'}<DebtMatrix {appState} {actor} {run} {busy} />
 						{:else if section === '/leaderboard'}<Leaderboard
 								{appState}
@@ -578,7 +572,7 @@
 			class="toast"
 			role="status"
 		>
-			{#if toastIsError}<AlertCircle size={19} />{:else}<Check size={19} />{/if}<span>{toast}</span><button
+			{#if toastIsError}<CircleAlert size={19} />{:else}<Check size={19} />{/if}<span>{toast}</span><button
 				aria-label="Đóng thông báo"
 				onclick={() => (toast = '')}><X size={15} /></button
 			>

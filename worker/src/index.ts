@@ -48,7 +48,7 @@ async function route(request: Request, env: Env, store: DataStore): Promise<Resp
 	if (url.pathname === '/api/admin/database-reset' && request.method === 'POST') {
 		const input = z
 			.object({
-				id: z.string().uuid(),
+				id: z.uuid(),
 				action: z.enum(['start', 'continue']),
 				confirmation: z.string().optional()
 			})

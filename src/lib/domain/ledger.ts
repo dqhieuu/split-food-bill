@@ -495,18 +495,6 @@ export function applyCommand(
 		else
 			state.members[index] = { ...data, ...(existing?.avatarUrl ? { avatarUrl: existing.avatarUrl } : {}) };
 		reference = data.id;
-	} else if (command === 'saveArchive') {
-		requireAdmin(state, actor);
-		const data = z
-			.object({
-				id: identifier,
-				name: text,
-				url: z.url().refine((v) => ['https:', 'http:'].includes(new URL(v).protocol)),
-				date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-			})
-			.parse(input);
-		state.archives.push(data);
-		reference = data.id;
 	} else if (command === 'importLedger') {
 		requireAdmin(state, actor);
 		const data = z.object({ entries: z.array(importEntrySchema).min(1).max(150) }).parse(input);

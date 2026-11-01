@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Plus, Users, Trash2 } from '@lucide/svelte';
+	import { Plus, Users, Trash } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import type { Group, GroupSummary, Session } from '$lib/domain/types';
@@ -112,7 +112,7 @@
 		</section>{/if}
 </div>
 {#if session.user.role === 'admin'}<div class="system-reset-action">
-		<Button variant="destructive" onclick={onReset}><Trash2 size={16} />Xóa toàn bộ cơ sở dữ liệu</Button>
+		<Button variant="destructive" onclick={onReset}><Trash size={16} />Xóa toàn bộ cơ sở dữ liệu</Button>
 	</div>{/if}
 {#if error}<p class="validation-error" role="alert">{error}</p>{/if}
 {#if configOpen && configGroup?.role === 'admin'}<GroupConfig

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { LoaderCircle, Trash2 } from '@lucide/svelte';
+	import { LoaderCircle, Trash } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { ApiError, requestJson } from '$lib/client/api';
@@ -96,7 +96,7 @@
 				variant="destructive"
 				disabled={!pendingId && confirmation !== 'XÓA TOÀN BỘ'}
 				onclick={() => execute(!pendingId)}
-				><Trash2 size={16} />{pendingId ? 'Tiếp tục xóa' : 'Xóa toàn bộ dữ liệu'}</Button
+				><Trash size={16} />{pendingId ? 'Tiếp tục xóa' : 'Xóa toàn bộ dữ liệu'}</Button
 			>
 		</div>
 	{/if}

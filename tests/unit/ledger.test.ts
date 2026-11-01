@@ -284,7 +284,7 @@ describe('member profile permissions', () => {
 	});
 });
 describe('payments', () => {
-	it.each(['recordPayment', 'recordPayments', 'renameGroup', 'retryBillNotification'])(
+	it.each(['recordPayment', 'recordPayments', 'renameGroup', 'retryBillNotification', 'saveArchive'])(
 		'rejects the removed %s command without changing state',
 		(command) => {
 			const state = fresh();
