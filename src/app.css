@@ -4126,6 +4126,33 @@ select[aria-invalid='true'] {
 	max-width: 96px;
 	font-size: 10.5px;
 }
+.cal-inspector {
+	scroll-margin-top: 80px;
+	margin-top: 16px;
+	padding-top: 14px;
+	border-top: 1px solid var(--cal-line);
+}
+.cal-inspector-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 12px;
+}
+.cal-inspector-head h3 {
+	font-size: 14px;
+}
+.cal-inspector-head p,
+.cal-inspector-empty {
+	margin-top: 4px;
+	font-size: 12px;
+	color: var(--cal-muted);
+}
+.cal-inspector-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
 /* ---- Bill composer ---- */
 .money-input {
 	position: relative;
@@ -4399,17 +4426,16 @@ select[aria-invalid='true'] {
 		gap: 3px;
 	}
 	.cal-day {
-		height: 96px;
+		height: 72px;
 		padding: 5px;
 	}
 	.cal-date {
-		height: 26px;
+		height: 20px;
 		flex-direction: column;
 		gap: 2px;
 	}
 	.cal-pay {
-		height: 6px;
-		margin-top: 2px;
+		display: none;
 	}
 	.cal-pay-meta,
 	.cal-more-label,
@@ -4417,15 +4443,18 @@ select[aria-invalid='true'] {
 		display: none;
 	}
 	.cal-events {
-		height: 48px;
-		margin-top: 5px;
-		gap: 3px;
+		height: auto;
+		min-height: 0;
+		flex: 1 1 0%;
+		margin-top: 3px;
+		gap: 2px;
 	}
 	.cal-bill {
-		height: 6px;
+		height: 5px;
 		padding: 0;
 		border: 0;
 		background: var(--spend-color);
+		pointer-events: none;
 	}
 	.cal-bill > * {
 		display: none;
@@ -4435,6 +4464,13 @@ select[aria-invalid='true'] {
 		padding: 0;
 		justify-content: center;
 		font-size: 9px;
+	}
+	.cal-mobile-count {
+		flex-shrink: 0;
+		font-size: 9px;
+		line-height: 12px;
+		text-align: center;
+		color: var(--cal-muted);
 	}
 	.amount-input .money-input {
 		width: 150px;
@@ -4581,8 +4617,11 @@ select[aria-invalid='true'] {
 		font-size: 12px;
 	}
 	.cal-add-inline {
-		width: 20px;
-		height: 20px;
+		display: none;
+	}
+	.cal-day:hover .cal-lunar small,
+	.cal-day:focus-within .cal-lunar small {
+		opacity: 1;
 	}
 	.cal-date {
 		flex-direction: row;

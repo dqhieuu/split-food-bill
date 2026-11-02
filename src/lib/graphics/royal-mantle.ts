@@ -44,13 +44,17 @@ export function createRoyalMantle(chest: THREE.Bone) {
 		return part;
 	}
 	function point(u: number, t: number, offset = 0) {
-		const angle = 0.57 + u * (Math.PI * 2 - 1.14);
+		// Keep the collar and upper drape behind the sleeves, then let the
+		// mantle wrap forward below the elbows into its full, open-front hem.
+		const drape = THREE.MathUtils.smoothstep(t, 0.16, 0.55);
+		const opening = THREE.MathUtils.lerp(1.95, 0.57, drape);
+		const angle = opening + u * (Math.PI * 2 - opening * 2);
 		const fold = Math.sin(u * Math.PI * 24) * (0.006 + t * 0.022);
 		const radius = 0.31 + Math.sin((t * Math.PI) / 2) * 0.13 + fold + offset;
 		return new THREE.Vector3(
 			Math.sin(angle) * radius,
 			0.145 - t * 0.87 - Math.cos(angle) * 0.025 + Math.sin(u * Math.PI * 12) * t * 0.012,
-			Math.cos(angle) * (0.19 + t * 0.09 + fold + offset) - 0.055
+			Math.cos(angle) * (0.19 + t * 0.09 + fold + offset) - 0.055 - (1 - drape) * 0.035
 		);
 	}
 	function surface(start: number, end: number, offset = 0) {

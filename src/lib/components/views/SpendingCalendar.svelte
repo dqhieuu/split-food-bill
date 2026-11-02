@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { ChevronLeft, ChevronRight, ChevronDown, Plus, X } from '@lucide/svelte';
 	import { Popover } from 'bits-ui';
+	import { MediaQuery } from 'svelte/reactivity';
+	import { tick } from 'svelte';
 	import type { Bill, Member } from '$lib/domain/types';
 	import { currency, localDate, billDateLabel, dateTimeLabel } from '$lib/domain/ledger';
 	import { toLunar } from '$lib/domain/lunar';
@@ -27,11 +29,13 @@
 		onBillClick: (id: string) => void;
 	} = $props();
 	const today = localDate(new Date());
+	const mobile = new MediaQuery('(max-width: 760px)');
 	const cursor = $derived({ year: Number(monthKey.slice(0, 4)), month: Number(monthKey.slice(5, 7)) });
 	let selectedKey = $state(today);
 	let payerFilter = $state('all');
 	let overflowMode = $state<'compact' | 'scroll'>('compact');
 	let openPopover = $state<string | null>(null);
+	let inspector: HTMLElement | undefined = $state();
 	$effect(() => {
 		selectedKey = monthKey === today.slice(0, 7) ? today : `${monthKey}-01`;
 		openPopover = null;
@@ -75,6 +79,7 @@
 		];
 	});
 	const dateLabel = billDateLabel;
+	const selectedDay = $derived(cells.find((cell) => cell?.key === selectedKey));
 	function shift(step: number) {
 		const index = cursor.year * 12 + cursor.month - 1 + step;
 		monthKey = `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
@@ -82,7 +87,14 @@
 	function onCellKey(event: KeyboardEvent, key: string) {
 		if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
 		event.preventDefault();
+		selectDay(key);
+	}
+	async function selectDay(key: string) {
 		selectedKey = key;
+		if (mobile.current) {
+			await tick();
+			inspector?.scrollIntoView({ block: 'start' });
+		}
 	}
 	function openBill(id: string) {
 		openPopover = null;
@@ -99,7 +111,11 @@
 {#snippet billBar(bill: CalendarBill)}
 	<button
 		class="cal-bill"
-		onclick={() => openBill(bill.id)}
+		onclick={() => {
+			if (!mobile.current) openBill(bill.id);
+		}}
+		tabindex={mobile.current ? -1 : 0}
+		aria-hidden={mobile.current}
 		style:--spend-color={bill.color}
 		title={`${bill.description} · Người trả: ${bill.payer} · ${currency(bill.amount)} · Tạo: ${dateTimeLabel(bill.createdAt)}`}
 	>
@@ -180,7 +196,7 @@
 					tabindex="0"
 					aria-selected={cell.key === selectedKey}
 					aria-label={`${cell.day}/${cursor.month}: ${currency(cell.total)}, ${cell.bills.length} hóa đơn`}
-					onclick={() => (selectedKey = cell.key)}
+					onclick={() => selectDay(cell.key)}
 					onkeydown={(event) => onCellKey(event, cell.key)}
 				>
 					<div class="cal-date">
@@ -208,8 +224,13 @@
 							>{#if cell.bills.length}<small>{cell.bills.length} khoản</small>{/if}
 						</div>
 					</div>
-					<div class="cal-events" class:scrollable={overflowMode === 'scroll'}>
-						{#if overflowMode === 'scroll' || cell.bills.length <= MAX_BARS}{#each cell.bills as bill (bill.id)}{@render billBar(
+					<div class="cal-events" class:scrollable={!mobile.current && overflowMode === 'scroll'}>
+						{#if mobile.current}
+							{#each cell.bills.slice(0, MAX_BARS) as bill (bill.id)}{@render billBar(bill)}{/each}
+							{#if cell.bills.length > MAX_BARS}<span class="cal-mobile-count" aria-hidden="true"
+									>+{cell.bills.length - MAX_BARS}</span
+								>{/if}
+						{:else if overflowMode === 'scroll' || cell.bills.length <= MAX_BARS}{#each cell.bills as bill (bill.id)}{@render billBar(
 									bill
 								)}{/each}{:else}{#each cell.bills.slice(0, COMPACT_BARS) as bill (bill.id)}{@render billBar(
 									bill
@@ -240,4 +261,30 @@
 					</div>
 				</div>{:else}<div class="cal-day empty" aria-hidden="true"></div>{/if}{/each}
 	</div>
+	{#if mobile.current && selectedDay}
+		<section
+			bind:this={inspector}
+			class="cal-inspector"
+			aria-label={`Hóa đơn ngày ${dateLabel(selectedKey)}`}
+		>
+			<div class="cal-inspector-head">
+				<div>
+					<h3>Ngày {dateLabel(selectedKey)}</h3>
+					<p>{currency(selectedDay.total)} · {selectedDay.bills.length} hóa đơn</p>
+				</div>
+				<a
+					class="icon-button"
+					href={`/new-bill?date=${selectedKey}`}
+					aria-label={`Thêm hoá đơn ngày ${dateLabel(selectedKey)}`}><Plus size={18} /></a
+				>
+			</div>
+			<div class="cal-inspector-list">
+				{#each selectedDay.bills as bill, index (bill.id)}
+					{@render billRow(bill, index)}
+				{:else}
+					<p class="cal-inspector-empty">Chưa có hóa đơn trong ngày này.</p>
+				{/each}
+			</div>
+		</section>
+	{/if}
 </section>

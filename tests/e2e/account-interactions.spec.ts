@@ -2183,6 +2183,100 @@ for (const width of [1280, 390]) {
 			await expect(dialog.getByRole('button', { name: 'Hoàn tác hóa đơn', exact: true })).toBeInViewport();
 		});
 
+		test('calendar keeps crowded dates compact and shows every bill for the selected mobile date', async ({
+			page
+		}) => {
+			const month = localDate(new Date()).slice(0, 7);
+			await openFixture(page, '/overview', (state) => {
+				const { undoneAt, undoneBy, ...bill } = state.bills[0];
+				state.bills = [5, 5, 5, 5, 5, 5, 6, 7, 7, 7].map((day, index) => ({
+					...bill,
+					id: `calendar-${index}`,
+					description: `Bữa trưa văn phòng có tên dài ${index + 1}`,
+					organizer: index === 5 ? 'linh' : ACTOR,
+					date: `${month}-${String(day).padStart(2, '0')}T12:00:00Z`,
+					createdAt: `${month}-01T${String(index).padStart(2, '0')}:00:00Z`
+				}));
+			});
+			const day = (date: number) => page.getByRole('gridcell', { name: new RegExp(`^${date}/`) });
+			const crowded = day(5);
+			if (width <= 760) {
+				await expect(crowded.locator('.cal-bill')).toHaveCount(3);
+				await expect(crowded.locator('.cal-mobile-count')).toHaveText('+3');
+				await expect(page.locator('.cal-more')).toHaveCount(0);
+				await crowded.scrollIntoViewIfNeeded();
+				const chip = (await crowded.locator('.cal-bill').first().boundingBox())!;
+				await page.mouse.click(chip.x + chip.width / 2, chip.y + chip.height / 2);
+				const inspector = page.locator('.cal-inspector');
+				await expect(crowded).toHaveAttribute('aria-selected', 'true');
+				await expect(inspector.locator('.cal-row')).toHaveCount(6);
+				await expect(inspector.locator('h3')).toBeInViewport();
+				await expect(inspector.locator('.cal-row').first()).toBeInViewport();
+				await expect(inspector).toContainText('180.000 ₫ · 6 hóa đơn');
+				await expect(inspector.locator('.cal-row').last()).toContainText('Bữa trưa văn phòng có tên dài 1');
+				await expect(page.getByRole('dialog')).toHaveCount(0);
+				const bounds = await crowded.evaluate((element) => {
+					const box = element.getBoundingClientRect();
+					return [...element.querySelectorAll('.cal-bill, .cal-mobile-count')].every((child) => {
+						const rect = child.getBoundingClientRect();
+						return rect.bottom <= box.bottom && rect.left >= box.left && rect.right <= box.right;
+					});
+				});
+				expect(bounds).toBe(true);
+				await inspector.locator('.cal-row').last().click();
+				await expect(
+					page.getByRole('dialog', { name: 'Bữa trưa văn phòng có tên dài 1', exact: true })
+				).toBeVisible();
+				await page.keyboard.press('Escape');
+				await day(6).click();
+				await expect(inspector.locator('.cal-row')).toHaveCount(1);
+				await day(7).focus();
+				await page.keyboard.press('Space');
+				await expect(inspector.locator('.cal-row')).toHaveCount(3);
+				await day(8).focus();
+				await page.keyboard.press('Enter');
+				await expect(inspector.locator('.cal-row')).toHaveCount(0);
+				await expect(inspector).toContainText('Chưa có hóa đơn trong ngày này.');
+				await expect(inspector.getByRole('link')).toHaveAttribute('href', `/new-bill?date=${month}-08`);
+				await crowded.click();
+				await page.locator('.cal-filter').getByRole('button', { name: 'Minh An', exact: true }).click();
+				await expect(inspector.locator('.cal-row')).toHaveCount(5);
+				await page.locator('.cal-filter').getByRole('button', { name: 'Tất cả', exact: true }).click();
+				await expect(inspector.locator('.cal-row')).toHaveCount(6);
+				await page
+					.locator('.calendar-panel')
+					.screenshot({ path: `artifacts/mobile-calendar-multiple-bills-${width}.png` });
+				// A desktop scroll preference must not make mobile dates overflow after resizing.
+				await page.setViewportSize({ width: 1280, height: 844 });
+				await page.getByRole('button', { name: 'Cuộn trong ô', exact: true }).click();
+				await expect(crowded.locator('.cal-bill')).toHaveCount(6);
+				for (const mobileWidth of [300, 320, 390, 760]) {
+					await page.setViewportSize({ width: mobileWidth, height: 844 });
+					await expect(crowded.locator('.cal-bill')).toHaveCount(3);
+					await expect(crowded.locator('.cal-events')).not.toHaveClass(/scrollable/);
+					await expect(inspector.locator('.cal-row')).toHaveCount(6);
+					await expect(day(6).locator('.cal-track')).toBeHidden();
+					await expect(day(6).locator('.cal-bill:visible')).toHaveCount(1);
+					await expect(day(6).locator('.cal-bill')).toHaveCSS('background-color', 'rgb(239, 68, 68)');
+					expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+					if (mobileWidth === 300)
+						await page.locator('.cal-grid').screenshot({ path: 'artifacts/mobile-calendar-grid-300.png' });
+				}
+				await page.getByRole('button', { name: 'Tháng sau', exact: true }).click();
+				await expect(inspector.locator('.cal-row')).toHaveCount(0);
+				await expect(inspector).toContainText('Chưa có hóa đơn trong ngày này.');
+			} else {
+				await expect(day(6).locator('.cal-track')).toBeVisible();
+				await expect(crowded.locator('.cal-bill')).toHaveCount(2);
+				await crowded.locator('.cal-more').click();
+				await expect(page.locator('.cal-popover .cal-row')).toHaveCount(6);
+				await page.locator('.cal-popover .cal-row').last().click();
+				await expect(
+					page.getByRole('dialog', { name: 'Bữa trưa văn phòng có tên dài 1', exact: true })
+				).toBeVisible();
+			}
+		});
+
 		test('monthly spending bars select the calendar month across windows, including empty months', async ({
 			page
 		}) => {

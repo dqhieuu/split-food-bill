@@ -294,7 +294,7 @@ export async function createCourtModel(
 							height + breath * 0.05 + (seated ? pull * 0.12 : 0),
 							0.24 - (seated ? pull * 0.22 : 0)
 						],
-			[0.65, height, -0.15]
+			[0.65, height, seated ? 0.22 : -0.15]
 		);
 		solveLimb(
 			'upperarm_r',
@@ -309,7 +309,7 @@ export async function createCourtModel(
 							seated ? 0.76 + reach * 0.025 : kneeling ? 0.68 + reach * 0.025 : 0.96 + reach * 0.05,
 							0.18
 						],
-			[-0.65, height, -0.15]
+			[-0.65, height, seated ? 0.22 : -0.15]
 		);
 		if (seated) orientHand('l', true);
 		if (courtier) {
