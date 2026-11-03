@@ -383,15 +383,24 @@ describe('migration and receipts', () => {
 			['Thảo Linh', 'Thao Linh'],
 			['Đăng Khoa', 'Dang Khoa'],
 			['Alexandra', 'Alexandra'],
-			['Nguyễn Hoàng Minh An', 'An']
+			['Nguyễn Hoàng Minh An', 'Nguyen Hoang Minh An'],
+			['A'.repeat(35), 'A'.repeat(35)],
+			[`${'Nguyễn '.repeat(6)}An`, 'An']
 		]) {
 			const message = qrPaymentMessage(name);
 			expect(message).toBe(`${expected} tra tien an QR`);
-			expect(message.length).toBeLessThanOrEqual(25);
+			expect(message.length).toBeLessThanOrEqual(50);
 			const payload = vietQrPayload('970436', '00000123', 55000, message);
 			expect(payload).toContain(message);
 			expect(payload.slice(-4)).toBe(crc16(payload.slice(0, -4)));
 		}
+	});
+	it('limits the QR payload description to 50 characters', () => {
+		const description = `${'A'.repeat(50)}B`;
+		const payload = vietQrPayload('970436', '00000123', 55000, description);
+		expect(payload).toContain(`62540850${'A'.repeat(50)}6304`);
+		expect(payload).not.toContain(description);
+		expect(payload.slice(-4)).toBe(crc16(payload.slice(0, -4)));
 	});
 	it('resolves suggested banks to QR codes and preserves arbitrary bank text without a fabricated code', () => {
 		expect(resolveBank('  vIet com bank ')).toEqual({ code: '970436', label: 'Vietcombank' });
