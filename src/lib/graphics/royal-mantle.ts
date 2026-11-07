@@ -7,6 +7,7 @@ export function createRoyalMantle(chest: THREE.Bone) {
 	group.quaternion.copy(chest.getWorldQuaternion(new THREE.Quaternion()).invert());
 	chest.add(group);
 	const geometries = new Set<THREE.BufferGeometry>();
+	const batches: THREE.InstancedMesh[] = [];
 	const velvet = new THREE.MeshPhysicalMaterial({
 		color: '#740e2a',
 		roughness: 0.93,
@@ -40,6 +41,13 @@ export function createRoyalMantle(chest: THREE.Bone) {
 	function add(geometry: THREE.BufferGeometry, material: THREE.Material) {
 		geometries.add(geometry);
 		const part = new THREE.Mesh(geometry, material);
+		group.add(part);
+		return part;
+	}
+	function instanced(geometry: THREE.BufferGeometry, material: THREE.Material, count: number) {
+		geometries.add(geometry);
+		const part = new THREE.InstancedMesh(geometry, material, count);
+		batches.push(part);
 		group.add(part);
 		return part;
 	}
@@ -105,21 +113,31 @@ export function createRoyalMantle(chest: THREE.Bone) {
 		);
 	}
 	// Dark ermine tails and fine gold embroidery make the trim readable at small sizes.
+	const tails = instanced(
+		new THREE.TubeGeometry(
+			new THREE.CatmullRomCurve3([
+				new THREE.Vector3(-0.003, 0.008, 0),
+				new THREE.Vector3(),
+				new THREE.Vector3(0.002, -0.01, 0)
+			]),
+			16,
+			0.0028,
+			6,
+			false
+		),
+		ermine,
+		46
+	);
+	const transform = new THREE.Matrix4();
+	let tailIndex = 0;
 	for (let i = 0; i < 23; i++) {
 		const u = (i + 0.5) / 23;
 		for (const t of [0.04, 0.975]) {
 			const p = point(u, t, 0.023);
-			stitch(
-				[
-					p.clone().add(new THREE.Vector3(-0.003, 0.008, 0)),
-					p,
-					p.clone().add(new THREE.Vector3(0.002, -0.01, 0))
-				],
-				0.0028,
-				ermine
-			);
+			tails.setMatrixAt(tailIndex++, transform.makeTranslation(p.x, p.y, p.z));
 		}
 	}
+	tails.instanceMatrix.needsUpdate = true;
 	for (const edge of [0.05, 0.95])
 		for (let i = 0; i < 6; i++) {
 			const t = 0.23 + i * 0.11;
@@ -135,12 +153,14 @@ export function createRoyalMantle(chest: THREE.Bone) {
 			);
 		}
 	// A draped chain closes the mantle across the chest; each link is articulated geometry.
+	const chain = instanced(new THREE.TorusGeometry(0.009, 0.0028, 6, 16), gold, 29);
 	for (let i = 0; i <= 28; i++) {
 		const x = -0.18 + (i / 28) * 0.36;
-		const link = add(new THREE.TorusGeometry(0.009, 0.0028, 6, 16), gold);
-		link.position.set(x, 0.065 - Math.cos(((x / 0.18) * Math.PI) / 2) * 0.09, 0.167);
-		link.rotation.y = i % 2 ? Math.PI / 3 : 0;
+		transform.makeRotationY(i % 2 ? Math.PI / 3 : 0);
+		transform.setPosition(x, 0.065 - Math.cos(((x / 0.18) * Math.PI) / 2) * 0.09, 0.167);
+		chain.setMatrixAt(i, transform);
 	}
+	chain.instanceMatrix.needsUpdate = true;
 	const setting = add(new THREE.IcosahedronGeometry(0.033, 2), gold);
 	setting.position.set(0, -0.026, 0.175);
 	setting.scale.set(0.82, 1.1, 0.3);
@@ -150,6 +170,7 @@ export function createRoyalMantle(chest: THREE.Bone) {
 	return {
 		dispose() {
 			group.removeFromParent();
+			batches.forEach((batch) => batch.dispose());
 			geometries.forEach((geometry) => geometry.dispose());
 			materials.forEach((material) => material.dispose());
 		}

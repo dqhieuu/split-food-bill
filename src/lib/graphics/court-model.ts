@@ -43,13 +43,22 @@ function setAnimation(key: symbol, animate?: (time: number) => void) {
 }
 
 const templates = new Map<string, Promise<THREE.Group>>();
+let courtCacheRequested = false;
 async function loadOutfit(royal: boolean) {
 	const url = `/models/court/Male_${royal ? 'Ranger' : 'Peasant'}.gltf`;
 	let pending = templates.get(url);
 	if (!pending) {
 		pending = new GLTFLoader()
 			.loadAsync(url)
-			.then((gltf) => gltf.scene)
+			.then((gltf) => {
+				if (!courtCacheRequested && 'serviceWorker' in navigator) {
+					courtCacheRequested = true;
+					void navigator.serviceWorker.ready
+						.then((registration) => registration.active?.postMessage({ type: 'cache-court' }))
+						.catch(() => {});
+				}
+				return gltf.scene;
+			})
 			.catch((error) => {
 				templates.delete(url);
 				throw error;
@@ -192,7 +201,8 @@ export async function createCourtModel(
 		return model.localToWorld(new THREE.Vector3(...p));
 	}
 	function aim(joint: THREE.Bone, child: THREE.Bone, target: THREE.Vector3) {
-		outfit.updateMatrixWorld(true);
+		// World-space getters update the joint's ancestors on demand. Updating the
+		// entire outfit before and after each IK joint repeats the full rig traversal.
 		const position = joint.getWorldPosition(new THREE.Vector3());
 		const current = child.getWorldPosition(new THREE.Vector3()).sub(position).normalize();
 		const desired = target.clone().sub(position).normalize();
@@ -201,7 +211,6 @@ export async function createCourtModel(
 			.multiply(joint.getWorldQuaternion(new THREE.Quaternion()));
 		const parent = joint.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
 		joint.quaternion.copy(parent.multiply(rotation));
-		outfit.updateMatrixWorld(true);
 	}
 	function solveLimb(upper: string, lower: string, tip: string, target: Point, pole: Point) {
 		const a = bone(upper),
@@ -259,7 +268,6 @@ export async function createCourtModel(
 		);
 		bone('spine_02').rotateZ(sway * (debtor ? 0.045 : 0.025) + (debtor ? reaction * 0.1 : 0));
 		bone('spine_03').rotateY(Math.sin(seconds * 0.7) * 0.05);
-		outfit.updateMatrixWorld(true);
 		for (const side of ['l', 'r']) {
 			const sign = side === 'l' ? 1 : -1;
 			// Courtiers take a formal one-knee stance; debtors remain on both knees.
@@ -274,7 +282,6 @@ export async function createCourtModel(
 				joint.parent!.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(baseFoot.get(side)!)
 			);
 		}
-		outfit.updateMatrixWorld(true);
 		// Follow the actual knee joint so breathing cannot lift the hands off its surface.
 		const knee = courtier
 			? model.worldToLocal(bone('calf_l').getWorldPosition(new THREE.Vector3()))
@@ -344,7 +351,6 @@ export async function createCourtModel(
 				bone(`thumb_03_${side}`).rotateX(0.5);
 			}
 		}
-		outfit.updateMatrixWorld(true);
 		if (debtor) updateBindings();
 		const gesture =
 			seated && pull > 0.15 ? 'pulling' : debtor && Math.abs(reaction) > 0.12 ? 'jerked' : 'idle';
@@ -588,8 +594,11 @@ export async function createCourtModel(
 	canvas.dataset.modelId = model.uuid;
 	let triangles = 0;
 	model.traverse((object) => {
-		if (object instanceof THREE.Mesh && object.visible)
-			triangles += (object.geometry.index?.count ?? object.geometry.getAttribute('position').count) / 3;
+		if (object instanceof THREE.Mesh && object.visible) {
+			const instances = object instanceof THREE.InstancedMesh ? object.count : 1;
+			triangles +=
+				(instances * (object.geometry.index?.count ?? object.geometry.getAttribute('position').count)) / 3;
+		}
 	});
 	canvas.dataset.triangles = String(triangles);
 	canvas.dataset.rig = 'skinned';

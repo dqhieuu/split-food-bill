@@ -19,6 +19,11 @@ export function createCourtRopes(canvas: HTMLCanvasElement, onfailure: () => voi
 	const meshes: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>[] = [];
 	const segments = 96,
 		sides = 6;
+	const point = new THREE.Vector3();
+	const tangent = new THREE.Vector3();
+	const side = new THREE.Vector3();
+	const depth = new THREE.Vector3();
+	const center = new THREE.Vector3();
 	let lastWidth = 0,
 		lastHeight = 0;
 	function makeStrand() {
@@ -75,35 +80,37 @@ export function createCourtRopes(canvas: HTMLCanvasElement, onfailure: () => voi
 				end
 			);
 			const turns = curve.getLength() / 15;
-			for (let strand = 0; strand < 3; strand++) {
-				const geometry = meshes[index * 3 + strand].geometry;
-				const position = geometry.getAttribute('position') as THREE.BufferAttribute;
-				const normal = geometry.getAttribute('normal') as THREE.BufferAttribute;
-				for (let i = 0; i <= segments; i++) {
-					const t = i / segments,
-						point = curve.getPoint(t),
-						tangent = curve.getTangent(t);
-					const side = new THREE.Vector3(-tangent.y, tangent.x, 0).normalize();
-					const depth = new THREE.Vector3().crossVectors(tangent, side).normalize();
+			const strands = meshes.slice(index * 3, index * 3 + 3).map(({ geometry }) => ({
+				position: geometry.getAttribute('position') as THREE.BufferAttribute,
+				normal: geometry.getAttribute('normal') as THREE.BufferAttribute
+			}));
+			for (let i = 0; i <= segments; i++) {
+				const t = i / segments;
+				curve.getPoint(t, point);
+				curve.getTangent(t, tangent);
+				side.set(-tangent.y, tangent.x, 0).normalize();
+				depth.crossVectors(tangent, side).normalize();
+				for (let strand = 0; strand < 3; strand++) {
+					const { position, normal } = strands[strand];
 					const twist = t * turns * Math.PI * 2 + (strand * Math.PI * 2) / 3;
-					const center = point
-						.clone()
+					center
+						.copy(point)
 						.addScaledVector(side, Math.cos(twist) * 1.05)
 						.addScaledVector(depth, Math.sin(twist) * 1.05);
 					for (let j = 0; j <= sides; j++) {
 						const angle = (j / sides) * Math.PI * 2;
-						const outward = side
-							.clone()
-							.multiplyScalar(Math.cos(angle))
-							.addScaledVector(depth, Math.sin(angle));
-						const p = center.clone().addScaledVector(outward, 0.85),
-							vertex = i * (sides + 1) + j;
-						position.setXYZ(vertex, p.x, p.y, p.z);
-						normal.setXYZ(vertex, outward.x, outward.y, outward.z);
+						const cosine = Math.cos(angle),
+							sine = Math.sin(angle);
+						const nx = side.x * cosine + depth.x * sine;
+						const ny = side.y * cosine + depth.y * sine;
+						const nz = side.z * cosine + depth.z * sine;
+						const vertex = i * (sides + 1) + j;
+						position.setXYZ(vertex, center.x + nx * 0.85, center.y + ny * 0.85, center.z + nz * 0.85);
+						normal.setXYZ(vertex, nx, ny, nz);
 					}
 				}
-				position.needsUpdate = normal.needsUpdate = true;
 			}
+			for (const { position, normal } of strands) position.needsUpdate = normal.needsUpdate = true;
 		});
 		renderer.render(scene, camera);
 		if (canvas.dataset.renderer !== '3d') canvas.dataset.renderer = '3d';

@@ -1422,59 +1422,83 @@
 	"textures":[
 		{
 			"sampler":0,
-			"source":0
+			"extensions":{
+				"EXT_texture_webp":{
+					"source":0
+				}
+			}
 		},
 		{
 			"sampler":0,
-			"source":1
+			"extensions":{
+				"EXT_texture_webp":{
+					"source":1
+				}
+			}
 		},
 		{
 			"sampler":0,
-			"source":2
+			"extensions":{
+				"EXT_texture_webp":{
+					"source":2
+				}
+			}
 		},
 		{
 			"sampler":0,
-			"source":3
+			"extensions":{
+				"EXT_texture_webp":{
+					"source":3
+				}
+			}
 		},
 		{
 			"sampler":0,
-			"source":4
+			"extensions":{
+				"EXT_texture_webp":{
+					"source":4
+				}
+			}
 		},
 		{
 			"sampler":0,
-			"source":5
+			"extensions":{
+				"EXT_texture_webp":{
+					"source":5
+				}
+			}
 		}
 	],
 	"images":[
 		{
-			"mimeType":"image/png",
+			"mimeType":"image/webp",
 			"name":"T_Peasant_Normal",
-			"uri":"T_Peasant_Normal.png"
+			"uri":"T_Peasant_Normal.webp"
 		},
 		{
-			"mimeType":"image/png",
+			"mimeType":"image/webp",
 			"name":"T_Peasant_BaseColor",
-			"uri":"T_Peasant_BaseColor.png"
+			"uri":"T_Peasant_BaseColor.webp"
 		},
 		{
-			"mimeType":"image/png",
+			"mimeType":"image/webp",
 			"name":"T_Peasant_ORM",
-			"uri":"T_Peasant_ORM.png"
+			"uri":"T_Peasant_ORM.webp"
 		},
 		{
-			"mimeType":"image/png",
+			"mimeType":"image/webp",
 			"name":"T_Regular_Male_Normal",
-			"uri":"T_Regular_Male_Normal.png"
+			"uri":"T_Regular_Male_Normal.webp"
 		},
 		{
-			"mimeType":"image/png",
+			"mimeType":"image/webp",
 			"name":"T_Regular_Male_Dark_BaseColor",
-			"uri":"T_Regular_Male_Dark_BaseColor.png"
+			"uri":"T_Regular_Male_Dark_BaseColor.webp"
 		},
 		{
-			"mimeType":"image/png",
+			"mimeType":"image/webp",
 			"name":"T_Regular_Male_Roughness",
-			"uri":"T_Regular_Male_Roughness.png"
+			"uri":"T_Regular_Male_Roughness.webp"
 		}
 	],
 	"skins":[
@@ -2140,5 +2164,11 @@
 			"byteLength":674764,
 			"uri":"Male_Peasant.bin"
 		}
+	],
+	"extensionsUsed":[
+		"EXT_texture_webp"
+	],
+	"extensionsRequired":[
+		"EXT_texture_webp"
 	]
 }

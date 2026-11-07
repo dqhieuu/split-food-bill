@@ -52,7 +52,7 @@
 					current,
 					(state) => {
 						if (cancelled) return;
-						grip = state;
+						if (current.tier === 'sovereign' || current.tier === 'servant') grip = state;
 						modelReady = true;
 						avatarReady = state.avatar;
 					},

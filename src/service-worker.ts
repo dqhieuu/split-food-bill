@@ -12,10 +12,29 @@ const scoped = (path: string) => new URL(path, sw.registration.scope).pathname;
 /** The app is client-rendered, so one cached shell can open any route offline. */
 const SHELL = scoped('');
 const IMMUTABLE = new Set([...immutable, ...assets].map(({ path }) => scoped(path)));
+const COURT_ASSETS = [...IMMUTABLE].filter((path) => path.startsWith(scoped('models/court/')));
+const PRECACHE = [...IMMUTABLE].filter((path) => !path.startsWith(scoped('models/court/')));
 
 sw.addEventListener('install', (event) => {
-	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([...IMMUTABLE, SHELL])));
+	event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll([...PRECACHE, SHELL])));
 });
+
+// Warm the optional court only after a model has loaded. This also covers the
+// first visit, before the new service worker controls the page's model requests.
+sw.addEventListener('message', (event) => {
+	if (event.data?.type === 'cache-court') {
+		event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(COURT_ASSETS)));
+	}
+});
+
+async function cacheFirst(request: Request) {
+	const cache = await caches.open(CACHE);
+	const cached = await cache.match(request);
+	if (cached) return cached;
+	const response = await fetch(request);
+	if (response.ok && response.type === 'basic') await cache.put(request, response.clone());
+	return response;
+}
 
 sw.addEventListener('activate', (event) => {
 	event.waitUntil(
@@ -46,7 +65,7 @@ sw.addEventListener('fetch', (event) => {
 	// API calls go cross-origin with a bearer token and must always reach the network.
 	if (request.method !== 'GET' || url.origin !== sw.location.origin) return;
 	if (IMMUTABLE.has(url.pathname)) {
-		event.respondWith(caches.match(url.pathname).then((cached) => cached ?? fetch(request)));
+		event.respondWith(cacheFirst(request));
 		return;
 	}
 	event.respondWith(networkFirst(request));
