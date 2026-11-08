@@ -117,6 +117,7 @@
 		tabindex={mobile.current ? -1 : 0}
 		aria-hidden={mobile.current}
 		style:--spend-color={bill.color}
+		style:--bill-width={`${bill.ratio * 100}%`}
 		title={`${bill.description} · Người trả: ${bill.payer} · ${currency(bill.amount)} · Tạo: ${dateTimeLabel(bill.createdAt)}`}
 	>
 		<span class="cal-bill-left"

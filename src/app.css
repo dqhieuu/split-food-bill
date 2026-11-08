@@ -3657,6 +3657,7 @@ select[aria-invalid='true'] {
 	--cal-cell-hover: light-dark(#f5f6ef, #252525);
 	--cal-line: light-dark(#e6e8dd, #2c2c2c);
 	--cal-line-strong: light-dark(#c9d0bd, #454545);
+	--cal-track: light-dark(#e6e8dd, #323232);
 	--cal-sunken: light-dark(#f1f2eb, #181818);
 	--cal-muted: light-dark(#6e7865, #9ca3af);
 	--cal-faint: light-dark(#9aa092, #737373);
@@ -3888,7 +3889,7 @@ select[aria-invalid='true'] {
 	height: 6px;
 	flex-shrink: 0;
 	border-radius: 999px;
-	background: light-dark(#e6e8dd, #323232);
+	background: var(--cal-track);
 	overflow: hidden;
 }
 /* One solid color per day, matching its percentage of the month's maximum daily spending. */
@@ -4451,10 +4452,18 @@ select[aria-invalid='true'] {
 	}
 	.cal-bill {
 		height: 5px;
+		width: 100%;
 		padding: 0;
 		border: 0;
-		background: var(--spend-color);
+		background: var(--cal-track);
 		pointer-events: none;
+	}
+	.cal-bill::before {
+		content: '';
+		width: clamp(5px, var(--bill-width), 100%);
+		height: 100%;
+		border-radius: inherit;
+		background: var(--spend-color);
 	}
 	.cal-bill > * {
 		display: none;

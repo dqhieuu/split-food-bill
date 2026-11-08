@@ -2223,6 +2223,7 @@ for (const width of [1280, 390]) {
 					id: `calendar-${index}`,
 					description: `Bữa trưa văn phòng có tên dài ${index + 1}`,
 					organizer: index === 5 ? 'linh' : ACTOR,
+					...(index === 8 ? { total: 15000, lines: [{ ...bill.lines[0], amount: 15000 }] } : {}),
 					date: `${month}-${String(day).padStart(2, '0')}T12:00:00Z`,
 					createdAt: `${month}-01T${String(index).padStart(2, '0')}:00:00Z`
 				}));
@@ -2286,7 +2287,21 @@ for (const width of [1280, 390]) {
 					await expect(inspector.locator('.cal-row')).toHaveCount(6);
 					await expect(day(6).locator('.cal-track')).toBeHidden();
 					await expect(day(6).locator('.cal-bill:visible')).toHaveCount(1);
-					await expect(day(6).locator('.cal-bill')).toHaveCSS('background-color', 'rgb(239, 68, 68)');
+					const trackColor = await day(6)
+						.locator('.cal-track')
+						.evaluate((track) => getComputedStyle(track).backgroundColor);
+					await expect(day(6).locator('.cal-bill')).toHaveCSS('background-color', trackColor);
+					const [large, small] = await day(7)
+						.locator('.cal-bill')
+						.evaluateAll((bars) =>
+							bars.map((bar) => ({
+								trackWidth: bar.getBoundingClientRect().width,
+								fillWidth: parseFloat(getComputedStyle(bar, '::before').width)
+							}))
+						);
+					expect(small.trackWidth).toBe(large.trackWidth);
+					expect(large.fillWidth).toBeCloseTo(large.trackWidth, 0);
+					expect(small.fillWidth).toBeCloseTo(large.trackWidth / 2, 0);
 					expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 					if (mobileWidth === 300)
 						await page.locator('.cal-grid').screenshot({ path: 'artifacts/mobile-calendar-grid-300.png' });
