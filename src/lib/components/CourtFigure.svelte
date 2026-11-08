@@ -89,13 +89,15 @@
 			data-renderer={modelReady ? '3d' : 'fallback'}
 			data-avatar={avatarReady ? 'photo' : 'initials'}
 		></canvas>
-		{#if !modelReady}<span class="fallback-face" class:kneeling><Avatar member={entry.member} /></span>{/if}
+		{#if !modelReady}<span class="fallback-face" class:kneeling class:courtier={kneelingPose}
+				><Avatar member={entry.member} /></span
+			>{/if}
 		<svg viewBox="0 0 120 180" class="human-figure">
 			<defs>
 				<linearGradient id={`${uid}-skin`} x1="0" x2="1"
-					><stop stop-color="#af7658" /><stop offset=".45" stop-color="#e8b58e" /><stop
+					><stop stop-color="var(--skin-shadow)" /><stop offset=".45" stop-color="var(--skin-light)" /><stop
 						offset="1"
-						stop-color="#c28b69"
+						stop-color="var(--skin-mid)"
 					/></linearGradient
 				>
 				<linearGradient id={`${uid}-cloth`} x1="0" x2="1"
@@ -145,9 +147,25 @@
 					stroke="#49362e"
 				/>
 				<path d="M65 81Q75 85 78 99L69 113L59 107L66 96Z" fill={`url(#${uid}-cloth)`} stroke="#49362e" />
-				<path d="M56 103Q62 99 66 104L73 108Q77 113 71 116L60 112L54 110Z" fill={`url(#${uid}-skin)`} />
-				<path d="M65 105L72 110M62 107L69 113" stroke="#955c43" fill="none" />
-				<g transform="rotate(23 56 65)">
+				{#if kneelingPose}
+					<path d="M61 115H67L66 165L64 174L62 165Z" fill="#b9c8d2" stroke="#647383" />
+					<path d="M64 118V169" stroke="#eef3f4" />
+					<path d="M64 101V115" stroke="#513a2c" stroke-width="5" />
+					<path d="M54 115H74" stroke={`url(#${uid}-gold)`} stroke-width="3" stroke-linecap="round" />
+					<circle cx="64" cy="100" r="2.5" fill={`url(#${uid}-gold)`} />
+					<rect x="61" y="102" width="9" height="6" rx="2.5" fill={`url(#${uid}-skin)`} stroke="#955c43" />
+					<rect x="57" y="108" width="10" height="6" rx="2.5" fill={`url(#${uid}-skin)`} stroke="#955c43" />
+				{:else}
+					<path d="M56 103Q62 99 66 104L73 108Q77 113 71 116L60 112L54 110Z" fill={`url(#${uid}-skin)`} />
+					<path d="M65 105L72 110M62 107L69 113" stroke="#955c43" fill="none" />
+					<g fill="none" stroke="#dfbc82" stroke-width="2.8"
+						><path d="M56 101L54 110M60 102L58 113M64 104L62 114" /><path
+							d="M60 112Q78 136 82 119Q82 111 64 110"
+							stroke-width="1.8"
+						/></g
+					>
+				{/if}
+				<g transform={kneelingPose ? undefined : 'rotate(23 56 65)'}>
 					<path d="M50 59L49 76Q56 82 63 75L61 59" fill={`url(#${uid}-skin)`} />
 					<path
 						d="M38 40Q37 26 53 25Q72 24 74 42L70 60Q65 72 57 72Q45 67 42 57Z"
@@ -158,12 +176,6 @@
 					<path d="M56 50L55 58L59 59M53 65Q59 61 64 64" fill="none" stroke="#8d5544" stroke-width="1.5" />
 					<path d="M43 56L49 58M64 60L69 60" stroke="#bc7060" stroke-width="3" opacity=".6" />
 				</g>
-				<g fill="none" stroke="#dfbc82" stroke-width="2.8"
-					><path d="M56 101L54 110M60 102L58 113M64 104L62 114" /><path
-						d="M60 112Q78 136 82 119Q82 111 64 110"
-						stroke-width="1.8"
-					/></g
-				>
 				<path d="M40 119L45 124L40 128" fill="none" stroke="#c7a580" stroke-width="1.5" />
 			{:else}
 				<!-- Adult proportions: a small sculpted face, articulated arms, tailored clothes and boots. -->
@@ -281,6 +293,9 @@
 		--robe: #815d96;
 		--robe-dark: #302339;
 		--trim: #ddbd7b;
+		--skin-shadow: #af7658;
+		--skin-light: #e8b58e;
+		--skin-mid: #c28b69;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -296,6 +311,9 @@
 		--robe: #a54758;
 		--robe-dark: #440f27;
 		--trim: #ffdc8b;
+		--skin-shadow: #c1947a;
+		--skin-light: #ffe1c5;
+		--skin-mid: #eec2a7;
 	}
 	.commoner {
 		--robe: #538b80;
@@ -306,6 +324,9 @@
 		--robe: #93816b;
 		--robe-dark: #463b32;
 		--trim: #c6ad8e;
+		--skin-shadow: #211b19;
+		--skin-light: #4a3931;
+		--skin-mid: #302522;
 	}
 	.figure-body {
 		position: relative;
@@ -353,6 +374,8 @@
 	.fallback-face.kneeling {
 		left: 34%;
 		top: 20%;
+	}
+	.fallback-face.kneeling:not(.courtier) {
 		transform: rotate(23deg);
 	}
 	.fallback-face :global(.avatar) {

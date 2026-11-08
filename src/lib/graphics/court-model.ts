@@ -44,8 +44,7 @@ function setAnimation(key: symbol, animate?: (time: number) => void) {
 
 const templates = new Map<string, Promise<THREE.Group>>();
 let courtCacheRequested = false;
-async function loadOutfit(royal: boolean) {
-	const url = `/models/court/Male_${royal ? 'Ranger' : 'Peasant'}.gltf`;
+async function loadCourtAsset(url: string) {
 	let pending = templates.get(url);
 	if (!pending) {
 		pending = new GLTFLoader()
@@ -74,7 +73,11 @@ export async function createCourtModel(
 	onrender: (state: RenderState) => void,
 	onfailure: () => void
 ) {
-	const outfit = await loadOutfit(entry.tier === 'sovereign' || entry.tier === 'noble');
+	const royal = entry.tier === 'sovereign' || entry.tier === 'noble';
+	const [outfit, headMesh] = await Promise.all([
+		loadCourtAsset(`/models/court/Male_${royal ? 'Ranger' : 'Peasant'}.gltf`),
+		loadCourtAsset('/models/court/Male_Head.glb')
+	]);
 	const output = canvas.getContext('2d');
 	if (!output) throw new Error('Canvas unavailable');
 	if (!renderer) {
@@ -117,11 +120,15 @@ export async function createCourtModel(
 	}
 	const debtor = entry.tier === 'servant';
 	const courtier = entry.kneeling === true && !debtor;
-	const royal = entry.tier === 'sovereign' || entry.tier === 'noble';
-	const skin = material('#d8aa85');
+	const seated = entry.tier === 'sovereign';
+	const skinTint = debtor ? new THREE.Color('#423934') : seated ? new THREE.Color(1.5, 2.25, 3.1) : undefined;
 	const gold = material(royal ? '#dfb65f' : '#a29478', 0.72, 0.28);
 	const rope = material('#d4ac72');
-	const hair = material('#302622');
+	const swordX = 0.02;
+	const swordZ = 0.37;
+	const pommelHeight = 0.82;
+	const gripOffset = 0.108;
+	const gripDepth = 0.036;
 	function mesh(
 		geometry: THREE.BufferGeometry,
 		mat: THREE.Material,
@@ -136,8 +143,34 @@ export async function createCourtModel(
 		parent.add(part);
 		return part;
 	}
-	function oval(position: Point, scale: Point, mat: THREE.Material, parent: THREE.Object3D = model) {
-		return mesh(new THREE.SphereGeometry(1, 64, 40), mat, position, scale, parent);
+	if (courtier) {
+		const sword = new THREE.Group();
+		sword.position.set(swordX, 0, swordZ);
+		model.add(sword);
+		const steel = material('#cbd5dc', 0.4, 0.28);
+		const leather = material('#442c26');
+		const blade = new THREE.Shape();
+		blade.moveTo(0, 0);
+		blade.lineTo(0.019, 0.12);
+		blade.lineTo(0.026, 0.61);
+		blade.lineTo(-0.026, 0.61);
+		blade.lineTo(-0.019, 0.12);
+		blade.closePath();
+		mesh(
+			new THREE.ExtrudeGeometry(blade, {
+				depth: 0.006,
+				bevelSize: 0.004,
+				bevelThickness: 0.004,
+				bevelSegments: 1
+			}),
+			steel,
+			[0, 0, -0.003],
+			[1, 1, 1],
+			sword
+		);
+		mesh(new THREE.BoxGeometry(0.2, 0.026, 0.045), gold, [0, 0.615, 0], [1, 1, 1], sword);
+		mesh(new THREE.CylinderGeometry(0.024, 0.027, 0.19, 12), leather, [0, 0.72, 0], [1, 1, 1], sword);
+		mesh(new THREE.OctahedronGeometry(1), gold, [0, pommelHeight, 0], [0.043, 0.035, 0.032], sword);
 	}
 	// The clothing and limbs are authored, skinned meshes, not disconnected primitives.
 	model.add(outfit);
@@ -151,6 +184,7 @@ export async function createCourtModel(
 		const source = Array.isArray(object.material) ? object.material : [object.material];
 		const copies = source.map((original) => {
 			const copy = original.clone() as THREE.MeshStandardMaterial;
+			if (skinTint && copy.name === 'MI_Regular_Male') copy.color.copy(skinTint);
 			if (copy.name.includes('Ranger')) {
 				copy.color.set(entry.tier === 'sovereign' ? '#793345' : '#b7a4d4');
 				if (entry.tier === 'sovereign') {
@@ -186,8 +220,13 @@ export async function createCourtModel(
 	const baseFoot = new Map(
 		['l', 'r'].map((side) => [side, bone(`foot_${side}`).getWorldQuaternion(new THREE.Quaternion())])
 	);
+	if (kneeling) {
+		// Tuck the boot behind each knee that rests on the floor.
+		const tuckedBoot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.55);
+		baseFoot.get('r')!.premultiply(tuckedBoot);
+		if (debtor) baseFoot.get('l')!.premultiply(tuckedBoot);
+	}
 	const origin = bone('pelvis').position.clone();
-	const seated = entry.tier === 'sovereign';
 	const mantle = seated ? createRoyalMantle(bone('spine_03')) : undefined;
 	const shadow = new THREE.MeshBasicMaterial({
 		color: '#09060d',
@@ -235,9 +274,11 @@ export async function createCourtModel(
 		aim(a, b, elbow);
 		aim(b, c, goal);
 	}
-	function orientHand(side: string, fingersDown: boolean, resting = false) {
-		const palm = resting ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(0, 0, 1);
-		const fingers = resting ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, fingersDown ? -1 : 1, 0);
+	function orientHand(side: string, pose: 'up' | 'down' | 'sword') {
+		const sign = side === 'l' ? 1 : -1;
+		const palm = new THREE.Vector3(0, 0, pose === 'sword' ? sign : 1);
+		const fingers =
+			pose === 'sword' ? new THREE.Vector3(-sign, 0, 0) : new THREE.Vector3(0, pose === 'down' ? -1 : 1, 0);
 		const rotation = new THREE.Quaternion().setFromRotationMatrix(
 			new THREE.Matrix4().makeBasis(palm, fingers, new THREE.Vector3().crossVectors(palm, fingers))
 		);
@@ -258,10 +299,9 @@ export async function createCourtModel(
 		}
 		const breath = Math.sin(seconds * 1.7),
 			sway = Math.sin(seconds * 0.9);
-		// A seated hip stays on the cushion; breathing comes from the spine, not hovering.
+		// Keep the seated and kneeling contact points steady as the spine breathes.
 		bone('pelvis').position.z =
-			origin.z - (courtier ? 0.47 : kneeling ? 0.4 : seated ? 0.45 : 0) + (seated ? 0 : breath * 0.012);
-		if (debtor) bone('pelvis').position.z += Math.max(0, reaction) * 0.055;
+			origin.z - (kneeling ? 0.47 : seated ? 0.45 : 0) + (seated || kneeling ? 0 : breath * 0.012);
 		bone('spine_01').rotateX(
 			(debtor ? 0.16 - reaction * 0.3 : seated ? -0.02 + pull * 0.09 : courtier ? 0.18 : -0.02) +
 				breath * 0.035
@@ -270,22 +310,18 @@ export async function createCourtModel(
 		bone('spine_03').rotateY(Math.sin(seconds * 0.7) * 0.05);
 		for (const side of ['l', 'r']) {
 			const sign = side === 'l' ? 1 : -1;
-			// Courtiers take a formal one-knee stance; debtors remain on both knees.
-			const foot: Point = [
-				sign * (seated ? 0.2 : courtier ? 0.13 : 0.1),
-				0.085,
-				courtier ? (side === 'l' ? 0.43 : -0.42) : kneeling ? -0.28 : seated ? 0.43 : -0.085
-			];
-			solveLimb(`thigh_${side}`, `calf_${side}`, `foot_${side}`, foot, [sign * 0.2, 0.3, 1]);
+			const groundedKnee = debtor || (courtier && side === 'r');
+			const foot: Point = groundedKnee
+				? [sign * 0.12, 0.19, -0.44]
+				: [sign * (seated ? 0.2 : courtier ? 0.15 : 0.1), 0.085, courtier || seated ? 0.43 : -0.085];
+			const kneePole: Point = groundedKnee ? [sign * 0.12, 0.12, 0.8] : [sign * 0.2, 0.3, 1];
+			solveLimb(`thigh_${side}`, `calf_${side}`, `foot_${side}`, foot, kneePole);
 			const joint = bone(`foot_${side}`);
 			joint.quaternion.copy(
 				joint.parent!.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(baseFoot.get(side)!)
 			);
 		}
-		// Follow the actual knee joint so breathing cannot lift the hands off its surface.
-		const knee = courtier
-			? model.worldToLocal(bone('calf_l').getWorldPosition(new THREE.Vector3()))
-			: undefined;
+		// Anchor the courtiers' hands to the planted sword throughout their idle motion.
 		const reach = Math.sin(seconds * 1.25);
 		const height = debtor ? 0.81 + reaction * 0.17 : seated ? 0.82 : kneeling ? 0.76 : 1.13;
 		solveLimb(
@@ -293,7 +329,7 @@ export async function createCourtModel(
 			'lowerarm_l',
 			'hand_l',
 			courtier
-				? [knee!.x + 0.045, knee!.y + 0.08, knee!.z - 0.15]
+				? [swordX + gripOffset, 0.68, swordZ - gripDepth]
 				: debtor
 					? [0.07 + sway * 0.018, height + breath * 0.035, 0.32 + reach * 0.025]
 					: [
@@ -308,7 +344,7 @@ export async function createCourtModel(
 			'lowerarm_r',
 			'hand_r',
 			courtier
-				? [knee!.x - 0.065, knee!.y + 0.12, knee!.z - 0.16]
+				? [swordX - gripOffset, 0.77, swordZ - gripDepth]
 				: debtor
 					? [-0.07 + sway * 0.018, height + breath * 0.035, 0.32 + reach * 0.025]
 					: [
@@ -318,21 +354,23 @@ export async function createCourtModel(
 						],
 			[-0.65, height, seated ? 0.22 : -0.15]
 		);
-		if (seated) orientHand('l', true);
+		if (seated) orientHand('l', 'down');
 		if (courtier) {
-			orientHand('l', false, true);
-			orientHand('r', false, true);
+			orientHand('l', 'sword');
+			orientHand('r', 'sword');
 		}
 		if (debtor) {
-			orientHand('l', false);
-			orientHand('r', false);
+			orientHand('l', 'up');
+			orientHand('r', 'up');
 		}
 		for (const side of ['l', 'r']) {
 			for (const digit of ['index', 'middle', 'ring', 'pinky'])
 				for (const segment of ['01', '02', '03']) {
 					bone(`${digit}_${segment}_${side}`).rotateX(
 						(courtier
-							? 0.12
+							? segment === '01'
+								? 0.95
+								: 1.15
 							: seated && side === 'l'
 								? segment === '01'
 									? 1.15
@@ -345,7 +383,7 @@ export async function createCourtModel(
 							breath * 0.025
 					);
 				}
-			if (debtor || (seated && side === 'l')) {
+			if (courtier || debtor || (seated && side === 'l')) {
 				bone(`thumb_01_${side}`).rotateZ(-0.4);
 				bone(`thumb_02_${side}`).rotateX(0.7);
 				bone(`thumb_03_${side}`).rotateX(0.5);
@@ -410,23 +448,23 @@ export async function createCourtModel(
 		});
 	}
 
-	// Avatar is a curved face surface on a solid head, rather than a floating portrait.
+	// The stock head is exported relative to the same Head joint used by both outfits.
 	const head = new THREE.Group();
-	head.position.set(0, 0.11, 0.01);
-	head.scale.setScalar(0.74);
+	head.scale.setScalar(1.8);
+	head.position.set(0, -0.075, -0.055);
 	head.rotation.set(courtier ? 0.15 : debtor ? 0.17 : -0.025, -0.09, debtor ? -0.2 : 0);
 	bone('Head').add(head);
-	oval([0, -0.22, 0], [0.075, 0.13, 0.07], skin, head);
-	oval([0, 0, 0], [0.215, 0.265, 0.185], skin, head);
-	oval([-0.214, -0.01, 0], [0.04, 0.07, 0.045], skin, head);
-	oval([0.214, -0.01, 0], [0.04, 0.07, 0.045], skin, head);
-	mesh(
-		new THREE.SphereGeometry(1, 64, 32, 0, Math.PI * 2, 0, 1.05),
-		hair,
-		[0, 0.03, -0.015],
-		[0.224, 0.265, 0.19],
-		head
-	);
+	head.add(headMesh);
+	if (skinTint) {
+		headMesh.traverse((object) => {
+			if (!(object instanceof THREE.Mesh) || !(object.material instanceof THREE.MeshStandardMaterial)) return;
+			if (object.material.name !== 'MI_Superhero_Male') return;
+			const skin = object.material.clone();
+			skin.color.copy(skinTint);
+			object.material = skin;
+			materials.push(skin);
+		});
+	}
 	const faceCanvas = document.createElement('canvas');
 	faceCanvas.width = faceCanvas.height = 256;
 	const faceContext = faceCanvas.getContext('2d')!;
@@ -454,17 +492,16 @@ export async function createCourtModel(
 	const faceVertices: number[] = [],
 		faceUvs: number[] = [],
 		faceIndices: number[] = [];
-	// Concentric rings follow the head surface; a simple triangle fan would sink
-	// through the head between its centre and perimeter and obscure the photograph.
-	const faceRings = 24,
-		faceSegments = 96;
+	// A shallow curved mask clears the nose while leaving the stock head visible around it.
+	const faceRings = 8,
+		faceSegments = 48;
 	for (let ring = 0; ring <= faceRings; ring++) {
 		for (let segment = 0; segment <= faceSegments; segment++) {
 			const radius = ring / faceRings;
 			const angle = (segment / faceSegments) * Math.PI * 2;
 			const x = Math.cos(angle) * radius,
 				y = Math.sin(angle) * radius;
-			faceVertices.push(x * 0.192, y * 0.227, 0.105 + 0.1 * Math.sqrt(Math.max(0, 1 - radius * radius)));
+			faceVertices.push(x * 0.079, y * 0.093, 0.113 + 0.025 * (1 - radius * radius));
 			faceUvs.push((x + 1) / 2, (y + 1) / 2);
 			if (ring < faceRings && segment < faceSegments) {
 				const a = ring * (faceSegments + 1) + segment,
@@ -477,11 +514,11 @@ export async function createCourtModel(
 	faceGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(faceUvs, 2));
 	faceGeometry.setIndex(faceIndices);
 	faceGeometry.computeVertexNormals();
-	mesh(faceGeometry, faceMaterial, [0, -0.015, 0], [1, 1, 1], head);
+	mesh(faceGeometry, faceMaterial, [0, 0.102, 0], [1, 1, 1], head);
 	if (entry.tier === 'sovereign') {
 		const crown = new THREE.Group();
-		crown.position.y = 0.19;
-		crown.scale.z = 0.86;
+		crown.position.y = 0.185;
+		crown.scale.set(0.34, 0.34, 0.29);
 		head.add(crown);
 		const ruby = material('#a51d3a', 0.25, 0.16);
 		const pearl = material('#fff3ca', 0.25, 0.22);
@@ -561,7 +598,7 @@ export async function createCourtModel(
 			);
 			arch.rotation.y = (i * Math.PI) / 2;
 		}
-		oval([0, 0.31, 0], [0.025, 0.025, 0.025], gold, crown);
+		mesh(new THREE.SphereGeometry(0.025, 64, 40), gold, [0, 0.31, 0], [1, 1, 1], crown);
 		mesh(new THREE.BoxGeometry(0.009, 0.055, 0.009), gold, [0, 0.35, 0], [1, 1, 1], crown);
 		mesh(new THREE.BoxGeometry(0.035, 0.009, 0.009), gold, [0, 0.36, 0], [1, 1, 1], crown);
 	}
@@ -673,12 +710,10 @@ export async function createCourtModel(
 	const animationKey = Symbol(entry.member.id);
 	const phase = [...entry.member.id].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 29;
 	const rest = head.rotation.clone();
-	const restPosition = head.position.clone();
 	let visible = false;
 	function idle(time: number) {
 		const seconds = time / 1000 + phase;
 		pose(seconds, time / 1000);
-		head.position.y = restPosition.y + Math.sin(seconds * 1.7) * 0.008;
 		head.rotation.y = rest.y + Math.sin(seconds * 1.1) * 0.14;
 		head.rotation.x =
 			rest.x +
