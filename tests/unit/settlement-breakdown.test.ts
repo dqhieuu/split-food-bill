@@ -128,7 +128,9 @@ describe('settlement breakdown', () => {
 		applyCommand(state, 'an', 'undoSettlement', { id: 'batch-2' }, date(4));
 		settle(state, 5);
 
-		const { before } = settlementBreakdown(state, 'huy')[0];
+		const flows = settlementBreakdown(state, 'huy');
+		expect(flows.map(({ batch }) => batch.id)).toEqual(['batch-5']);
+		const { before } = flows[0];
 		expect(before).toMatchObject([
 			{ from: 'an', to: 'huy', amount: 60000, parts: [{ entry: { id: 'qr-full' } }] },
 			{ from: 'huy', to: 'linh', amount: 60000, parts: [{ billId: 'bun' }] }
@@ -159,8 +161,7 @@ describe('settlement breakdown', () => {
 		settle(laterBatch, 5);
 		applyCommand(laterBatch, 'an', 'undoSettlement', { id: 'batch-2' }, date(6));
 		applyCommand(state, 'an', 'undoSettlement', { id: 'batch-2' }, date(4));
-		const restored = settlementBreakdown(state, 'huy');
-		expect(restored[0].batch.undoneAt).toBe(date(4));
+		expect(settlementBreakdown(state, 'huy')).toEqual([]);
 		const previousLedger = [...laterBatch.ledger];
 		settle(laterBatch, 7);
 		for (const member of laterBatch.members) {

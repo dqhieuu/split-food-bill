@@ -126,9 +126,10 @@ export function settlementBreakdown(state: AppState, accountId: string) {
 				after.push({ ...entry, parts: outstandingParts(breakdown) });
 				record(entry, breakdown);
 			}
+			// Replaying undone batches preserves the inputs for their reversals.
 			const personalBefore = before.filter(involvesAccount);
 			const personalAfter = after.filter(involvesAccount);
-			if (personalBefore.length || personalAfter.length)
+			if (!event.batch.undoneAt && (personalBefore.length || personalAfter.length))
 				history.push({ batch: event.batch, before: personalBefore, after: personalAfter });
 			continue;
 		}

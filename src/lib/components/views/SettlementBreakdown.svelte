@@ -233,11 +233,10 @@
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger
 							class="flow-date"
-							aria-label={`Ngày tối giản: ${dateTimeLabel(batch.date)}${showNew ? ', mới' : ''}${batch.undoneAt ? ', đã hoàn tác' : ''}`}
+							aria-label={`Ngày tối giản: ${dateTimeLabel(batch.date)}${showNew ? ', mới' : ''}`}
 						>
 							{#if showNew}<Badge class="leading-none">Mới</Badge>{/if}
-							<span aria-live="polite" class:line-through={!!batch.undoneAt}>{dateTimeLabel(batch.date)}</span
-							><ChevronDown size={14} />
+							<span aria-live="polite">{dateTimeLabel(batch.date)}</span><ChevronDown size={14} />
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Portal>
 							<DropdownMenu.Content
@@ -252,9 +251,7 @@
 											value={option.id}
 										>
 											<span>
-												{dateTimeLabel(option.date)} · Nợ chúa {name(option.hub)}{option.undoneAt
-													? ' · Đã hoàn tác'
-													: ''}
+												{dateTimeLabel(option.date)} · Nợ chúa {name(option.hub)}
 											</span>
 											{#if simulation || unread.has(option.id) || firstViewId === option.id}
 												<Badge class="leading-none">Mới</Badge>
@@ -277,46 +274,42 @@
 		</header>
 		<div id="settlement-flow-content" class="flow-content" hidden={!expanded}>
 			{#if expanded}
-				{#if batch.undoneAt}
-					<p>Lần tối giản nợ này đã được hoàn tác.</p>
-				{:else}
-					<p>
-						{#if before.length}
-							<span class="flow-previous">
-								{#if beforePayees.length && beforePayers.length}
-									{subject} từng phải trả tiền cho <strong>{list.format(beforePayees)}</strong> và chờ nhận
-									tiền từ <strong>{list.format(beforePayers)}</strong>.
-								{:else if beforePayees.length}
-									{subject} từng phải trả tiền cho <strong>{list.format(beforePayees)}</strong>.
-								{:else}
-									{subject} từng chờ nhận tiền từ <strong>{list.format(beforePayers)}</strong>.
-								{/if}
-							</span>
-							<br />
-						{/if}
-						{'→ '}
-						{#if !after.length}
-							Sau khi tối giản nợ, {midSubject} không còn khoản nào cần trả hoặc sẽ nhận.
-						{:else if batch.hub === accountId}
-							Sau khi tối giản nợ, {midSubject} trở thành <strong>nợ chúa</strong>.
-							{#if afterPayers.length && afterPayees.length}
-								{subject} sẽ nhận tiền từ <strong>{list.format(afterPayers)}</strong> và phải chuyển tiền cho
-								<strong>{list.format(afterPayees)}</strong>.
-							{:else if afterPayers.length}
-								{subject} sẽ nhận tiền từ <strong>{list.format(afterPayers)}</strong>.
-							{:else if afterPayees.length}
-								{subject} phải chuyển tiền cho <strong>{list.format(afterPayees)}</strong>.
+				<p>
+					{#if before.length}
+						<span class="flow-previous">
+							{#if beforePayees.length && beforePayers.length}
+								{subject} từng phải trả tiền cho <strong>{list.format(beforePayees)}</strong> và chờ nhận tiền
+								từ <strong>{list.format(beforePayers)}</strong>.
+							{:else if beforePayees.length}
+								{subject} từng phải trả tiền cho <strong>{list.format(beforePayees)}</strong>.
+							{:else}
+								{subject} từng chờ nhận tiền từ <strong>{list.format(beforePayers)}</strong>.
 							{/if}
+						</span>
+						<br />
+					{/if}
+					{'→ '}
+					{#if !after.length}
+						Sau khi tối giản nợ, {midSubject} không còn khoản nào cần trả hoặc sẽ nhận.
+					{:else if batch.hub === accountId}
+						Sau khi tối giản nợ, {midSubject} trở thành <strong>nợ chúa</strong>.
+						{#if afterPayers.length && afterPayees.length}
+							{subject} sẽ nhận tiền từ <strong>{list.format(afterPayers)}</strong> và phải chuyển tiền cho
+							<strong>{list.format(afterPayees)}</strong>.
+						{:else if afterPayers.length}
+							{subject} sẽ nhận tiền từ <strong>{list.format(afterPayers)}</strong>.
 						{:else if afterPayees.length}
-							Sau khi tối giản nợ, {midSubject} chỉ cần trả tiền cho nợ chúa
-							<strong>{name(batch.hub)}</strong>.
-						{:else}
-							Sau khi tối giản nợ, {midSubject} chỉ cần chờ nhận tiền từ nợ chúa
-							<strong>{name(batch.hub)}</strong>.
+							{subject} phải chuyển tiền cho <strong>{list.format(afterPayees)}</strong>.
 						{/if}
-					</p>
-				{/if}
-				<div class="flow-comparison" class:flow-undone={!!batch.undoneAt}>
+					{:else if afterPayees.length}
+						Sau khi tối giản nợ, {midSubject} chỉ cần trả tiền cho nợ chúa
+						<strong>{name(batch.hub)}</strong>.
+					{:else}
+						Sau khi tối giản nợ, {midSubject} chỉ cần chờ nhận tiền từ nợ chúa
+						<strong>{name(batch.hub)}</strong>.
+					{/if}
+				</p>
+				<div class="flow-comparison">
 					{@render snapshot('Trước tối giản', before)}
 					{@render snapshot('Sau tối giản', after)}
 				</div>
@@ -380,9 +373,6 @@
 	}
 	.flow-previous {
 		color: light-dark(#6e7865, #a3ab9c);
-	}
-	.flow-comparison.flow-undone {
-		opacity: 0.7;
 	}
 	.flow-snapshot-heading,
 	.flow-totals {

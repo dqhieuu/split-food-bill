@@ -1409,6 +1409,20 @@ for (const width of [1280, 390]) {
 			await flow.getByRole('button', { name: 'Lần tối giản trước' }).click();
 			await expect(date).toContainText('13:00:00');
 			await expect(date).not.toContainText('Mới');
+
+			const undo = (id: string) =>
+				applyCommand(state, ACTOR, 'undoSettlement', { id }, '2026-10-27T08:00:00.000Z');
+			undo('second');
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await expect(date).toContainText('14:00:00');
+			await date.click();
+			await expect(page.getByRole('menuitemradio')).toHaveCount(2);
+			await expect(page.getByRole('menuitemradio', { name: /13:00:00/ })).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			undo('existing');
+			undo('third');
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await expect(flow).toHaveCount(0);
 		});
 
 		test('account debug scenarios swap in read-only sample balances and leave group data alone', async ({
@@ -1488,19 +1502,7 @@ for (const width of [1280, 390]) {
 			await expect(page.getByRole('dialog', { name: 'Bánh mì', exact: true })).toBeVisible();
 			await page.keyboard.press('Escape');
 
-			const comparison = flow.locator('.flow-comparison');
-			const panelBackground = await flow.evaluate((element) => getComputedStyle(element).backgroundColor);
-			await scenario.selectOption('undo');
-			await expect(flow.getByText('Lần tối giản nợ này đã được hoàn tác.', { exact: true })).toBeVisible();
-			await expect(flow).toHaveCSS('background-color', panelBackground);
-			await expect(flow).toHaveCSS('opacity', '1');
-			await expect(comparison).toHaveCSS('opacity', '0.7');
-			await expect(
-				flow.getByRole('button', { name: /^Ngày tối giản.*đã hoàn tác$/ }).locator('[aria-live="polite"]')
-			).toHaveCSS('text-decoration-line', 'line-through');
-
 			await scenario.selectOption('newHub');
-			await expect(comparison).toHaveCSS('opacity', '1');
 			const older = flow.getByRole('button', { name: 'Lần tối giản trước' });
 			const newer = flow.getByRole('button', { name: 'Lần tối giản sau' });
 			const date = flow.getByRole('button', { name: /^Ngày tối giản/ });

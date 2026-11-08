@@ -5,8 +5,7 @@ export const settlementScenarios = {
 	first: { label: 'Tối giản lần đầu', member: 'huy' },
 	repeat: { label: 'Tối giản lại khi chưa ai trả', member: 'huy' },
 	newHub: { label: 'Thêm hóa đơn làm đổi nợ chúa', member: 'an' },
-	partial: { label: 'Trả một phần rồi tối giản lại', member: 'huy' },
-	undo: { label: 'Hoàn tác tối giản sau khi đã chuyển tiền', member: 'huy' }
+	partial: { label: 'Trả một phần rồi tối giản lại', member: 'huy' }
 } as const;
 
 export type SettlementScenario = keyof typeof settlementScenarios;
@@ -59,7 +58,7 @@ export function settlementFixture(scenario: SettlementScenario): AppState {
 	settle(4);
 
 	if (scenario === 'repeat') settle(5);
-	if (scenario === 'partial' || scenario === 'newHub' || scenario === 'undo') {
+	if (scenario === 'partial' || scenario === 'newHub') {
 		applyCommand(
 			state,
 			'huy',
@@ -70,8 +69,7 @@ export function settlementFixture(scenario: SettlementScenario): AppState {
 		if (scenario === 'partial')
 			applyCommand(state, 'huy', 'confirmQrPayment', { id: 'partial-2', to: 'an', amount: 8_000 }, date(6));
 		if (scenario === 'newHub') bill('lau', 'Lẩu', 'mai', 'linh', 150_000, 6);
-		if (scenario === 'undo') applyCommand(state, 'an', 'undoSettlement', { id: 'batch-4' }, date(7));
-		else settle(7);
+		settle(7);
 	}
 	return state;
 }
