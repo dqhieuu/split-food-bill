@@ -166,7 +166,7 @@
 			<p class="court-eyebrow"><span></span> ĐẠI ĐIỆN HOÀNG GIA <span></span></p>
 			<h1>Bảng xếp hạng</h1>
 		</header>
-		<div class="palace-stage">
+		<div class="palace-stage" class:has-third={courtiers.some((entry) => entry.rank === 3)}>
 			<div class="palace-world" use:connectRopes={ranks}>
 				<svg class="palace-architecture" viewBox="0 0 720 500" preserveAspectRatio="none" aria-hidden="true">
 					<defs>
@@ -294,6 +294,7 @@
 				{#each courtiers as entry, index (entry.member.id)}<div
 						class="courtier"
 						class:courtier-right={index === 1}
+						class:courtier-third={entry.rank === 3}
 					>
 						<CourtFigure {entry} kneeling onselect={summon} />
 					</div>{/each}
@@ -392,16 +393,16 @@
 			</p>
 			<dl class="profile-balances">
 				<div>
-					<dt>Đang nợ</dt>
-					<dd>{currency(balanceDetails.owing)}</dd>
-				</div>
-				<div>
 					<dt>Đang bị nợ</dt>
 					<dd>{currency(balanceDetails.owed)}</dd>
 				</div>
+				<div>
+					<dt>Đang nợ</dt>
+					<dd>{currency(balanceDetails.owing)}</dd>
+				</div>
 				<div class="profile-net">
-					<dt>Nợ − bị nợ</dt>
-					<dd>{currency(0 - selected.credit)}</dd>
+					<dt>Bị nợ - nợ</dt>
+					<dd>{currency(selected.credit)}</dd>
 				</div>
 			</dl>
 			<a class="profile-account" href={`/balances?member=${encodeURIComponent(selected.member.id)}`}
@@ -504,11 +505,15 @@
 		color: var(--muted-gold);
 	}
 	.palace-stage {
+		--third-pillar-drop: 0px;
 		position: relative;
-		height: 690px;
+		height: calc(690px + var(--third-pillar-drop));
 		max-width: 820px;
 		margin: 4px auto 0;
 		perspective: 800px;
+	}
+	.palace-stage.has-third {
+		--third-pillar-drop: 56px;
 	}
 	.palace-world {
 		position: absolute;
@@ -616,9 +621,10 @@
 		width: 40%;
 	}
 	.courtier {
+		--pillar-offset: 0px;
 		position: absolute;
 		z-index: 3;
-		top: 230px;
+		top: calc(230px + var(--pillar-offset));
 		left: 4%;
 		width: 28%;
 	}
@@ -626,13 +632,16 @@
 		left: auto;
 		right: 4%;
 	}
+	.courtier-third {
+		--pillar-offset: var(--third-pillar-drop);
+	}
 	.courtier::before {
 		content: '';
 		position: absolute;
 		top: 162px;
 		left: 50%;
 		width: 90px;
-		height: 181px;
+		height: calc(181px - var(--pillar-offset));
 		transform: translateX(-50%);
 		border-radius: 0 0 8px 8px;
 		border-inline: 1px solid #9b774844;
@@ -669,7 +678,7 @@
 	.court-gathering {
 		position: absolute;
 		z-index: 4;
-		top: 500px;
+		top: calc(500px + var(--third-pillar-drop));
 		left: 9%;
 		right: 9%;
 		display: flex;
@@ -1142,7 +1151,7 @@
 			font-size: 12px;
 		}
 		.palace-stage {
-			height: 660px;
+			height: calc(660px + var(--third-pillar-drop));
 		}
 		.throne-occupant {
 			top: 125px;
@@ -1156,7 +1165,7 @@
 			height: 256px;
 		}
 		.courtier {
-			top: 215px;
+			top: calc(215px + var(--pillar-offset));
 			left: 10%;
 			width: 25%;
 		}
@@ -1165,10 +1174,10 @@
 			right: 10%;
 		}
 		.courtier::before {
-			height: 163px;
+			height: calc(163px - var(--pillar-offset));
 		}
 		.court-gathering {
-			top: 470px;
+			top: calc(470px + var(--third-pillar-drop));
 			left: 19%;
 			right: 19%;
 		}

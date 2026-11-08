@@ -6,7 +6,7 @@
 	import Avatar from '../Avatar.svelte';
 	import type { AppState, SettlementPlan } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, pairBalance, netBalance, settlementPlan, dateTimeLabel } from '$lib/domain/ledger';
+	import { currency, pairBalance, settlementPlan, dateTimeLabel } from '$lib/domain/ledger';
 	let { appState, actor, run, busy }: { appState: AppState; actor: string; run: RunCommand; busy: boolean } =
 		$props();
 	let confirmOpen = $state(false);
@@ -28,13 +28,6 @@
 	const highestTotal = $derived(Math.max(0, ...columnTotals));
 	const isAdmin = $derived(appState.members.some((m) => m.id === actor && m.active && m.role === 'admin'));
 	const hubName = $derived(appState.members.find((m) => m.id === plan?.hub)?.name ?? '');
-	const previewPositions = $derived(
-		plan
-			? appState.members
-					.map((m) => ({ member: m, net: netBalance(appState.ledger, m.id) }))
-					.filter((p) => p.net !== 0 && p.member.id !== plan!.hub)
-			: []
-	);
 	function preview() {
 		planError = '';
 		try {
@@ -238,15 +231,21 @@
 		</div>
 		<h3>Các khoản nợ sau tối giản</h3>
 		<div class="review-lines">
-			{#each previewPositions as position}<div>
-					<span
-						><strong
-							>{position.net < 0 ? position.member.name : hubName} → {position.net < 0
-								? hubName
-								: position.member.name}</strong
-						><small>Nợ - bị nợ của {position.member.name}: {currency(-position.net)}</small></span
-					><strong>{currency(Math.abs(position.net))}</strong>
-				</div>{/each}
+			{#each plan.entries.filter((entry) => entry.type === 'debt') as entry}
+				{@const debtor = appState.members.find((member) => member.id === entry.from)?.name ?? entry.from}
+				{@const creditor = appState.members.find((member) => member.id === entry.to)?.name ?? entry.to}
+				<div>
+					<span>
+						<strong>{debtor} nợ {creditor}</strong>
+						<small
+							>{entry.settlementStep === 2
+								? 'Gom tiền về nợ chúa'
+								: 'Nợ chúa trả tiền cho người bị nợ'}</small
+						>
+					</span>
+					<strong>{currency(entry.amount)}</strong>
+				</div>
+			{/each}
 		</div>
 		<div class="modal-actions">
 			<Button variant="outline" onclick={() => (confirmOpen = false)}>Hủy</Button><Button

@@ -442,15 +442,32 @@ for (const width of [1280, 390]) {
 			await page.locator('.rank-row[data-self="true"]').click();
 			const dialog = page.getByRole('dialog');
 			await expect(dialog).toContainText('Nô bộc');
-			await expect(dialog.locator('.profile-net')).toContainText('90.000');
+			await expect(dialog.locator('.profile-balances dt')).toHaveText([
+				'Đang bị nợ',
+				'Đang nợ',
+				'Bị nợ - nợ'
+			]);
+			await expect(dialog.locator('.profile-balances dd')).toHaveText(['20.000 ₫', '110.000 ₫', '-90.000 ₫']);
 			await dialog.getByRole('link', { name: 'Xem tài khoản' }).click();
 			await expect(page).toHaveURL(new RegExp(`/balances\\?member=${ACTOR}$`));
 			await expect(page.getByRole('heading', { name: 'Tài khoản của bạn', exact: true })).toBeVisible();
 		});
 
 		test('royal court updates its crown with live balances and handles a vacant throne', async ({ page }) => {
-			const { state } = await openFixture(page, '/leaderboard');
+			const { state } = await openFixture(page, '/leaderboard', (state) => {
+				state.ledger.push({ ...state.ledger[0], id: 'owe-mai', to: 'mai', amount: 10000 });
+			});
 			await expect(page.locator('.throne-occupant')).toContainText('Thảo Linh');
+			const second = page.locator('.courtier').filter({ hasText: 'Hoàng Nam' });
+			const third = page.locator('.courtier').filter({ hasText: 'Ngọc Mai' });
+			await expect(second).toBeVisible();
+			await expect(third).toBeVisible();
+			const pillarDrop = (await third.boundingBox())!.y - (await second.boundingBox())!.y;
+			expect(pillarDrop).toBeGreaterThanOrEqual(48);
+			const amount = (await third.locator('.figure-amount').boundingBox())!;
+			expect(amount.y + amount.height).toBeLessThan(
+				(await page.locator('.court-gathering').boundingBox())!.y
+			);
 			state.ledger.push({ ...state.ledger[0], id: 'crown-change', from: 'linh', to: ACTOR, amount: 150000 });
 			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 			await expect(page.locator('.throne-occupant')).toContainText('Minh An');
@@ -1246,6 +1263,18 @@ for (const width of [1280, 390]) {
 			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
 			await expect(lowest).toHaveCount(0);
 			await expect(highest).toHaveCount(0);
+		});
+
+		test('simplification preview lists debts to the hub before debts from the hub', async ({ page }) => {
+			await openFixture(page, '/matrix');
+			await page.getByRole('button', { name: 'Tối giản nợ', exact: true }).click();
+			const preview = page.getByRole('dialog', { name: 'Xem lại phương án tối giản nợ' });
+			await expect(preview.locator('.review-lines > div')).toHaveText([
+				/^Quang Huy nợ Minh An\s*Gom tiền về nợ chúa\s*20\.000 ₫$/,
+				/^Minh An nợ Thảo Linh\s*Nợ chúa trả tiền cho người bị nợ\s*40\.000 ₫$/,
+				/^Minh An nợ Hoàng Nam\s*Nợ chúa trả tiền cho người bị nợ\s*20\.000 ₫$/,
+				/^Minh An nợ Thành viên cũ\s*Nợ chúa trả tiền cho người bị nợ\s*50\.000 ₫$/
+			]);
 		});
 
 		test('admins can cancel, retry and undo a simplification from its history', async ({ page }) => {
