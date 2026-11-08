@@ -8,6 +8,11 @@ if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080')
 const db = getFirestore(initializeApp({ projectId: 'demo-lunchroom' }, 'discord-local-seed'));
 const root = db.doc('groups/local');
 const fixture = (await root.get()).data();
+if (fixture?.localSnapshot === true) {
+	console.log('The restored local group is already initialized.');
+	await db.terminate();
+	process.exit(0);
+}
 if (fixture?.discordGuildId && !fixture.discordChannelId) {
 	console.log('Local Discord fixtures are already initialized.');
 	await db.terminate();

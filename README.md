@@ -30,6 +30,15 @@ Click the Discord login button to open the **local mock account picker**. Minh A
 
 The local seed uses Discord-prefixed IDs directly. It replaces an old, uninitialized local fixture rather than migrating it, and skips an already initialized Discord fixture. Ctrl+C exports emulator data to ignored `.emulator-data/`; the next run imports it. `npm run backup:local` explicitly exports a running emulator. Browser drafts are scoped to both group and user.
 
+To reproduce a group's production data locally, start `npm run dev`, then restore a JSON export from **Dữ liệu & lưu trữ → Tải bản sao JSON**:
+
+```powershell
+npm run restore:local -- "C:\path\to\lunchroom-backup.json"
+npm run backup:local
+```
+
+This replaces all seven data collections for `groups/local` in the Firestore emulator. Sign out of the demo account and use the local Discord picker to sign in as an active member from the backup. The export contains group records, including references to receipt photos, but does not contain the photo files, production login credentials, or group settings. Keep the JSON and emulator exports out of version control.
+
 ## Screens
 
 | Route       | Navigation           | Purpose                                                                  |
@@ -58,7 +67,7 @@ The organizer's own meal does not create self debt. Payments offset a member pai
 
 On Android and iOS, tapping a payment QR opens a VietQR bank-app link chosen from the signed-in member's saved bank (including when an admin views another member's balance). Recipient details, amount and payment reference match the displayed QR. The local app directory covers the [full VietQR list](https://www.vietqr.io/deeplink/bank-apps), with platform-specific app variants and autofill support as of 2026-10-29. Apps without autofill are labelled accordingly; desktop, missing-bank and unsupported-bank cases retain the normal QR. Links are constructed locally and disclose the transfer details to `dl.vietqr.io` only when tapped. The provider opens in a new tab so the original confirmation dialog stays available. Returning from a bank app never confirms a payment automatically.
 
-Bills and ledger entries remain immutable. Ledger import accepts normalized CSV/JSON with existing group member IDs, stable entry IDs and explicit ISO dates. Unknown member IDs are rejected; Discord sync must add them first. Imports commit in chunks of 150 and safely skip identical IDs on retry. JSON backup restoration currently supports ledger entries only; XLSX ingestion and full backup restoration are not implemented.
+Bills and ledger entries remain immutable. The in-app ledger import accepts normalized CSV/JSON with existing group member IDs, stable entry IDs and explicit ISO dates. Unknown member IDs are rejected; Discord sync must add them first. Imports commit in chunks of 150 and safely skip identical IDs on retry. Use the local restore command above to load all group data from a JSON backup into the emulator.
 
 The bill toggle sends Discord DM notifications to its participants after the bill is committed. Rich Discord embeds show the group, optional receipt photo, bill/date, personal share and meal, other participants, total and a repayment link. The confirmation dialog includes a per-recipient Discord preview. Delivery results are persisted per recipient for backend diagnostics; bill details do not display notification status. The retry API skips successful deliveries without changing debt. Local mode simulates delivery; production uses the configured Discord bot. Email delivery is no longer part of the bill flow.
 

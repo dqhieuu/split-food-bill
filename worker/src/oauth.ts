@@ -4,7 +4,7 @@ import type { DataStore as Store } from './store';
 import { challenge, customToken, randomCode, sessionOperation } from './identity';
 import { mockProfiles, type DiscordProfile } from './discord';
 import { profileUser, userId } from './groups';
-import type { GlobalUser } from '../../src/lib/domain/types';
+import type { GlobalUser, Member } from '../../src/lib/domain/types';
 import { DomainError } from '../../src/lib/domain/ledger';
 
 type Flow = { challenge: string };
@@ -20,6 +20,17 @@ function validState(request: Request, env: Env, state: string) {
 		?.split('=')[1];
 	if (!state || saved !== state)
 		throw new DomainError('Phiên đăng nhập không hợp lệ. Vui lòng thử lại.', 400);
+}
+async function localProfiles(store: Store): Promise<DiscordProfile[]> {
+	const group = await store.get<{ localSnapshot?: boolean }>('groups/local');
+	if (!group?.localSnapshot) return mockProfiles;
+	const members = await store.list<Member>('groups/local/members');
+	return members
+		.filter((member) => member.active && /^discord_\d{17,20}$/.test(member.id))
+		.sort(
+			(a, b) => Number(b.role === 'admin') - Number(a.role === 'admin') || a.name.localeCompare(b.name, 'vi')
+		)
+		.map((member) => ({ id: member.id.slice(8), username: member.name, global_name: member.name }));
 }
 async function finish(profile: DiscordProfile, flow: Flow, env: Env, store: Store) {
 	if (!/^\d{17,20}$/.test(profile.id) || profile.bot)
@@ -69,8 +80,16 @@ export async function oauth(request: Request, env: Env, store: Store): Promise<R
 	if (url.pathname === '/auth/mock' && isLocal(env)) {
 		const state = url.searchParams.get('state') ?? '';
 		validState(request, env, state);
+		const profiles = await localProfiles(store);
 		if (request.method === 'GET') {
-			const content = `<!doctype html><html lang="vi"><meta charset="utf-8"><title>Discord thử nghiệm</title><body style="font-family:system-ui;max-width:500px;margin:60px auto;padding:20px"><h1>Discord thử nghiệm</h1><p>Chọn tài khoản Discord giả lập cục bộ.</p><form method="post">${mockProfiles.map((profile) => `<p><button name="discordId" value="${profile.id}" style="padding:12px;width:100%">${profile.global_name}</button></p>`).join('')}</form></body></html>`;
+			const buttons = profiles.map((profile) => {
+				const name = (profile.global_name || profile.username)
+					.replaceAll('&', '&amp;')
+					.replaceAll('<', '&lt;')
+					.replaceAll('>', '&gt;');
+				return `<p><button name="discordId" value="${profile.id}" style="padding:12px;width:100%">${name}</button></p>`;
+			});
+			const content = `<!doctype html><html lang="vi"><meta charset="utf-8"><title>Discord thử nghiệm</title><body style="font-family:system-ui;max-width:500px;margin:60px auto;padding:20px"><h1>Discord thử nghiệm</h1><p>Chọn tài khoản Discord giả lập cục bộ.</p><form method="post">${buttons.join('')}</form></body></html>`;
 			return new Response(content, {
 				headers: {
 					'content-type': 'text/html;charset=utf-8',
@@ -81,7 +100,7 @@ export async function oauth(request: Request, env: Env, store: Store): Promise<R
 		}
 		if (request.method !== 'POST') throw new DomainError('Phương thức không hợp lệ.', 405);
 		const id = (await request.formData()).get('discordId');
-		const profile = mockProfiles.find((profile) => profile.id === id);
+		const profile = profiles.find((profile) => profile.id === id);
 		if (!profile) throw new DomainError('Tài khoản thử nghiệm không hợp lệ.', 400);
 		const flow = await sessionOperation<Flow | null>(env, 'take', `oauth:${state}`);
 		if (!flow) throw new DomainError('Phiên đăng nhập đã được sử dụng hoặc hết hạn.', 400);

@@ -17,6 +17,7 @@
 		"test:e2e": "playwright test",
 		"format": "prettier --write .",
 		"backup:local": "node scripts/backup.mjs",
+		"restore:local": "node --import tsx scripts/restore-local.mjs",
 		"migrate:supabase": "node --import tsx scripts/migrate-supabase.ts",
 		"dev:worker": "wrangler dev --env local --ip 127.0.0.1 --port 8787",
 		"check:worker": "tsc -p worker/tsconfig.json",
