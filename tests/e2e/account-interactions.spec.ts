@@ -1334,10 +1334,15 @@ for (const width of [1280, 390]) {
 				expect(afterBox.y).toBeGreaterThanOrEqual(beforeBox.y + beforeBox.height);
 			}
 			const billLink = after.getByRole('button', { name: 'Bún bò', exact: true });
+			const billRow = after
+				.locator('.counterpart-history-entry')
+				.filter({ has: page.getByRole('button', { name: 'Bún bò', exact: true }) });
+			const billRowBox = (await billRow.boundingBox())!;
+			const amountSide = { x: billRowBox.width - 4, y: billRowBox.height / 2 };
 			await expect(billLink).toHaveCSS('text-decoration-line', 'none');
-			await billLink.hover();
+			await billRow.hover({ position: amountSide });
 			await expect(billLink).toHaveCSS('color', 'rgb(87, 129, 92)');
-			await billLink.click();
+			await billRow.click({ position: amountSide });
 			await expect(page.getByRole('dialog', { name: 'Bún bò', exact: true })).toBeVisible();
 		});
 
@@ -1355,7 +1360,10 @@ for (const width of [1280, 390]) {
 			await expect(date).toHaveCount(0);
 			await expect.poll(() => saved()?.baselineVersion).toBe(state.version);
 
-			await toggle.click();
+			const header = flow.locator('.flow-header');
+			const headerBox = (await header.boundingBox())!;
+			await header.click({ position: { x: headerBox.width - 8, y: headerBox.height / 2 } });
+			await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 			await expect(date).not.toContainText('Mới');
 			await expect.poll(() => saved()?.expanded).toBe(true);
 			await page.reload();
@@ -1476,17 +1484,7 @@ for (const width of [1280, 390]) {
 			await expect(page.getByRole('dialog', { name: 'Bánh mì', exact: true })).toBeVisible();
 			await page.keyboard.press('Escape');
 
-			for (const [id, section, expected] of [
-				['newHub', after, 'Cần trả cho Mai · 120.000 ₫'],
-				[
-					'undo',
-					flow.getByRole('region', { name: 'Cần trả hoặc nhận hiện tại' }),
-					'Nhận lại từ An · 20.000 ₫'
-				]
-			] as const) {
-				await scenario.selectOption(id);
-				await expect(section.getByText(expected, { exact: true })).toBeVisible();
-			}
+			await scenario.selectOption('undo');
 			await expect(flow.getByText('Lần tối giản nợ này đã được hoàn tác.', { exact: true })).toBeVisible();
 			await expect(flow).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 			await expect(
@@ -1622,7 +1620,7 @@ for (const width of [1280, 390]) {
 			const huy = page.locator('.counterpart').filter({ hasText: 'Quang Huy' });
 			await linh.getByRole('button', { name: 'Xem lịch sử với Thảo Linh', exact: true }).click();
 			// The decorative chevron forwards clicks to the full-row history toggle.
-			const historyChevron = huy.locator('.counterpart-history-chevron');
+			const historyChevron = huy.locator('.collapse-chevron');
 			await historyChevron.evaluate((element) => element.scrollIntoView({ block: 'center' }));
 			const chevron = (await historyChevron.boundingBox())!;
 			await page.mouse.click(chevron.x + chevron.width / 2, chevron.y + chevron.height / 2);

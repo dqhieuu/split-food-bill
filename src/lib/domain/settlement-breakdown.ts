@@ -17,7 +17,6 @@ export type CashFlowRoute = {
 type BatchFlow = { batch: Settlement; before: CashFlowRoute[]; after: CashFlowRoute[] };
 type Pair = {
 	from: string;
-	to: string;
 	parts: Map<string, CashFlowPart>;
 	qrCutoff?: { order: number; parts: Map<string, CashFlowPart> };
 };
@@ -93,7 +92,7 @@ export function settlementBreakdown(state: AppState, accountId: string) {
 		booked.set(entry.id, { order: booked.size, parts });
 		if (entry.from === entry.to) return;
 		const key = pairKey(entry.from, entry.to);
-		const pair: Pair = pairs.get(key) ?? { from: entry.from, to: entry.to, parts: new Map() };
+		const pair: Pair = pairs.get(key) ?? { from: entry.from, parts: new Map() };
 		for (const part of parts) addPart(pair.parts, part, pair.from === entry.from ? 1 : -1);
 		pairs.set(key, pair);
 		return pair;
@@ -183,13 +182,6 @@ export function settlementBreakdown(state: AppState, accountId: string) {
 			}
 		}
 	}
-	const routes: CashFlowRoute[] = [];
-	for (const pair of pairs.values()) {
-		const amount = total(pair.parts.values());
-		if (!amount || !involvesAccount(pair)) continue;
-		const [from, to] = amount > 0 ? [pair.from, pair.to] : [pair.to, pair.from];
-		routes.push({ from, to, amount: Math.abs(amount), parts: outstandingParts(pairParts(from, to)) });
-	}
 	const cancelled = cancelledEntryIds(state.ledger);
 	const since = history[0]?.batch.date;
 	const transfers = since
@@ -207,5 +199,5 @@ export function settlementBreakdown(state: AppState, accountId: string) {
 				.sort(compareLedgerEntries)
 				.map((entry) => ({ entry, billMatches: transferBills.get(entry.id) }))
 		: [];
-	return { history: history.reverse(), routes: routes.sort((a, b) => b.amount - a.amount), transfers };
+	return { history: history.reverse(), transfers };
 }

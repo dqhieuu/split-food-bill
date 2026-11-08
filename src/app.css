@@ -1463,6 +1463,10 @@ footer {
 	cursor: pointer;
 }
 .counterpart {
+	--counterpart-inset: 25px;
+	--counterpart-avatar-size: 36px;
+	--counterpart-history-start: calc(var(--counterpart-inset) + var(--counterpart-avatar-size) / 2 - 1px);
+	--counterpart-history-line: light-dark(#dfe7d8, #354238);
 	display: flow-root;
 	padding: 0;
 	border-bottom: 1px solid light-dark(#eef0e6, #22241e);
@@ -1496,8 +1500,21 @@ footer {
 	display: flex;
 	align-items: center;
 	gap: 13px;
-	padding: 8px 25px;
+	padding: 8px var(--counterpart-inset);
 	cursor: pointer;
+}
+.counterpart-main > .avatar {
+	width: var(--counterpart-avatar-size);
+	height: var(--counterpart-avatar-size);
+}
+.counterpart-main:has(> .counterpart-row-toggle[aria-expanded='true'])::before {
+	content: '';
+	position: absolute;
+	inset-block: calc(50% + var(--counterpart-avatar-size) / 2) 0;
+	inset-inline-start: var(--counterpart-history-start);
+	width: 2px;
+	background: var(--counterpart-history-line);
+	pointer-events: none;
 }
 .counterpart-row-toggle {
 	position: absolute;
@@ -1585,9 +1602,11 @@ footer {
 	pointer-events: none;
 }
 .counterpart-history {
-	margin: 0 25px 16px 46px;
-	padding: 4px 0 4px 27px;
-	border-left: 2px solid light-dark(#dfe7d8, #354238);
+	margin-block: 0 16px;
+	margin-inline: var(--counterpart-history-start) var(--counterpart-inset);
+	padding-block: 4px;
+	padding-inline-start: 30px;
+	border-inline-start: 2px solid var(--counterpart-history-line);
 }
 .counterpart-history-heading {
 	display: flex;
@@ -1660,7 +1679,7 @@ footer {
 	color: light-dark(#6e7865, #a3ab9c);
 	padding: 8px 0;
 }
-.counterpart-history-chevron {
+.collapse-chevron {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -1668,7 +1687,7 @@ footer {
 	color: light-dark(#6e7865, #a3ab9c);
 	transition: transform 150ms ease;
 }
-.counterpart-history-chevron.expanded {
+.collapse-chevron.expanded {
 	color: var(--primary);
 	transform: rotate(180deg);
 }
@@ -2703,8 +2722,8 @@ footer {
 		flex-wrap: wrap;
 		gap: 14px;
 	}
-	.counterpart-main {
-		padding-inline: 18px;
+	.counterpart {
+		--counterpart-inset: 18px;
 	}
 	.counterpart-actions {
 		margin-left: 4px;
@@ -3105,17 +3124,17 @@ footer {
 		flex: 1;
 		min-width: 0;
 	}
+	.counterpart {
+		--counterpart-inset: 16px;
+	}
 	.counterpart-main {
 		display: grid;
-		grid-template-columns: 36px minmax(0, 1fr) auto;
+		grid-template-columns: var(--counterpart-avatar-size) minmax(0, 1fr) auto;
 		grid-template-areas: 'avatar name actions' 'avatar amount actions';
 		gap: 4px 10px;
-		padding-inline: 16px;
 	}
 	.counterpart-main > .avatar {
 		grid-area: avatar;
-		width: 36px;
-		height: 36px;
 	}
 	.counterpart-name {
 		grid-area: name;
@@ -3155,8 +3174,8 @@ footer {
 		padding: 6px 8px;
 	}
 	.counterpart-history {
-		margin: 0 16px 14px 34px;
-		padding-left: 12px;
+		margin-block-end: 14px;
+		padding-inline-start: 12px;
 	}
 	.counterpart-history-info strong,
 	.counterpart-history-amount {

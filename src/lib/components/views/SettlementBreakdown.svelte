@@ -110,24 +110,6 @@
 		return { toPay, toReceive };
 	}
 
-	function sameBreakdown(left: CashFlowRoute[], right: CashFlowRoute[]) {
-		return (
-			left.length === right.length &&
-			left.every(({ from, to, amount, parts }) => {
-				const match = right.find((route) => route.from === from && route.to === to);
-				return (
-					match?.amount === amount &&
-					match.parts.length === parts.length &&
-					parts.every(({ entry, amount, billId }) =>
-						match.parts.some(
-							(part) => part.entry.id === entry.id && part.amount === amount && part.billId === billId
-						)
-					)
-				);
-			})
-		);
-	}
-
 	function partLabel(part: CashFlowPart) {
 		const { entry } = part;
 		if (entry.source === 'settlement' || entry.source === 'reversal')
@@ -175,9 +157,13 @@
 					part.entry.source !== 'reversal'}
 				{@const billAlreadyListed =
 					payment && route.parts.some((item) => item.billId === part.billId && item.entry.type === 'debt')}
-				<div class="counterpart-history-entry">
+				{@const linkedBillId = billAlreadyListed ? undefined : part.billId}
+				<div
+					class="counterpart-history-entry"
+					class:flow-bill-entry={!!linkedBillId && bills.has(linkedBillId)}
+				>
 					<div class="counterpart-history-info">
-						{@render billLabel(billAlreadyListed ? undefined : part.billId, partLabel(part))}
+						{@render billLabel(linkedBillId, partLabel(part))}
 						{#if payment}
 							{#if !billAlreadyListed && part.billId && bills.has(part.billId)}<small>{partLabel(part)}</small
 								>{/if}
@@ -224,7 +210,7 @@
 		class:flow-undone={!!batch.undoneAt}
 		aria-label="Dòng tiền sau tối giản nợ"
 	>
-		<header class="flow-header">
+		<header class="flow-header" class:expanded>
 			<h2>
 				<button
 					type="button"
@@ -234,7 +220,7 @@
 					onclick={toggleExpanded}
 				>
 					Dòng tiền sau tối giản nợ
-					<ChevronDown size={18} aria-hidden="true" />
+					<span class="collapse-chevron" class:expanded aria-hidden="true"><ChevronDown size={18} /></span>
 				</button>
 			</h2>
 			{#if expanded}
@@ -336,12 +322,6 @@
 					{@render snapshot('Trước tối giản', before)}
 					{@render snapshot('Sau tối giản', after)}
 				</div>
-				{#if selectedIndex === 0 && !sameBreakdown(after, flow.routes)}
-					<section aria-label="Cần trả hoặc nhận hiện tại">
-						<h3>Cần trả hoặc nhận hiện tại</h3>
-						{@render routeList(flow.routes)}
-					</section>
-				{/if}
 				{#if flow.transfers.length}
 					<details>
 						<summary>Lịch sử chuyển tiền</summary>
@@ -382,18 +362,22 @@
 
 <style>
 	.cash-flow {
-		padding: 16px;
 		margin-bottom: 16px;
 	}
 	.cash-flow.flow-undone {
 		background: light-dark(#f0f0f0, #242424);
 	}
 	.flow-header {
+		position: relative;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px 12px;
+		padding: 16px;
+	}
+	.flow-header.expanded {
+		padding-bottom: 0;
 	}
 	.flow-toggle {
 		display: flex;
@@ -402,10 +386,14 @@
 		text-align: left;
 		cursor: pointer;
 	}
-	.flow-toggle[aria-expanded='true'] :global(svg) {
-		transform: rotate(180deg);
+	.flow-toggle::before {
+		content: '';
+		position: absolute;
+		inset: 0;
 	}
 	.flow-picker {
+		position: relative;
+		z-index: 1;
 		--cal-line: var(--border);
 		--cal-cell: var(--background);
 	}
@@ -420,6 +408,9 @@
 	}
 	.flow-picker :global(.flow-date:hover) {
 		background: var(--muted);
+	}
+	.flow-content {
+		padding: 0 16px 16px;
 	}
 	.flow-content > p {
 		margin-top: 6px;
@@ -458,16 +449,27 @@
 		font-weight: 600;
 	}
 	.flow-route {
-		padding-inline: 12px;
 		margin-top: 10px;
+	}
+	.flow-route > .counterpart-history-entry {
+		margin-inline: 12px;
 	}
 	.flow-route h4 {
 		font-weight: 650;
 	}
 	.flow-transfer-bills {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0 12px;
+		display: grid;
+	}
+	.flow-transfer-bills .flow-bill {
+		padding-block: 2px;
+	}
+	.flow-bill-entry {
+		position: relative;
+	}
+	.flow-bill-entry .flow-bill::before {
+		content: '';
+		position: absolute;
+		inset: 0;
 	}
 	.flow-bill {
 		font-size: 14px;

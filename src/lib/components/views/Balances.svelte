@@ -312,7 +312,7 @@
 									>{reason}</span
 								>{/if}</span
 						>{/if}<span
-						class="counterpart-history-chevron"
+						class="collapse-chevron"
 						class:expanded={expanded.includes(pair.member.id)}
 						aria-hidden="true"><ChevronDown size={18} /></span
 					>
