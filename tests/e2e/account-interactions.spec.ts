@@ -1027,7 +1027,7 @@ for (const width of [1280, 390]) {
 								json: { message: 'AI đang bận. Bạn có thể nhập thủ công.' }
 							});
 						return route.fulfill({
-							json: { billName: 'Hóa đơn từ camera', totalCost: 125000, billDate: '2026-10-28' }
+							json: { billName: 'Hóa đơn từ camera', totalCost: 125500, billDate: '2026-10-28' }
 						});
 					});
 					await page.route('**/api/groups/local/commands/createBill', (route) => {
@@ -1076,7 +1076,11 @@ for (const width of [1280, 390]) {
 						aiEnabled ? 'Hóa đơn từ camera' : 'Bản nháp camera'
 					);
 					if (aiEnabled) {
-						await expect(page.getByLabel('Tổng tiền cần chia', { exact: true })).toHaveValue('125');
+						await expect(page.getByLabel('Tổng tiền cần chia', { exact: true })).toHaveValue('125500');
+						await expect(page.getByRole('button', { name: 'Đồng', exact: true })).toHaveAttribute(
+							'aria-pressed',
+							'true'
+						);
 						await expect(page.locator('.ai-scan-notice')).toContainText('AI đã điền tên');
 					} else {
 						await expect(page.getByLabel('Số tiền của Thảo Linh', { exact: true })).toHaveValue('55');
@@ -1085,6 +1089,10 @@ for (const width of [1280, 390]) {
 					expect(scans).toBe(aiEnabled ? 1 : 0);
 					await page.reload();
 					await expect(page.locator('.bill-image-attached img')).toHaveJSProperty('naturalWidth', 1200);
+					if (aiEnabled) {
+						await page.getByRole('button', { name: 'Nhập từng người', exact: true }).click();
+						await expect(page.getByLabel('Số tiền của Thảo Linh', { exact: true })).toHaveValue('55000');
+					}
 					expect(uploads).toBe(1);
 					expect(scans).toBe(aiEnabled ? 1 : 0);
 					// The same camera input works again from the composer; errors keep its attachment/draft.
@@ -1480,14 +1488,19 @@ for (const width of [1280, 390]) {
 			await expect(page.getByRole('dialog', { name: 'Bánh mì', exact: true })).toBeVisible();
 			await page.keyboard.press('Escape');
 
+			const comparison = flow.locator('.flow-comparison');
+			const panelBackground = await flow.evaluate((element) => getComputedStyle(element).backgroundColor);
 			await scenario.selectOption('undo');
 			await expect(flow.getByText('Lần tối giản nợ này đã được hoàn tác.', { exact: true })).toBeVisible();
-			await expect(flow).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+			await expect(flow).toHaveCSS('background-color', panelBackground);
+			await expect(flow).toHaveCSS('opacity', '1');
+			await expect(comparison).toHaveCSS('opacity', '0.7');
 			await expect(
 				flow.getByRole('button', { name: /^Ngày tối giản.*đã hoàn tác$/ }).locator('[aria-live="polite"]')
 			).toHaveCSS('text-decoration-line', 'line-through');
 
 			await scenario.selectOption('newHub');
+			await expect(comparison).toHaveCSS('opacity', '1');
 			const older = flow.getByRole('button', { name: 'Lần tối giản trước' });
 			const newer = flow.getByRole('button', { name: 'Lần tối giản sau' });
 			const date = flow.getByRole('button', { name: /^Ngày tối giản/ });
@@ -2488,6 +2501,9 @@ for (const width of [1280, 390]) {
 			});
 			const day = (date: number) => page.getByRole('gridcell', { name: new RegExp(`^${date}/`) });
 			const crowded = day(5);
+			await expect(day(7).locator('.cal-bill-name')).toHaveText(
+				[10, 8, 9].map((number) => `Bữa trưa văn phòng có tên dài ${number}`)
+			);
 			if (width <= 760) {
 				await expect(crowded.locator('.cal-bill')).toHaveCount(3);
 				await expect(crowded.locator('.cal-mobile-count')).toHaveText('+3');
@@ -2549,7 +2565,7 @@ for (const width of [1280, 390]) {
 						.locator('.cal-track')
 						.evaluate((track) => getComputedStyle(track).backgroundColor);
 					await expect(day(6).locator('.cal-bill')).toHaveCSS('background-color', trackColor);
-					const [large, small] = await day(7)
+					const [large, , small] = await day(7)
 						.locator('.cal-bill')
 						.evaluateAll((bars) =>
 							bars.map((bar) => ({

@@ -299,6 +299,7 @@
 			if (scan.billDate !== null) date = scan.billDate;
 			mode = 'equal';
 			if (scan.totalCost > 0) {
+				if (scan.totalCost % unit !== 0) changeUnit(1);
 				totalInput = scan.totalCost / unit;
 				scanNotice = `AI đã điền tên và tổng ${currency(scan.totalCost)}. Hãy kiểm tra lại.`;
 			} else scanNotice = 'AI đã điền tên nhưng không đọc được tổng tiền. Hãy nhập tổng.';

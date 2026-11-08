@@ -176,7 +176,7 @@ export function calendarMonth(
 				localDate(bill.date).startsWith(monthKey) &&
 				(!payerId || bill.organizer === payerId)
 		)
-		.sort(compareBillsByCreatedAt);
+		.sort((a, b) => b.total - a.total || compareBillsByCreatedAt(a, b));
 	const maxBill = Math.max(1, ...inMonth.map((bill) => bill.total));
 	const monthTotal = inMonth.reduce((sum, bill) => sum + bill.total, 0);
 	const monthPersonMeals = inMonth.reduce((sum, bill) => sum + participantCount(bill), 0);

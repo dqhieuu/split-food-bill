@@ -207,11 +207,7 @@
 	{@const beforePayers = payers(before)}
 	{@const afterPayees = payees(after)}
 	{@const afterPayers = payers(after)}
-	<section
-		class="panel cash-flow"
-		class:flow-undone={!!batch.undoneAt}
-		aria-label="Dòng tiền sau tối giản nợ"
-	>
+	<section class="panel cash-flow" aria-label="Dòng tiền sau tối giản nợ">
 		<header class="flow-header" class:expanded>
 			<h2>
 				<button
@@ -320,7 +316,7 @@
 						{/if}
 					</p>
 				{/if}
-				<div class="flow-comparison">
+				<div class="flow-comparison" class:flow-undone={!!batch.undoneAt}>
 					{@render snapshot('Trước tối giản', before)}
 					{@render snapshot('Sau tối giản', after)}
 				</div>
@@ -332,9 +328,6 @@
 <style>
 	.cash-flow {
 		margin-bottom: 16px;
-	}
-	.cash-flow.flow-undone {
-		background: light-dark(#f0f0f0, #242424);
 	}
 	.flow-header {
 		position: relative;
@@ -387,6 +380,9 @@
 	}
 	.flow-previous {
 		color: light-dark(#6e7865, #a3ab9c);
+	}
+	.flow-comparison.flow-undone {
+		opacity: 0.7;
 	}
 	.flow-snapshot-heading,
 	.flow-totals {

@@ -105,8 +105,8 @@ describe('spending calendar month', () => {
 	});
 	const name = (b: Bill) => b.memberNames?.[b.organizer] ?? b.organizer;
 	const bills = [
-		bill('a', '2026-10-05T05:00:00.000Z', 100000),
-		bill('b', '2026-10-05T06:00:00.000Z', 400000, 'linh'),
+		bill('a', '2026-10-05T06:00:00.000Z', 100000),
+		bill('b', '2026-10-05T05:00:00.000Z', 400000, 'linh'),
 		bill('c', '2026-10-20T05:00:00.000Z', 200000),
 		bill('d', '2026-09-30T05:00:00.000Z', 900000)
 	];
