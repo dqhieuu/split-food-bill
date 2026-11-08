@@ -35,7 +35,7 @@ export function billNotificationMessage(
 	const others = bill.lines.filter((entry) => entry.memberId !== recipient);
 	const heading = [
 		`**Hoá đơn:** ${text(bill.description, 160)} ngày ${billDateLabel(bill.date)}`,
-		`**Người trả hóa đơn:** ${text(bill.memberNames?.[bill.organizer] ?? bill.organizer, 100)}`,
+		`**Người thanh toán:** ${text(bill.memberNames?.[bill.organizer] ?? bill.organizer, 100)}`,
 		'',
 		`**${bill.alreadyPaid ? 'Đã thanh toán' : 'Bạn phải trả'}: ${currency(line.amount)}**${line.description ? ` cho ${text(line.description, 120)}` : ''}`,
 		...(others.length ? ['', '**Người khác:**'] : [])

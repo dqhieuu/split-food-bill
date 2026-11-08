@@ -13,7 +13,8 @@
 		actor,
 		run,
 		busy,
-		groupId
+		groupId,
+		readOnly = false
 	}: {
 		open: boolean;
 		bill?: Bill;
@@ -22,12 +23,14 @@
 		run: RunCommand;
 		busy: boolean;
 		groupId: string;
+		readOnly?: boolean;
 	} = $props();
 	let confirming = $state(false);
 	const name = (id: string) => appState.members.find((member) => member.id === id)?.name || id;
 	const currentMember = $derived(appState.members.find((member) => member.id === actor));
 	const canUndo = $derived(
-		!!bill &&
+		!readOnly &&
+			!!bill &&
 			!bill.undoneAt &&
 			currentMember?.active &&
 			(bill.organizer === actor || currentMember.role === 'admin')
@@ -36,7 +39,7 @@
 		if (!open || bill?.undoneAt) confirming = false;
 	});
 	async function undo() {
-		if (!bill) return;
+		if (!bill || !canUndo) return;
 		await run('undoBill', { id: bill.id }, 'Đã hoàn tác hóa đơn.').catch(() => {});
 	}
 </script>

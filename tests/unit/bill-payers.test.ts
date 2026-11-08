@@ -41,8 +41,8 @@ describe('admin selects a bill payer', () => {
 			'https://example.test'
 		);
 		expect(message.embeds[0].description).toContain('/balances?group=lunch&to=linh');
-		expect(message.embeds[0].description).toContain('**Người trả hóa đơn:** Thảo Linh');
-		expect(message.embeds[0].description).not.toContain('**Người trả hóa đơn:** Minh An');
+		expect(message.embeds[0].description).toContain('**Người thanh toán:** Thảo Linh');
+		expect(message.embeds[0].description).not.toContain('**Người thanh toán:** Minh An');
 	});
 
 	it('rejects a forged payer from a non-admin group member without changing state', () => {

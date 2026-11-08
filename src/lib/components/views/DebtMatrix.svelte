@@ -155,8 +155,8 @@
 		</div>
 		<ol class="simplification-steps">
 			<li>Bước 1: Cân bằng nợ nần về 0</li>
-			<li>Bước 2: Người nợ trả tiền cho nợ chúa</li>
-			<li>Bước 3: Nợ chúa trả tiền cho người bị nợ</li>
+			<li>Bước 2: Những người bị nợ gom hết tiền về cho nợ chúa</li>
+			<li>Bước 3: Nợ chúa trả tiền cho toàn bộ người bị nợ</li>
 		</ol>
 		{#if !isAdmin}<p class="fine-print">Chỉ quản trị viên được tối giản nợ.</p>{/if}
 	</section>
@@ -234,14 +234,11 @@
 			{#each plan.entries.filter((entry) => entry.type === 'debt') as entry}
 				{@const debtor = appState.members.find((member) => member.id === entry.from)?.name ?? entry.from}
 				{@const creditor = appState.members.find((member) => member.id === entry.to)?.name ?? entry.to}
+				{@const toHub = entry.settlementStep === 2}
 				<div>
 					<span>
-						<strong>{debtor} nợ {creditor}</strong>
-						<small
-							>{entry.settlementStep === 2
-								? 'Gom tiền về nợ chúa'
-								: 'Nợ chúa trả tiền cho người bị nợ'}</small
-						>
+						<strong class={toHub ? 'negative' : 'positive'}>{debtor} nợ {creditor}</strong>
+						<small>{toHub ? 'Gom tiền về nợ chúa' : 'Nợ chúa trả tiền cho người bị nợ'}</small>
 					</span>
 					<strong>{currency(entry.amount)}</strong>
 				</div>

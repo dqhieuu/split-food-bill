@@ -771,7 +771,9 @@ button.chart-column:is(:hover, :focus-visible) .bar {
 	padding: 15px 0;
 	border-top: 1px solid light-dark(#efefe6, #24241e);
 }
-.bill-row:hover .bill-info strong {
+.bill-row:is(:hover, :focus-visible) .bill-info strong,
+.flow-bill:is(:hover, :focus-visible),
+.counterpart-bill-toggle:is(:hover, :focus-visible) + .counterpart-history-info strong {
 	color: light-dark(#57815c, #78a37c);
 }
 .bill-symbol {
@@ -1461,10 +1463,11 @@ footer {
 	cursor: pointer;
 }
 .counterpart {
+	display: flow-root;
 	padding: 0;
 	border-bottom: 1px solid light-dark(#eef0e6, #22241e);
 }
-.counterpart.owing > .counterpart-main {
+.counterpart.owing {
 	background: light-dark(#fff4f2, #2b2020);
 }
 .balances-heading {
@@ -1493,7 +1496,7 @@ footer {
 	display: flex;
 	align-items: center;
 	gap: 13px;
-	padding: 14px 25px;
+	padding: 8px 25px;
 	cursor: pointer;
 }
 .counterpart-row-toggle {
@@ -1627,10 +1630,6 @@ footer {
 	outline: 2px solid var(--primary);
 	outline-offset: 2px;
 }
-.counterpart-bill-entry .counterpart-history-info strong {
-	text-decoration: underline;
-	text-underline-offset: 3px;
-}
 .counterpart-history-info {
 	min-width: 0;
 }
@@ -1640,6 +1639,9 @@ footer {
 	font-weight: 500;
 	line-height: 1.4;
 	overflow-wrap: anywhere;
+}
+.counterpart-bill-entry .counterpart-history-info strong {
+	font-weight: 600;
 }
 .counterpart-history-info small {
 	display: block;
@@ -3108,7 +3110,7 @@ footer {
 		grid-template-columns: 36px minmax(0, 1fr) auto;
 		grid-template-areas: 'avatar name actions' 'avatar amount actions';
 		gap: 4px 10px;
-		padding: 14px 16px;
+		padding-inline: 16px;
 	}
 	.counterpart-main > .avatar {
 		grid-area: avatar;

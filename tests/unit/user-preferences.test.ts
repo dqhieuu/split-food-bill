@@ -90,3 +90,22 @@ describe('account Discord notification preference', () => {
 		expect(written).toHaveLength(0);
 	});
 });
+
+it('merges flow updates per group and keeps the original baseline and every viewed batch', async () => {
+	const { users, store } = fixture();
+	const save = (groupId: string, change: object) =>
+		saveUserPreferences(store, second.id, { settlementFlow: { groupId, ...change } });
+	await save('lunch', { baselineVersion: 8 });
+	await save('lunch', { expanded: false, seenBatchId: 'third' });
+	await save('lunch', { baselineVersion: 12, seenBatchId: 'second' });
+	await save('lunch', { expanded: true, seenBatchId: 'third' });
+	await save('dinner', { baselineVersion: 5 });
+	expect(users.get(`users/${second.id}`)?.preferences).toEqual({
+		discordBillNotifications: true,
+		settlementFlow: {
+			lunch: { baselineVersion: 8, expanded: true, seenBatchIds: ['third', 'second'] },
+			dinner: { baselineVersion: 5 }
+		}
+	});
+	expect(users.get(`users/${first.id}`)?.preferences).toBeUndefined();
+});

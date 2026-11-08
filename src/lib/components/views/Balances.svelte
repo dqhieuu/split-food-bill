@@ -10,7 +10,8 @@
 	import Modal from '../Modal.svelte';
 	import BillDetail from '../BillDetail.svelte';
 	import EmptyState from '../EmptyState.svelte';
-	import type { AppState, Member } from '$lib/domain/types';
+	import SettlementBreakdown from './SettlementBreakdown.svelte';
+	import type { AppState, Member, SettlementFlowPreference, SettlementFlowUpdate } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
 	import { currency, dateLabel, cancelledEntryIds, pairBalance } from '$lib/domain/ledger';
 	import { vietQrPayload, bankNames, qrPaymentMessage } from '$lib/domain/qr';
@@ -27,14 +28,20 @@
 		run,
 		busy,
 		groupId,
-		onEditAccount
+		flowPreference,
+		onFlowPreferenceChange,
+		onEditAccount,
+		onSimulateMember
 	}: {
 		appState: AppState;
 		actor: string;
 		run: RunCommand;
 		busy: boolean;
 		groupId: string;
-		onEditAccount: () => void;
+		flowPreference?: SettlementFlowPreference;
+		onFlowPreferenceChange?: (change: SettlementFlowUpdate) => void;
+		onEditAccount?: () => void;
+		onSimulateMember?: (id: string) => void;
 	} = $props();
 	let filter = $state('all');
 	let expanded = $state<string[]>([]);
@@ -60,12 +67,15 @@
 	const currentMember = $derived(appState.members.find((member) => member.id === actor));
 	const isAdmin = $derived(currentMember?.active && currentMember.role === 'admin');
 	const account = $derived(
-		appState.members.find((member) => member.id === page.url.searchParams.get('member')) ?? currentMember
+		onSimulateMember
+			? currentMember
+			: (appState.members.find((member) => member.id === page.url.searchParams.get('member')) ??
+					currentMember)
 	);
 	const accountId = $derived(account?.id ?? actor);
 	const isOwnAccount = $derived(accountId === actor);
 	const subject = $derived(isOwnAccount ? 'Bạn' : (account?.name ?? 'Thành viên'));
-	const canManage = $derived(!!currentMember?.active && (isOwnAccount || !!isAdmin));
+	const canManage = $derived(!onSimulateMember && !!currentMember?.active && (isOwnAccount || !!isAdmin));
 	let openedAccount = '';
 	let openedRecipient = '';
 	$effect(() => {
@@ -79,7 +89,7 @@
 			billOpen = false;
 			selectedBillId = '';
 		}
-		const to = page.url.searchParams.get('to');
+		const to = onSimulateMember ? null : page.url.searchParams.get('to');
 		if (to && to !== openedRecipient) {
 			openedRecipient = to;
 			expanded = [...new Set([...expanded, to])];
@@ -123,6 +133,10 @@
 	});
 	async function changeAccount(id: string) {
 		if (busy) return;
+		if (onSimulateMember) {
+			onSimulateMember(id);
+			return;
+		}
 		const url = new URL(page.url.href);
 		if (id === actor) url.searchParams.delete('member');
 		else url.searchParams.set('member', id);
@@ -211,7 +225,7 @@
 		</select>
 	</label>
 </div>
-{#if isOwnAccount && account && (!account.bankCode.trim() || !account.bankAccount.trim())}
+{#if onEditAccount && isOwnAccount && account && (!account.bankCode.trim() || !account.bankAccount.trim())}
 	<div class="notice bank-account-notice" role="status">
 		<CircleAlert size={20} aria-hidden="true" />
 		<div>
@@ -235,6 +249,18 @@
 		>
 	</div>
 </div>
+<SettlementBreakdown
+	{appState}
+	{accountId}
+	{subject}
+	preference={flowPreference}
+	onPreferenceChange={onFlowPreferenceChange}
+	simulation={!!onSimulateMember}
+	onBillClick={(id) => {
+		selectedBillId = id;
+		billOpen = true;
+	}}
+/>
 <section class="panel">
 	<div class="filter-toolbar">
 		<div class="segmented-control">
@@ -272,7 +298,7 @@
 					>
 				</div>
 				<div class="counterpart-actions">
-					{#if pair.balance > 0}{@const reason = qrDisabledReason(pair.member)}
+					{#if !onSimulateMember && pair.balance > 0}{@const reason = qrDisabledReason(pair.member)}
 						<!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users need to focus the disabled button's reason.) -->
 						<span
 							class="qr-button-with-tooltip"
@@ -345,7 +371,16 @@
 			description="Không có nợ trong phạm vi bạn đã chọn."
 		/>{/if}
 </section>
-<BillDetail bind:open={billOpen} bill={selectedBill} {appState} {actor} {run} {busy} {groupId} />
+<BillDetail
+	bind:open={billOpen}
+	bill={selectedBill}
+	{appState}
+	{actor}
+	{run}
+	{busy}
+	{groupId}
+	readOnly={!!onSimulateMember}
+/>
 <Modal
 	bind:open={qrOpen}
 	title="Chuyển tiền bằng QR"

@@ -47,6 +47,7 @@
 		getSession,
 		selectGroup,
 		saveDiscordNotificationPreference,
+		saveSettlementFlowPreference,
 		sendCommand
 	} from '$lib/client/api';
 	import {
@@ -56,7 +57,14 @@
 		setTestView,
 		setTheme
 	} from '$lib/client/preferences.svelte';
-	import type { AppState, Session, Group } from '$lib/domain/types';
+	import {
+		updateSettlementFlowPreference,
+		type AppState,
+		type Session,
+		type Group,
+		type SettlementFlowUpdate
+	} from '$lib/domain/types';
+	const loadBalancesDebug = isTestEnv ? () => import('$lib/components/views/BalancesDebug.svelte') : null;
 	let appState = $state<AppState | null>(null);
 	let sessionData = $state<Session | null>(null);
 	let group = $state<Group | null>(null);
@@ -114,6 +122,7 @@
 			.toLocaleUpperCase('vi') || '?'
 	);
 	let toastTimer: ReturnType<typeof setTimeout>;
+	let settlementPreferenceWrites = Promise.resolve();
 	async function navigateFromBottomBar(event: MouseEvent, path: string) {
 		mobileMenu = false;
 		if (
@@ -154,12 +163,37 @@
 	}
 	async function changeDiscordNotificationPreference(enabled: boolean) {
 		const uid = sessionData?.user.id;
-		const { preferences } = await saveDiscordNotificationPreference(enabled);
+		const {
+			preferences: { discordBillNotifications }
+		} = await saveDiscordNotificationPreference(enabled);
 		if (sessionData && sessionData.user.id === uid)
 			sessionData = {
 				...sessionData,
-				user: { ...sessionData.user, preferences: { ...sessionData.user.preferences, ...preferences } }
+				user: {
+					...sessionData.user,
+					preferences: { ...sessionData.user.preferences, discordBillNotifications }
+				}
 			};
+	}
+	function changeSettlementFlowPreference(groupId: string, change: SettlementFlowUpdate) {
+		if (!sessionData) return;
+		const { user } = sessionData;
+		const flowPreferences = user.preferences?.settlementFlow;
+		const updated = updateSettlementFlowPreference(flowPreferences?.[groupId], change);
+		sessionData = {
+			...sessionData,
+			user: {
+				...user,
+				preferences: { ...user.preferences, settlementFlow: { ...flowPreferences, [groupId]: updated } }
+			}
+		};
+		settlementPreferenceWrites = settlementPreferenceWrites
+			.then(async () => {
+				if (sessionData?.user.id === user.id) await saveSettlementFlowPreference(groupId, change);
+			})
+			.catch(() => {
+				if (sessionData?.user.id === user.id) notify('Chưa lưu được tùy chọn dòng tiền.', true);
+			});
 	}
 	function openBillCamera() {
 		cameraContext = { groupId: selectedGroupId, actor };
@@ -199,6 +233,7 @@
 		busy = true;
 		error = '';
 		try {
+			await settlementPreferenceWrites;
 			sessionData = await getSession();
 			await selectGroup(id);
 			const result = await fetchState(id);
@@ -374,11 +409,11 @@
 			<div class="sidebar-bottom">
 				{#if isTestEnv}<div class="env-toggle">
 						<button type="button" tabindex="-1" onclick={() => setTestView(!preferences.testView)}
-							><strong>Giao diện thử nghiệm</strong><small
+							><strong>Giao diện QA</strong><small
 								>{preferences.testView ? 'Đang xem bản thử nghiệm' : 'Đang xem như bản chính thức'}</small
 							></button
 						><Switch
-							aria-label="Giao diện thử nghiệm"
+							aria-label="Giao diện QA"
 							checked={preferences.testView}
 							onCheckedChange={setTestView}
 						/>
@@ -493,17 +528,28 @@
 										true}
 									onDiscordNotificationPreferenceChange={changeDiscordNotificationPreference}
 								/>{/key}
-						{:else if section === '/balances'}{#key actor}<Balances
-									{appState}
-									{actor}
-									{run}
-									{busy}
-									groupId={selectedGroupId}
-									onEditAccount={() => {
-										focusMissingBank = true;
-										profileOpen = true;
-									}}
-								/>{/key}
+						{:else if section === '/balances'}
+							{@const balanceProps = {
+								appState,
+								actor,
+								run,
+								busy,
+								groupId: selectedGroupId,
+								flowPreference: sessionData?.user.preferences?.settlementFlow?.[selectedGroupId],
+								onFlowPreferenceChange: (change: SettlementFlowUpdate) =>
+									changeSettlementFlowPreference(selectedGroupId, change),
+								onEditAccount: () => {
+									focusMissingBank = true;
+									profileOpen = true;
+								}
+							}}
+							{#if loadBalancesDebug && preferences.testView}
+								{#await loadBalancesDebug() then { default: BalancesDebug }}
+									<BalancesDebug {...balanceProps} />
+								{/await}
+							{:else}
+								<Balances {...balanceProps} />
+							{/if}
 						{:else if section === '/activity'}<Activity
 								{appState}
 								{actor}

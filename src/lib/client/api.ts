@@ -9,7 +9,7 @@ import {
 	updateProfile,
 	type Auth
 } from 'firebase/auth';
-import type { AppState, Group, Session } from '$lib/domain/types';
+import type { AppState, Group, Session, SettlementFlowUpdate } from '$lib/domain/types';
 
 export class ApiError extends Error {
 	constructor(
@@ -116,6 +116,13 @@ export async function saveDiscordNotificationPreference(
 	return requestJson('/api/preferences', {
 		method: 'POST',
 		body: JSON.stringify({ discordBillNotifications: enabled })
+	});
+}
+export async function saveSettlementFlowPreference(groupId: string, change: SettlementFlowUpdate) {
+	await requestJson('/api/preferences', {
+		method: 'POST',
+		keepalive: true,
+		body: JSON.stringify({ settlementFlow: { groupId, ...change } })
 	});
 }
 export type GroupState = { state: AppState; actor: string; group: Group };

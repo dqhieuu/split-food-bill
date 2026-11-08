@@ -1,6 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 import { createDemoState } from '../../src/lib/domain/seed';
-import type { AppState, LedgerEntry } from '../../src/lib/domain/types';
+import {
+	updateSettlementFlowPreference,
+	type AppState,
+	type LedgerEntry,
+	type UserPreferences
+} from '../../src/lib/domain/types';
 import { applyCommand, localDate, pairBalance } from '../../src/lib/domain/ledger';
 import { customToken } from '../../worker/src/identity';
 import type { Env } from '../../worker/src/env';
@@ -15,7 +20,7 @@ async function openFixture(
 	options: { aiEnabled?: boolean } = {}
 ) {
 	const state = createDemoState(new Date(now));
-	const userPreferences = { discordBillNotifications: true };
+	const userPreferences: UserPreferences = { discordBillNotifications: true };
 	state.members.find((member) => member.id === 'an')!.id = ACTOR;
 	state.members.find((member) => member.id === 'linh')!.bankAccount = '';
 	const debt = (id: string, from: string, to: string, amount: number): LedgerEntry => ({
@@ -97,7 +102,14 @@ async function openFixture(
 	);
 	await page.route('**/api/groups/local/select', (route) => route.fulfill({ json: {} }));
 	await page.route('**/api/preferences', (route) => {
-		userPreferences.discordBillNotifications = route.request().postDataJSON().discordBillNotifications;
+		const { discordBillNotifications, settlementFlow } = route.request().postDataJSON();
+		if (typeof discordBillNotifications === 'boolean')
+			userPreferences.discordBillNotifications = discordBillNotifications;
+		if (settlementFlow) {
+			const { groupId, ...change } = settlementFlow;
+			const flows = (userPreferences.settlementFlow ??= {});
+			flows[groupId] = updateSettlementFlowPreference(flows[groupId], change);
+		}
 		return route.fulfill({ json: { preferences: userPreferences } });
 	});
 	await page.route('**/api/groups/local/state*', (route) =>
@@ -1277,6 +1289,251 @@ for (const width of [1280, 390]) {
 			]);
 		});
 
+		test('account breakdown opens the original bill after its payment route changes', async ({ page }) => {
+			await openFixture(page, '/balances?member=huy', (state) => {
+				state.ledger = [];
+				state.bills = [];
+				applyCommand(
+					state,
+					'linh',
+					'createBill',
+					{
+						id: 'lunch',
+						description: 'Bún bò',
+						date: now,
+						discordNotification: false,
+						lines: [
+							{ memberId: ACTOR, amount: 100000, description: 'Cơm', note: '' },
+							{ memberId: 'huy', amount: 60000, description: 'Bún bò', note: '' }
+						]
+					},
+					now
+				);
+				applyCommand(
+					state,
+					ACTOR,
+					'settleDebts',
+					{ id: 'reroute', version: state.version },
+					'2026-10-27T06:00:00.000Z'
+				);
+			});
+			const flow = page.getByRole('region', { name: 'Dòng tiền sau tối giản nợ' });
+			const before = flow.getByRole('region', { name: 'Trước tối giản' });
+			const after = flow.getByRole('region', { name: 'Sau tối giản' });
+			await flow.getByRole('button', { name: 'Dòng tiền sau tối giản nợ', exact: true }).click();
+			await expect(flow).toContainText('Quang Huy từng phải trả tiền cho Thảo Linh.');
+			await expect(before.getByRole('heading', { name: 'Cần trả cho Thảo Linh · 60.000 ₫' })).toBeVisible();
+			await expect(after.getByRole('heading', { name: 'Cần trả cho Minh An · 60.000 ₫' })).toBeVisible();
+			const beforeBox = (await before.boundingBox())!;
+			const afterBox = (await after.boundingBox())!;
+			if (width > 760) {
+				expect(afterBox.y).toBe(beforeBox.y);
+				expect(afterBox.x).toBeGreaterThan(beforeBox.x + beforeBox.width);
+			} else {
+				expect(afterBox.x).toBe(beforeBox.x);
+				expect(afterBox.y).toBeGreaterThanOrEqual(beforeBox.y + beforeBox.height);
+			}
+			const billLink = after.getByRole('button', { name: 'Bún bò', exact: true });
+			await expect(billLink).toHaveCSS('text-decoration-line', 'none');
+			await billLink.hover();
+			await expect(billLink).toHaveCSS('color', 'rgb(87, 129, 92)');
+			await billLink.click();
+			await expect(page.getByRole('dialog', { name: 'Bún bò', exact: true })).toBeVisible();
+		});
+
+		test('settlement flow remembers the panel choice and marks each new batch only on its first view', async ({
+			page
+		}) => {
+			const { state, userPreferences } = await openFixture(page, '/balances', (state) => {
+				applyCommand(state, ACTOR, 'settleDebts', { id: 'existing', version: state.version }, now);
+			});
+			const flow = page.getByRole('region', { name: 'Dòng tiền sau tối giản nợ' });
+			const toggle = flow.getByRole('button', { name: 'Dòng tiền sau tối giản nợ', exact: true });
+			const date = flow.getByRole('button', { name: /^Ngày tối giản/ });
+			const saved = () => userPreferences.settlementFlow?.local;
+			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+			await expect(date).toHaveCount(0);
+			await expect.poll(() => saved()?.baselineVersion).toBe(state.version);
+
+			await toggle.click();
+			await expect(date).not.toContainText('Mới');
+			await expect.poll(() => saved()?.expanded).toBe(true);
+			await page.reload();
+			await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+			await toggle.click();
+			await expect.poll(() => saved()?.expanded).toBe(false);
+			await page.reload();
+			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+			for (const [id, date] of [
+				['second', '2026-10-27T06:00:00.000Z'],
+				['third', '2026-10-27T07:00:00.000Z']
+			]) {
+				applyCommand(state, ACTOR, 'settleDebts', { id, version: state.version }, date);
+			}
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+			await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+			await expect(date).toContainText('14:00:00');
+			const badge = date.getByText('Mới', { exact: true });
+			await expect(badge).toHaveCSS('color', 'rgb(255, 255, 255)');
+			await page.getByRole('button', { name: 'Chuyển sang giao diện tối' }).click();
+			await expect(badge).toHaveCSS('color', 'rgb(28, 33, 29)');
+			await expect.poll(() => saved()?.seenBatchIds).toEqual(['third']);
+			await date.click();
+			await page.getByRole('menuitemradio', { name: /13:00:00.*Mới/ }).click();
+			await expect(date).toContainText('13:00:00');
+			await expect(date).toContainText('Mới');
+			await expect.poll(() => saved()?.seenBatchIds).toEqual(['third', 'second']);
+
+			await page.reload();
+			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+			await toggle.click();
+			await expect(date).toContainText('14:00:00');
+			await expect(date).not.toContainText('Mới');
+			await flow.getByRole('button', { name: 'Lần tối giản trước' }).click();
+			await expect(date).toContainText('13:00:00');
+			await expect(date).not.toContainText('Mới');
+		});
+
+		test('account debug scenarios swap in read-only sample balances and leave group data alone', async ({
+			page
+		}) => {
+			const commands: string[] = [];
+			await page.route('**/api/groups/*/commands/*', (route) => {
+				commands.push(route.request().url());
+				return route.abort();
+			});
+			await openFixture(page, '/balances?member=mai');
+			const scenario = page.getByRole('combobox', { name: 'Mô phỏng tối giản nợ' });
+			const account = page.getByRole('combobox', { name: 'Xem tài khoản' });
+			const flow = page.getByRole('region', { name: 'Dòng tiền sau tối giản nợ' });
+			const before = flow.getByRole('region', { name: 'Trước tối giản' });
+			const after = flow.getByRole('region', { name: 'Sau tối giản' });
+			await expect(account).toHaveValue('mai');
+			await expect(flow).toHaveCount(0);
+
+			await scenario.selectOption('first');
+			await expect(account).toHaveValue('huy');
+			await expect(before.getByRole('heading', { level: 3 })).toHaveText(
+				'Trước tối giản Nhận 20.000 ₫ Trả 70.000 ₫'
+			);
+			await expect(before.getByRole('heading', { name: 'Sẽ nhận từ Mai · 20.000 ₫' })).toBeVisible();
+			await expect(before.getByRole('heading', { name: 'Cần trả cho Linh · 60.000 ₫' })).toBeVisible();
+			await expect(flow).toContainText(
+				'chờ nhận tiền từ Mai. → Sau khi tối giản nợ, bạn chỉ cần trả tiền cho nợ chúa An.'
+			);
+			await expect(after.getByRole('heading', { level: 3 })).toHaveText('Sau tối giản Trả 50.000 ₫');
+			await expect(after.getByRole('heading', { name: 'Cần trả cho An · 50.000 ₫' })).toBeVisible();
+
+			await account.selectOption('an');
+			await expect(account).toHaveValue('an');
+			await expect(flow).toContainText(
+				'Bạn từng phải trả tiền cho Linh và chờ nhận tiền từ Huy. → Sau khi tối giản nợ, bạn trở thành nợ chúa.'
+			);
+			await expect(before.getByRole('heading', { level: 3 })).toHaveText(
+				'Trước tối giản Nhận 10.000 ₫ Trả 100.000 ₫'
+			);
+			await expect(after.getByRole('heading', { level: 3 })).toHaveText(
+				'Sau tối giản Nhận 50.000 ₫ Trả 140.000 ₫'
+			);
+			await expect(before.getByRole('heading', { name: 'Sẽ nhận từ Huy · 10.000 ₫' })).toBeVisible();
+			await expect(after.getByRole('heading', { name: 'Sẽ nhận từ Huy · 50.000 ₫' })).toBeVisible();
+			await after.getByRole('button', { name: 'Cơm', exact: true }).click();
+			const bill = page.getByRole('dialog', { name: 'Cơm', exact: true });
+			await expect(bill).toContainText('100.000 ₫');
+			await expect(bill.getByRole('button', { name: 'Hoàn tác hóa đơn' })).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			await expect(bill).toBeHidden();
+			await expect(page.getByRole('button', { name: 'Mã QR' })).toHaveCount(0);
+			await expect(page).toHaveURL(/\?member=mai$/);
+
+			await account.selectOption('mai');
+			await expect(before.getByRole('heading', { level: 3 })).toHaveText(
+				'Trước tối giản Nhận 20.000 ₫ Trả 20.000 ₫'
+			);
+			await expect(after.getByRole('heading', { level: 3 })).toHaveText('Sau tối giản 0 ₫');
+			await expect(flow).toContainText(
+				'→ Sau khi tối giản nợ, bạn không còn khoản nào cần trả hoặc sẽ nhận.'
+			);
+
+			await scenario.selectOption('repeat');
+			await expect(before).toContainText('Cần trả cho An · 60.000 ₫');
+			await expect(after).toContainText('Cần trả cho An · 60.000 ₫');
+			await expect(flow).not.toContainText('không đổi hướng thanh toán');
+
+			await scenario.selectOption('partial');
+			await expect(after.getByText('Cần trả cho An · 40.000 ₫', { exact: true })).toBeVisible();
+			await expect(after.getByText('Hoá đơn gốc không xác định', { exact: true })).toHaveCount(2);
+			const transfers = flow.locator('details').filter({ hasText: 'Lịch sử chuyển tiền' });
+			await transfers.getByText('Lịch sử chuyển tiền', { exact: true }).click();
+			await expect(transfers.getByText('Đã trả An', { exact: true })).toHaveCount(2);
+			await expect(transfers.getByText('−12.000 ₫', { exact: true })).toBeVisible();
+			await expect(transfers.getByText('−8.000 ₫', { exact: true })).toBeVisible();
+			const transfer = transfers.locator('.counterpart-history-entry').filter({ hasText: '−8.000 ₫' });
+			await expect(transfer).toContainText('Hóa đơn có thể liên quan');
+			await expect(transfer.getByRole('button', { name: 'Bún bò', exact: true })).toBeVisible();
+			await transfer.getByRole('button', { name: 'Bánh mì', exact: true }).click();
+			await expect(page.getByRole('dialog', { name: 'Bánh mì', exact: true })).toBeVisible();
+			await page.keyboard.press('Escape');
+
+			for (const [id, section, expected] of [
+				['newHub', after, 'Cần trả cho Mai · 120.000 ₫'],
+				[
+					'undo',
+					flow.getByRole('region', { name: 'Cần trả hoặc nhận hiện tại' }),
+					'Nhận lại từ An · 20.000 ₫'
+				]
+			] as const) {
+				await scenario.selectOption(id);
+				await expect(section.getByText(expected, { exact: true })).toBeVisible();
+			}
+			await expect(flow.getByText('Lần tối giản nợ này đã được hoàn tác.', { exact: true })).toBeVisible();
+			await expect(flow).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+			await expect(
+				flow.getByRole('button', { name: /^Ngày tối giản.*đã hoàn tác$/ }).locator('[aria-live="polite"]')
+			).toHaveCSS('text-decoration-line', 'line-through');
+
+			await scenario.selectOption('newHub');
+			const older = flow.getByRole('button', { name: 'Lần tối giản trước' });
+			const newer = flow.getByRole('button', { name: 'Lần tối giản sau' });
+			const date = flow.getByRole('button', { name: /^Ngày tối giản/ });
+			await expect(newer).toBeDisabled();
+			await expect(date).toContainText('Mới');
+			await expect(flow.getByText('Lịch sử tối giản nợ')).toHaveCount(0);
+			await expect(after).toContainText('Cần trả cho Mai · 120.000 ₫');
+
+			await older.click();
+			await expect(older).toBeDisabled();
+			await expect(date).toContainText('11:00:00');
+			await expect(before).toContainText('Cần trả cho Linh · 100.000 ₫');
+			await expect(after).toContainText('Cần trả cho Linh · 160.000 ₫');
+			await newer.click();
+			await expect(after).toContainText('Cần trả cho Mai · 120.000 ₫');
+
+			await date.click();
+			await page.getByRole('menuitemradio', { name: /11:00:00.*Nợ chúa An.*Mới/ }).click();
+			await expect(date).toContainText('Mới');
+			await expect(after).toContainText('Cần trả cho Linh · 160.000 ₫');
+
+			await scenario.selectOption('');
+			await expect(account).toHaveValue('mai');
+			await expect(flow).toHaveCount(0);
+
+			await scenario.selectOption('first');
+			await expect(flow).toBeVisible();
+			const testView = page.getByRole('switch', { name: 'Giao diện QA' });
+			if (width < 768) await page.getByRole('button', { name: 'Mở trình đơn', exact: true }).click();
+			await testView.click();
+			await expect(scenario).toHaveCount(0);
+			await expect(account).toHaveValue('mai');
+			await expect(flow).toHaveCount(0);
+
+			await testView.click();
+			if (width < 768) await page.getByRole('button', { name: 'Đóng trình đơn', exact: true }).click();
+			await expect(scenario).toHaveValue('');
+			expect(commands).toEqual([]);
+		});
+
 		test('admins can cancel, retry and undo a simplification from its history', async ({ page }) => {
 			let originalPairs: number[] = [];
 			const { state } = await openFixture(page, '/matrix', (state) => {
@@ -1365,7 +1622,9 @@ for (const width of [1280, 390]) {
 			const huy = page.locator('.counterpart').filter({ hasText: 'Quang Huy' });
 			await linh.getByRole('button', { name: 'Xem lịch sử với Thảo Linh', exact: true }).click();
 			// The decorative chevron forwards clicks to the full-row history toggle.
-			const chevron = (await huy.locator('.counterpart-history-chevron').boundingBox())!;
+			const historyChevron = huy.locator('.counterpart-history-chevron');
+			await historyChevron.evaluate((element) => element.scrollIntoView({ block: 'center' }));
+			const chevron = (await historyChevron.boundingBox())!;
 			await page.mouse.click(chevron.x + chevron.width / 2, chevron.y + chevron.height / 2);
 			await expect(page.locator('.counterpart-history')).toHaveCount(2);
 			await linh.screenshot({ path: `artifacts/balance-history-${width}.png` });
@@ -1417,7 +1676,12 @@ for (const width of [1280, 390]) {
 			});
 			const linh = page.locator('.counterpart').filter({ hasText: 'Thảo Linh' });
 			await linh.getByRole('button', { name: 'Xem lịch sử với Thảo Linh', exact: true }).click();
+			await expect(linh).toHaveCSS('background-color', 'rgb(255, 244, 242)');
 			const openBill = linh.getByRole('button', { name: 'Xem hóa đơn Bữa trưa văn phòng', exact: true });
+			const billTitle = linh.getByText('Cơm gà và nước', { exact: true });
+			await expect(billTitle).toHaveCSS('text-decoration-line', 'none');
+			await openBill.hover();
+			await expect(billTitle).toHaveCSS('color', 'rgb(87, 129, 92)');
 			await openBill.focus();
 			await page.keyboard.press('Enter');
 			const detail = page.getByRole('dialog', { name: 'Bữa trưa văn phòng', exact: true });

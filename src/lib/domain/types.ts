@@ -9,6 +9,30 @@ export type Member = {
 	color: string;
 	avatarUrl?: string;
 };
+export type SettlementFlowPreference = {
+	expanded?: boolean;
+	baselineVersion?: number;
+	seenBatchIds?: string[];
+};
+export type SettlementFlowUpdate = Pick<SettlementFlowPreference, 'expanded' | 'baselineVersion'> & {
+	seenBatchId?: string;
+};
+export type UserPreferences = {
+	discordBillNotifications?: boolean;
+	settlementFlow?: Record<string, SettlementFlowPreference>;
+};
+export function updateSettlementFlowPreference(
+	current: SettlementFlowPreference | undefined,
+	{ expanded, baselineVersion, seenBatchId }: SettlementFlowUpdate
+): SettlementFlowPreference {
+	const next = { ...current };
+	if (expanded !== undefined) next.expanded = expanded;
+	if (baselineVersion !== undefined && next.baselineVersion === undefined)
+		next.baselineVersion = baselineVersion;
+	if (seenBatchId && !next.seenBatchIds?.includes(seenBatchId))
+		next.seenBatchIds = [...(next.seenBatchIds ?? []), seenBatchId];
+	return next;
+}
 export type GlobalUser = {
 	id: string;
 	discordId: string;
@@ -18,7 +42,7 @@ export type GlobalUser = {
 	avatarUrl: string;
 	email: string;
 	lastActiveGroupId?: string;
-	preferences?: { discordBillNotifications?: boolean };
+	preferences?: UserPreferences;
 	createdAt: string;
 	updatedAt: string;
 };
