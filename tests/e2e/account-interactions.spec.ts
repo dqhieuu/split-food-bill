@@ -1472,15 +1472,11 @@ for (const width of [1280, 390]) {
 			await scenario.selectOption('partial');
 			await expect(after.getByText('Cần trả cho An · 40.000 ₫', { exact: true })).toBeVisible();
 			await expect(after.getByText('Hoá đơn gốc không xác định', { exact: true })).toHaveCount(2);
-			const transfers = flow.locator('details').filter({ hasText: 'Lịch sử chuyển tiền' });
-			await transfers.getByText('Lịch sử chuyển tiền', { exact: true }).click();
-			await expect(transfers.getByText('Đã trả An', { exact: true })).toHaveCount(2);
-			await expect(transfers.getByText('−12.000 ₫', { exact: true })).toBeVisible();
-			await expect(transfers.getByText('−8.000 ₫', { exact: true })).toBeVisible();
-			const transfer = transfers.locator('.counterpart-history-entry').filter({ hasText: '−8.000 ₫' });
-			await expect(transfer).toContainText('Hóa đơn có thể liên quan');
-			await expect(transfer.getByRole('button', { name: 'Bún bò', exact: true })).toBeVisible();
-			await transfer.getByRole('button', { name: 'Bánh mì', exact: true }).click();
+			await expect(after.getByText('−12.000 ₫', { exact: true })).toBeVisible();
+			await expect(after.getByText('−8.000 ₫', { exact: true })).toBeVisible();
+			await expect(flow.getByText('Lịch sử chuyển tiền', { exact: true })).toHaveCount(0);
+			await expect(after.getByRole('button', { name: 'Bún bò', exact: true })).toBeVisible();
+			await after.getByRole('button', { name: 'Bánh mì', exact: true }).click();
 			await expect(page.getByRole('dialog', { name: 'Bánh mì', exact: true })).toBeVisible();
 			await page.keyboard.press('Escape');
 

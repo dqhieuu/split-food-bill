@@ -28,12 +28,15 @@
 		simulation?: boolean;
 		onBillClick: (id: string) => void;
 	} = $props();
-	const flow = $derived(appState.settlements.length ? settlementBreakdown(appState, accountId) : null);
+	const history = $derived(appState.settlements.length ? settlementBreakdown(appState, accountId) : []);
 	let selectedId = $state('');
 	const selectedIndex = $derived(
-		Math.max(0, flow?.history.findIndex(({ batch }) => batch.id === selectedId) ?? -1)
+		Math.max(
+			0,
+			history.findIndex(({ batch }) => batch.id === selectedId)
+		)
 	);
-	const selected = $derived(flow?.history[selectedIndex]);
+	const selected = $derived(history[selectedIndex]);
 	let expandedOverride = $state<boolean | undefined>();
 	const expanded = $derived(expandedOverride ?? preference?.expanded ?? simulation);
 	let visible = $state<DocumentVisibilityState>();
@@ -43,7 +46,7 @@
 		const baseline = preference?.baselineVersion;
 		const seen = new Set(preference?.seenBatchIds);
 		return new Set(
-			flow?.history
+			history
 				.filter(({ batch }) => baseline !== undefined && batch.version >= baseline && !seen.has(batch.id))
 				.map(({ batch }) => batch.id)
 		);
@@ -55,7 +58,7 @@
 		}
 	});
 	$effect(() => {
-		const newest = flow?.history[0]?.batch.id ?? '';
+		const newest = history[0]?.batch.id ?? '';
 		if (newest !== latestId) {
 			latestId = newest;
 			if (unread.has(newest)) {
@@ -79,7 +82,6 @@
 	const bills = $derived(new Map(appState.bills.map((bill) => [bill.id, bill])));
 	const name = (id: string) => people.get(id) ?? id;
 	const list = new Intl.ListFormat('vi');
-	const signed = (amount: number) => `${amount < 0 ? '−' : '+'}${currency(Math.abs(amount))}`;
 	const payees = (routes: CashFlowRoute[]) =>
 		routes.filter((route) => route.from === accountId).map((route) => name(route.to));
 	const payers = (routes: CashFlowRoute[]) =>
@@ -92,11 +94,11 @@
 
 	function selectBatch(id: string) {
 		// Follow the latest batch on refresh until the user selects an older one.
-		selectedId = id === flow?.history[0]?.batch.id ? '' : id;
+		selectedId = id === history[0]?.batch.id ? '' : id;
 	}
 
 	function moveBatch(offset: number) {
-		const next = flow?.history[selectedIndex + offset];
+		const next = history[selectedIndex + offset];
 		if (next) selectBatch(next.batch.id);
 	}
 
@@ -198,7 +200,7 @@
 	</section>
 {/snippet}
 
-{#if flow && selected}
+{#if selected}
 	{@const { batch, before, after } = selected}
 	{@const showNew = simulation || firstViewId === batch.id}
 	{@const beforePayees = payees(before)}
@@ -229,7 +231,7 @@
 						type="button"
 						class="icon-button"
 						aria-label="Lần tối giản trước"
-						disabled={selectedIndex === flow.history.length - 1}
+						disabled={selectedIndex === history.length - 1}
 						onclick={() => moveBatch(1)}><ChevronLeft size={16} /></button
 					>
 					<DropdownMenu.Root>
@@ -248,7 +250,7 @@
 								collisionPadding={12}
 							>
 								<DropdownMenu.RadioGroup value={batch.id} onValueChange={selectBatch}>
-									{#each flow.history as { batch: option } (option.id)}
+									{#each history as { batch: option } (option.id)}
 										<DropdownMenu.RadioItem
 											class="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm outline-none data-highlighted:bg-muted data-[state=checked]:font-semibold"
 											value={option.id}
@@ -322,39 +324,6 @@
 					{@render snapshot('Trước tối giản', before)}
 					{@render snapshot('Sau tối giản', after)}
 				</div>
-				{#if flow.transfers.length}
-					<details>
-						<summary>Lịch sử chuyển tiền</summary>
-						{#each flow.transfers as { entry, billMatches } (entry.id)}
-							{@const billIds = billMatches?.billIds.filter((id) => bills.has(id)) ?? []}
-							<div class="counterpart-history-entry">
-								<div class="counterpart-history-info">
-									<strong
-										>{entry.from === accountId
-											? `Đã trả ${name(entry.to)}`
-											: `Đã nhận từ ${name(entry.from)}`}</strong
-									>
-									<small>{dateTimeLabel(entry.date)}</small>
-									{#if billIds.length}
-										{#if billMatches?.uncertain}
-											<small>Hóa đơn có thể liên quan</small>
-										{:else if billIds.length > 1}
-											<small>Hóa đơn liên quan</small>
-										{/if}
-										<div class="flow-transfer-bills">
-											{#each billIds as billId (billId)}
-												{@render billLabel(billId, '')}
-											{/each}
-										</div>
-									{/if}
-								</div>
-								<span class="counterpart-history-amount"
-									>{signed(entry.from === accountId ? -entry.amount : entry.amount)}</span
-								>
-							</div>
-						{/each}
-					</details>
-				{/if}
 			{/if}
 		</div>
 	</section>
@@ -440,13 +409,8 @@
 			column-gap: 24px;
 		}
 	}
-	.cash-flow h3,
-	.cash-flow details {
+	.cash-flow h3 {
 		margin-top: 12px;
-	}
-	.cash-flow summary {
-		cursor: pointer;
-		font-weight: 600;
 	}
 	.flow-route {
 		margin-top: 10px;
@@ -456,12 +420,6 @@
 	}
 	.flow-route h4 {
 		font-weight: 650;
-	}
-	.flow-transfer-bills {
-		display: grid;
-	}
-	.flow-transfer-bills .flow-bill {
-		padding-block: 2px;
 	}
 	.flow-bill-entry {
 		position: relative;

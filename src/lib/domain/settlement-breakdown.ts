@@ -1,4 +1,4 @@
-import { cancelledEntryIds, compareLedgerEntries } from './ledger';
+import { compareLedgerEntries } from './ledger';
 import type { AppState, LedgerEntry, Settlement } from './types';
 
 export type CashFlowPart = {
@@ -21,7 +21,6 @@ type Pair = {
 	qrCutoff?: { order: number; parts: Map<string, CashFlowPart> };
 };
 type Event = { date: string; entries: LedgerEntry[]; batch?: Settlement; order: number };
-type TransferBillMatches = { billIds: string[]; uncertain: boolean };
 
 const total = (parts: Iterable<CashFlowPart>) => [...parts].reduce((sum, part) => sum + part.amount, 0);
 
@@ -31,20 +30,15 @@ function addPart(parts: Map<string, CashFlowPart>, part: CashFlowPart, sign: num
 	else parts.delete(part.entry.id);
 }
 
-function totalsByBill(parts: CashFlowPart[]) {
+function outstandingParts(parts: CashFlowPart[]) {
 	const billTotals = new Map<string, number>();
 	for (const { billId, amount } of parts) {
 		if (billId) billTotals.set(billId, (billTotals.get(billId) ?? 0) + amount);
 	}
-	return billTotals;
-}
-
-function outstandingParts(parts: CashFlowPart[]) {
-	const billTotals = totalsByBill(parts);
 	return parts.filter(({ billId }) => !billId || billTotals.get(billId) !== 0);
 }
 
-/** Replays the booked transfers so a payment remains separate from the routes it helped fund. */
+/** Replays the ledger to recover bill contributions at each settlement. */
 export function settlementBreakdown(state: AppState, accountId: string) {
 	const batches = new Map(state.settlements.map((batch) => [batch.id, batch]));
 	const ledger = new Map(state.ledger.map((entry) => [entry.id, entry]));
@@ -75,7 +69,6 @@ export function settlementBreakdown(state: AppState, accountId: string) {
 	);
 	const pairs = new Map<string, Pair>();
 	const booked = new Map<string, { order: number; parts: CashFlowPart[] }>();
-	const transferBills = new Map<string, TransferBillMatches>();
 	const history: BatchFlow[] = [];
 	const pairKey = (from: string, to: string) => JSON.stringify(from < to ? [from, to] : [to, from]);
 	function pairParts(from: string, to: string) {
@@ -159,20 +152,9 @@ export function settlementBreakdown(state: AppState, accountId: string) {
 			let billId = entry.source === 'bill' ? entry.reference : undefined;
 			if (!billId && entry.type === 'payment' && entry.source !== 'reversal') {
 				const outstanding = outstandingParts(pairParts(entry.from, entry.to));
-				const balance = total(outstanding);
 				const bills = new Set(outstanding.map((part) => part.billId));
-				if (bills.size === 1 && balance >= entry.amount) billId = outstanding[0].billId;
-				if (!billId && balance > 0) {
-					const billIds = [...totalsByBill(outstanding)].filter(([, amount]) => amount > 0).map(([id]) => id);
-					if (billIds.length)
-						transferBills.set(entry.id, {
-							billIds,
-							uncertain: entry.amount !== balance || billIds.length !== bills.size
-						});
-				}
+				if (bills.size === 1 && total(outstanding) >= entry.amount) billId = outstanding[0].billId;
 			}
-			if (entry.type === 'payment' && billId)
-				transferBills.set(entry.id, { billIds: [billId], uncertain: false });
 			const pair = record(entry, [
 				{ entry, amount: entry.type === 'debt' ? entry.amount : -entry.amount, billId }
 			]);
@@ -182,22 +164,5 @@ export function settlementBreakdown(state: AppState, accountId: string) {
 			}
 		}
 	}
-	const cancelled = cancelledEntryIds(state.ledger);
-	const since = history[0]?.batch.date;
-	const transfers = since
-		? state.ledger
-				.filter(
-					(entry) =>
-						entry.type === 'payment' &&
-						entry.source !== 'settlement' &&
-						entry.source !== 'reversal' &&
-						!cancelled.has(entry.id) &&
-						entry.from !== entry.to &&
-						(entry.from === accountId || entry.to === accountId) &&
-						(entry.createdAt ?? entry.date) >= since
-				)
-				.sort(compareLedgerEntries)
-				.map((entry) => ({ entry, billMatches: transferBills.get(entry.id) }))
-		: [];
-	return { history: history.reverse(), transfers };
+	return history.reverse();
 }
