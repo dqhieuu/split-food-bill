@@ -12,6 +12,6 @@ export default defineConfig({
 	resolve: { alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) } },
 	plugins: [
 		tailwindcss(),
-		sveltekit({ adapter: process.env.VERCEL ? adapter({ runtime: 'nodejs22.x' }) : nodeAdapter() })
+		sveltekit({ adapter: process.env.VERCEL ? adapter({ runtime: 'nodejs26.x' }) : nodeAdapter() })
 	]
 });

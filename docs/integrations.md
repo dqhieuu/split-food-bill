@@ -119,14 +119,13 @@ Cloudflare Durable Object storage holds short-lived OAuth states, one-use handof
 ## Local development
 
 ```powershell
-corepack enable pnpm
 pnpm i
 pnpm dev
 ```
 
-Use Node.js 24.12 or later in the 24.x line and Java 21 or later. The local launcher runs Firebase emulators for `demo-lunchroom`, seeds a fresh Discord-based fixture when needed, starts Wrangler on `127.0.0.1:8787`, and starts Vite on `127.0.0.1:5173`. The first Firebase run may download emulator binaries. Use the login button and pick one of the mock Discord accounts.
+Use Node.js 26 and Java 21 or later. See the [README](../README.md#run-locally) for pnpm setup. The local launcher runs Firebase emulators for `demo-lunchroom`, seeds a fresh Discord-based fixture when needed, starts Wrangler on `127.0.0.1:8787`, and starts Vite on `127.0.0.1:5173`. The first Firebase run may download emulator binaries. Use the login button and pick one of the mock Discord accounts.
 
-The repository selects Node.js 24 through `.node-version` and pins pnpm through `packageManager` in `package.json`. Cloudflare Workers Builds and the GitHub workflow use these pins. Commit `package.json` and `pnpm-lock.yaml` together when updating dependencies. See [Cloudflare build image configuration](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/).
+The repository selects Node.js 26 through `.node-version` and pins pnpm through `packageManager` in `package.json`. Cloudflare Workers Builds and the GitHub workflow use these pins. Commit `package.json` and `pnpm-lock.yaml` together when updating dependencies. See [Cloudflare build image configuration](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/).
 
 The seeded Minh An (`discord_100000000000000001`) is the global admin and local group's active admin. The other users are inactive. Activate Thảo Linh or Quang Huy in member management before testing their group access. A second mock server is available for testing group creation. No real OAuth, Discord API calls or DMs occur in local mode, even if credentials exist in the shell.
 
@@ -217,8 +216,8 @@ It deploys the API and provisions its declared Durable Object class. Set Discord
 
 ## Connect Vercel
 
-1. Import this Git repository into Vercel. Use the repository root and SvelteKit framework detection. The commands in `vercel.json` use Corepack to install from the frozen lockfile and build with the pnpm version pinned in `package.json`. Leave output directory detection to the adapter. Under Project Settings → Environments → Production → Branch Tracking, select `master`. Deploy the latest `master` commit after changing this setting. See [Vercel production branch configuration](https://vercel.com/docs/git#production-branch). The Vite configuration selects the Vercel adapter when `VERCEL` is set.
-2. Set production `VITE_WORKER_API_URL=https://YOUR-WORKER-HOST`. Optionally set `VITE_APP_ENV=production` explicitly. Vite variables are embedded at build time, so redeploy after changes. Use Node.js 24 for the Vercel build to satisfy the Firebase SDK's install requirements. The adapter targets Node.js 22 for the generated functions.
+1. Import this Git repository into Vercel. Use the repository root and SvelteKit framework detection. The commands in `vercel.json` use the pnpm version pinned in `package.json` for the frozen install and build. Leave output directory detection to the adapter. Under Project Settings → Environments → Production → Branch Tracking, select `master`. Deploy the latest `master` commit after changing this setting. See [Vercel production branch configuration](https://vercel.com/docs/git#production-branch). The Vite configuration selects the Vercel adapter when `VERCEL` is set.
+2. Set production `VITE_WORKER_API_URL=https://YOUR-WORKER-HOST`. Optionally set `VITE_APP_ENV=production` explicitly. Vite variables are embedded at build time, so redeploy after changes. Vercel uses the Node.js 26 version specified in `package.json` for the build, and the adapter targets Node.js 26 for the generated functions.
 3. Set the chosen frontend domain as the Worker's exact `FRONTEND_ORIGIN`. The Worker allows this origin rather than arbitrary preview domains.
 4. Keep Firebase service-account, Discord client secret and bot token exclusively on Cloudflare. Vercel only needs the public backend URL for this architecture.
 

@@ -10,10 +10,9 @@ Discord OAuth is the only login method.
 
 ## Run locally
 
-Install Node.js 24.12 or later in the 24.x line and Java 21 or later. Corepack uses the pnpm version pinned in `package.json`.
+Use Node.js 26 and Java 21 or later. If you need to install pnpm, run `npm i -g pnpm@12.18.0`.
 
 ```powershell
-corepack enable pnpm
 pnpm i
 pnpm dev
 ```
