@@ -132,7 +132,7 @@
 		);
 		const anchor = document.createElement('a');
 		anchor.href = url;
-		anchor.download = `lunchroom-ledger-${localDate(new Date())}.csv`;
+		anchor.download = `bill-splitting-ledger-${localDate(new Date())}.csv`;
 		anchor.click();
 		URL.revokeObjectURL(url);
 	}

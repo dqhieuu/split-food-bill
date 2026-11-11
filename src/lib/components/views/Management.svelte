@@ -85,7 +85,7 @@
 		);
 		const anchor = document.createElement('a');
 		anchor.href = url;
-		anchor.download = `lunchroom-backup-${localDate(new Date())}.json`;
+		anchor.download = `bill-splitting-backup-${localDate(new Date())}.json`;
 		anchor.click();
 		URL.revokeObjectURL(url);
 	}

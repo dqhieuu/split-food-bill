@@ -1,0 +1,3 @@
+{
+	"installCommand": "npx --yes \"$(node -p 'require(\"./package.json\").packageManager')\" ci"
+}
