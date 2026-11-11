@@ -2058,6 +2058,67 @@ for (const width of [1280, 390]) {
 			await expect(name).toHaveValue('Hóa đơn tiếp theo');
 		});
 
+		test('retry after a lost save response replays the reviewed bill across reload', async ({ page }) => {
+			const { state, userPreferences } = await openFixture(page, '/new-bill');
+			const draftKey = `lunchroom-draft-local-${ACTOR}`;
+			const requests: { id: string; description: string }[] = [];
+			await page.route('**/api/groups/local/commands/createBill', async (route) => {
+				const input = route.request().postDataJSON();
+				requests.push(input);
+				const result = applyCommand(state, ACTOR, 'createBill', input, now);
+				if (requests.length === 1) await route.abort();
+				else await route.fulfill({ json: { state, result } });
+			});
+			const name = page.getByLabel('Tên hóa đơn', { exact: true });
+			const confirmation = page.getByRole('dialog', { name: 'Xác nhận hóa đơn', exact: true });
+			const openReview = page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true });
+			await name.fill('Hóa đơn đã xác nhận');
+			await page.getByLabel('Số tiền của Minh An', { exact: true }).fill('36');
+			await openReview.click();
+			await confirmation.getByRole('button', { name: 'Xác nhận', exact: true }).click();
+			await expect(confirmation.getByText(/Chưa xác nhận được lần lưu trước/)).toBeVisible();
+
+			// Autosave in another tab and a changed account preference cannot change the pending request.
+			await page.evaluate((key) => {
+				const draft = JSON.parse(localStorage.getItem(key)!);
+				draft.description = 'Bản nháp đã đổi';
+				localStorage.setItem(key, JSON.stringify(draft));
+			}, draftKey);
+			userPreferences.discordBillNotifications = false;
+			await page.reload();
+			await expect(name).toBeDisabled();
+			await openReview.click();
+			await expect(confirmation.getByRole('heading', { name: 'Hóa đơn đã xác nhận' })).toBeVisible();
+			await expect(confirmation.locator('.summary-total strong')).toHaveText('36.000 ₫');
+			await expect(confirmation.getByRole('button', { name: 'Xem trước Discord' })).toBeVisible();
+			await confirmation.getByRole('button', { name: 'Xác nhận', exact: true }).click();
+			await expect(page).toHaveURL(/\/activity$/);
+			expect(requests).toHaveLength(2);
+			expect(requests[1]).toEqual(requests[0]);
+			expect(state.bills.filter((bill) => bill.id === requests[0].id)).toHaveLength(1);
+			expect(await page.evaluate((key) => localStorage.getItem(key + '-attempt'), draftKey)).toBeNull();
+		});
+
+		test('a confirmed bill rejection leaves the draft available to edit', async ({ page }) => {
+			await openFixture(page, '/new-bill');
+			await page.route('**/api/groups/local/commands/createBill', (route) =>
+				route.fulfill({ status: 400, json: { message: 'Thông tin hóa đơn không hợp lệ.' } })
+			);
+			const name = page.getByLabel('Tên hóa đơn', { exact: true });
+			await name.fill('Bản nháp để sửa');
+			await page.getByLabel('Số tiền của Minh An', { exact: true }).fill('36');
+			await page.getByRole('button', { name: 'Xem lại hóa đơn', exact: true }).click();
+			const confirmation = page.getByRole('dialog', { name: 'Xác nhận hóa đơn', exact: true });
+			await confirmation.getByRole('button', { name: 'Xác nhận', exact: true }).click();
+			await expect(confirmation).toHaveCount(0);
+			await expect(name).toBeEnabled();
+			await expect(name).toHaveValue('Bản nháp để sửa');
+			await name.fill('Bản nháp đã sửa');
+			await expect
+				.poll(() => page.evaluate((actor) => localStorage.getItem(`lunchroom-draft-local-${actor}`), ACTOR))
+				.toContain('Bản nháp đã sửa');
+		});
+
 		test('admin can choose another payer, persist the draft and retain their own creator identity', async ({
 			page
 		}) => {

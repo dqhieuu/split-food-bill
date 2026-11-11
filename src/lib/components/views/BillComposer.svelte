@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
@@ -26,12 +26,24 @@
 	import DiscordPreview from '../DiscordPreview.svelte';
 	import { billNotificationMessage } from '$lib/domain/notifications';
 	import { scanBillImage, uploadBillImage } from '$lib/client/api';
+	import {
+		applyBillDraftScan,
+		billDraftDetails,
+		changeBillDraftMode,
+		changeBillDraftUnit,
+		createBillDraftStorage,
+		newBillDraft,
+		restoreBillDraft,
+		reviewBillDraft,
+		reviewedBill,
+		ROUNDING_OPTIONS,
+		type BillSubmission
+	} from '$lib/client/bill-draft';
 	import { compressImage } from '$lib/client/images';
-	import type { AppState, BillLine } from '$lib/domain/types';
+	import type { AppState } from '$lib/domain/types';
 	import type { RunCommand } from '$lib/client/types';
-	import { currency, billDateLabel, discountShares, equalShares, localDate } from '$lib/domain/ledger';
-	const ROUNDING_OPTIONS = [0, 1, 2, 3, 4];
-	const DEFAULT_ROUNDING = 0;
+	import { currency, billDateLabel } from '$lib/domain/ledger';
+
 	let {
 		appState,
 		actor,
@@ -53,173 +65,99 @@
 		onDiscordNotificationPreferenceChange: (enabled: boolean) => Promise<void>;
 		aiEnabled?: boolean;
 	} = $props();
-	let description = $state('');
-	let date = $state(localDate(new Date()));
-	let selected = $state<string[]>([]);
-	let payerId = $state('');
-	let amounts = $state<Record<string, number>>({});
-	let descriptions = $state<Record<string, string>>({});
-	let mode = $state('manual');
-	let totalInput = $state<number | null>(null);
-	let discountInput = $state<number | null>(null);
-	let rounding = $state(DEFAULT_ROUNDING);
-	let unit = $state(1000);
+
+	const draftStorage = $derived(createBillDraftStorage(() => localStorage, groupId, actor));
+	let draft = $state(newBillDraft(untrack(() => actor)));
+	let draftReady = $state(false);
+	let reviewSubmission = $state<BillSubmission | null>(null);
+	let pending = $state<BillSubmission | null>(null);
+	let submitting = $state(false);
+	let submitError = $state('');
 	let discordNotification = $state(true);
 	let savingNotificationPreference = $state(false);
 	let notificationPreferenceError = $state('');
-	let alreadyPaid = $state(false);
 	let confirmOpen = $state(false);
 	let previewOpen = $state(false);
 	let previewRecipient = $state('');
 	let attempted = $state(false);
 	let validation = $state('');
-	let draftReady = $state(false);
-	let submissionId = $state(crypto.randomUUID());
-	let imageId = $state('');
 	let uploadingImage = $state(false);
 	let scanning = $state(false);
 	let imageError = $state('');
 	let scanNotice = $state('');
 	let scannedImageId = $state('');
 	let aiChanges = $state({ name: false, date: false, total: false });
-	const scanComplete = $derived(!!imageId && scannedImageId === imageId);
-	const imageBusy = $derived(uploadingImage || scanning);
-	const people = $derived(appState.members.filter((m) => m.active));
-	const toDong = (value: number | null | undefined) => Math.round((Number(value) || 0) * unit);
-	const listed = $derived(selected.map((id) => toDong(amounts[id])));
-	const listedTotal = $derived(listed.reduce((s, v) => s + v, 0));
-	const discounted = $derived(toDong(discountInput));
-	const hasDiscount = $derived(mode === 'manual' && discounted > 0);
-	const shares = $derived(
-		mode === 'equal'
-			? equalShares(toDong(totalInput), selected.length, rounding)
-			: hasDiscount
-				? discountShares(listed, discounted, rounding)
-				: listed
-	);
-	const lines = $derived<BillLine[]>(
-		selected.map((memberId, i) => ({
-			memberId,
-			amount: shares[i] ?? 0,
-			description: descriptions[memberId] || description,
-			note: ''
-		}))
-	);
-	const total = $derived(lines.reduce((s, l) => s + l.amount, 0));
-	const roundingExtra = $derived(
-		mode === 'equal'
-			? Math.max(0, total - toDong(totalInput))
-			: hasDiscount
-				? Math.max(0, total - discounted)
-				: 0
-	);
+
+	const people = $derived(appState.members.filter((member) => member.active));
 	const editor = $derived(appState.members.find((member) => member.id === actor)!);
 	const isAdmin = $derived(editor.active && editor.role === 'admin');
-	const payer = $derived((isAdmin && people.find((member) => member.id === payerId)) || editor);
+	const details = $derived(billDraftDetails(draft, editor, people, attempted));
+	const {
+		selected,
+		payer,
+		shares,
+		total,
+		listedTotal,
+		hasDiscount,
+		roundingExtra,
+		nameInvalid,
+		dateInvalid,
+		totalInvalid,
+		discountInvalid,
+		amountInvalid
+	} = $derived(details);
+	const { mode, unit, imageId } = $derived(draft);
+	const scanComplete = $derived(!!imageId && scannedImageId === imageId);
+	const imageBusy = $derived(uploadingImage || scanning);
+	const submission = $derived(pending ?? reviewSubmission);
+	const bill = $derived(submission ? reviewedBill(submission, actor, appState.members) : null);
+	const reviewImageId = $derived(submission?.image ?? '');
 	const previewMessage = $derived(
-		previewOpen && lines.some((line) => line.memberId === previewRecipient)
+		previewOpen && bill?.lines.some((line) => line.memberId === previewRecipient)
 			? billNotificationMessage(
-					{
-						id: submissionId,
-						organizer: payer.id,
-						creator: actor,
-						description,
-						date,
-						lines,
-						total,
-						discordNotification,
-						alreadyPaid,
-						memberNames: Object.fromEntries(appState.members.map((member) => [member.id, member.name]))
-					},
+					bill,
 					{ id: groupId, name: groupName },
 					previewRecipient,
 					window.location.origin,
-					imageId ? `hoa-don.${imageId.split('.').pop()}` : undefined
+					reviewImageId ? `hoa-don.${reviewImageId.split('.').pop()}` : undefined
 				)
 			: null
 	);
-	const nameInvalid = $derived(attempted && !description.trim());
-	const dateInvalid = $derived(!date || Number.isNaN(new Date(date).getTime()));
-	const totalInvalid = $derived(
-		mode === 'equal' && (Number(totalInput) < 0 || (attempted && toDong(totalInput) <= 0))
-	);
-	const discountInvalid = $derived(
-		mode === 'manual' &&
-			(Number(discountInput) < 0 ||
-				(hasDiscount && listed.every((price) => price > 0) && shares.some((s) => s <= 0)))
-	);
-	const amountInvalid = (id: string, index: number) =>
-		mode === 'manual' &&
-		(Number(amounts[id]) < 0 || ((attempted || hasDiscount) && (listed[index] <= 0 || shares[index] <= 0)));
-	const formatStep = (digits: number) => currency(10 ** digits);
+
 	$effect(() => {
 		if (!savingNotificationPreference) discordNotification = discordNotificationPreference;
 	});
 	onMount(() => {
-		selected = [actor];
-		payerId = actor;
-		discordNotification = discordNotificationPreference;
 		try {
-			const saved = localStorage.getItem(`lunchroom-draft-${groupId}-${actor}`);
-			if (saved) {
-				const draft = JSON.parse(saved);
-				description = draft.description ?? '';
-				date = draft.date ?? date;
-				selected = (draft.selected ?? [actor]).filter((id: string) => people.some((m) => m.id === id));
-				if (isAdmin && people.some((member) => member.id === draft.payerId)) payerId = draft.payerId;
-				amounts = draft.amounts ?? {};
-				descriptions = draft.descriptions ?? {};
-				mode = draft.mode ?? 'manual';
-				totalInput = draft.totalInput ?? null;
-				discountInput = draft.discountInput ?? null;
-				rounding = draft.rounding ?? DEFAULT_ROUNDING;
-				unit = draft.unit ?? 1000;
-				alreadyPaid = draft.alreadyPaid === true;
-				imageId = draft.imageId ?? '';
-				submissionId = draft.submissionId || crypto.randomUUID();
-			}
+			const stored = draftStorage.read();
+			pending = draftStorage.readAttempt();
+			draft = restoreBillDraft(
+				stored,
+				draft,
+				editor,
+				people,
+				pending ? null : page.url.searchParams.get('date')
+			);
 		} catch {
-			/* Ignore an invalid local draft. */
+			/* A browser that blocks storage can still show the form. */
 		}
-		// The spending calendar links here with the day the user picked.
-		const requestedDate = page.url.searchParams.get('date');
-		if (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) date = requestedDate;
 		draftReady = true;
 	});
 	$effect(() => {
-		if (draftReady)
-			localStorage.setItem(
-				`lunchroom-draft-${groupId}-${actor}`,
-				JSON.stringify({
-					description,
-					date,
-					selected,
-					payerId: payer.id,
-					amounts,
-					descriptions,
-					mode,
-					totalInput,
-					discountInput,
-					rounding,
-					unit,
-					alreadyPaid,
-					imageId,
-					submissionId
-				})
-			);
+		if (!draftReady || pending) return;
+		try {
+			draftStorage.save({ ...draft, selected, payerId: payer.id });
+		} catch {
+			/* Submission reports when its retry record cannot be stored. */
+		}
 	});
+
 	function toggleMember(id: string) {
-		selected = selected.includes(id) ? selected.filter((v) => v !== id) : [...selected, id];
+		draft.selected = selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id];
 	}
-	function changeMode(next: 'manual' | 'equal') {
-		if (next === mode) return;
-		// Both fields describe the final bill price, before per-person rounding.
-		if (next === 'manual') discountInput = totalInput;
-		else if (discountInput !== null) totalInput = discountInput;
-		mode = next;
-	}
+
 	async function changeNotificationPreference(enabled: boolean) {
-		if (savingNotificationPreference || busy) return;
+		if (pending || savingNotificationPreference || busy) return;
 		const previous = discordNotification;
 		discordNotification = enabled;
 		savingNotificationPreference = true;
@@ -233,76 +171,67 @@
 			savingNotificationPreference = false;
 		}
 	}
-	function changeUnit(next: number) {
-		const factor = unit / next;
-		amounts = Object.fromEntries(Object.entries(amounts).map(([id, value]) => [id, value * factor]));
-		if (totalInput) totalInput *= factor;
-		if (discountInput) discountInput *= factor;
-		unit = next;
-	}
+
 	function pickedFile(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = '';
 		return file;
 	}
-	/** Uploads as soon as a photo is picked so the draft can keep the stored id across reloads. */
+
+	/** Upload immediately so the draft can retain the stored image ID across reloads. */
 	async function upload(file: File) {
+		if (pending || imageBusy || confirmOpen) return;
 		imageError = '';
 		scanNotice = '';
 		uploadingImage = true;
 		try {
-			imageId = await uploadBillImage(groupId, await compressImage(file));
+			draft.imageId = await uploadBillImage(groupId, await compressImage(file));
 			scannedImageId = '';
 			aiChanges = { name: false, date: false, total: false };
-			return imageId;
+			return draft.imageId;
 		} catch (cause) {
 			imageError = (cause as Error).message || 'Không tải được ảnh lên.';
 		} finally {
 			uploadingImage = false;
 		}
 	}
+
 	async function attachImage(event: Event) {
 		const file = pickedFile(event);
 		if (file) await upload(file);
 	}
+
 	export function isProcessingImage() {
-		return imageBusy;
+		return imageBusy || !!pending || confirmOpen;
 	}
-	/** The mobile camera shortcut uses the same upload, draft and optional AI scan flow. */
+
 	export async function attachCapturedPhoto(file: File) {
-		if (imageBusy) throw new Error('Đang xử lý ảnh hóa đơn. Vui lòng thử lại sau.');
+		if (pending) throw new Error('Hãy xác nhận kết quả lưu hóa đơn trước khi đổi ảnh.');
+		if (imageBusy || confirmOpen) throw new Error('Đang xử lý hóa đơn. Vui lòng thử lại sau.');
 		const uploaded = await upload(file);
 		if (uploaded && aiEnabled) await scanAttachedImage();
 	}
-	/** A newly selected photo shares the same scan action as an existing attachment. */
+
 	async function scanImage(event: Event) {
 		const file = pickedFile(event);
-		if (!file) return;
-		const uploaded = await upload(file);
-		if (!uploaded) return;
-		await scanAttachedImage();
+		if (file && (await upload(file))) await scanAttachedImage();
 	}
+
 	async function scanAttachedImage() {
-		if (!imageId || imageBusy || scanComplete) return;
+		if (!imageId || imageBusy || scanComplete || pending || confirmOpen) return;
 		const uploaded = imageId;
 		imageError = '';
 		scanning = true;
 		try {
 			const scan = await scanBillImage(groupId, uploaded);
-			aiChanges = {
-				name: description !== scan.billName.slice(0, 300),
-				date: scan.billDate !== null && date !== scan.billDate,
-				total: scan.totalCost > 0 && (mode !== 'equal' || toDong(totalInput) !== scan.totalCost)
-			};
-			description = scan.billName.slice(0, 300);
-			if (scan.billDate !== null) date = scan.billDate;
-			mode = 'equal';
-			if (scan.totalCost > 0) {
-				if (scan.totalCost % unit !== 0) changeUnit(1);
-				totalInput = scan.totalCost / unit;
-				scanNotice = `AI đã điền tên và tổng ${currency(scan.totalCost)}. Hãy kiểm tra lại.`;
-			} else scanNotice = 'AI đã điền tên nhưng không đọc được tổng tiền. Hãy nhập tổng.';
+			const next = applyBillDraftScan(draft, scan);
+			draft = next.draft;
+			aiChanges = next.changes;
+			scanNotice =
+				scan.totalCost > 0
+					? `AI đã điền tên và tổng ${currency(scan.totalCost)}. Hãy kiểm tra lại.`
+					: 'AI đã điền tên nhưng không đọc được tổng tiền. Hãy nhập tổng.';
 			scannedImageId = uploaded;
 		} catch (cause) {
 			imageError = (cause as Error).message || 'AI không đọc được hóa đơn.';
@@ -310,36 +239,23 @@
 			scanning = false;
 		}
 	}
+
 	function review() {
-		if (savingNotificationPreference) return;
-		attempted = true;
-		validation = '';
-		if (!description.trim()) validation = 'Hãy đặt tên cho hóa đơn.';
-		else if (dateInvalid) validation = 'Hãy chọn ngày hợp lệ.';
-		else if (!lines.length) validation = 'Chọn ít nhất một thành viên.';
-		else if (totalInvalid) validation = 'Hãy nhập tổng tiền cần chia.';
-		else if (mode === 'manual' && listed.some((price) => price <= 0))
-			validation = 'Mỗi người được chọn cần có số tiền lớn hơn 0.';
-		else if (discountInvalid) validation = 'Giá sau khi giảm giá không hợp lệ.';
-		else if (lines.some((l) => !Number.isSafeInteger(l.amount) || l.amount <= 0))
-			validation = 'Mỗi người được chọn cần có số tiền lớn hơn 0.';
-		else if (total > 1_000_000_000) validation = 'Tổng hóa đơn tối đa là 1 tỷ đồng.';
-		else confirmOpen = true;
+		if (busy || imageBusy || savingNotificationPreference) return;
+		submitError = '';
+		if (!pending) {
+			attempted = true;
+			const result = reviewBillDraft(draft, details, discordNotification);
+			validation = 'error' in result ? result.error : '';
+			if ('error' in result) return;
+			reviewSubmission = result.submission;
+		}
+		confirmOpen = true;
 	}
-	async function clearSubmittedBill() {
-		description = '';
-		date = localDate(new Date());
-		selected = [actor];
-		payerId = actor;
-		amounts = {};
-		descriptions = {};
-		mode = 'manual';
-		totalInput = null;
-		discountInput = null;
-		rounding = DEFAULT_ROUNDING;
-		unit = 1000;
-		alreadyPaid = false;
-		imageId = '';
+
+	async function clearSubmittedBill(complete: () => void) {
+		draftReady = false;
+		draft = newBillDraft(actor);
 		imageError = '';
 		scanNotice = '';
 		scannedImageId = '';
@@ -347,39 +263,63 @@
 		confirmOpen = false;
 		previewOpen = false;
 		previewRecipient = '';
+		reviewSubmission = null;
 		attempted = false;
 		validation = '';
 		notificationPreferenceError = '';
-		submissionId = crypto.randomUUID();
-		// Flush the cleared form and its autosave before removing the submitted draft.
-		// Autosave stays active if the user remains here or starts another bill.
 		await tick();
-		localStorage.removeItem(`lunchroom-draft-${groupId}-${actor}`);
+		try {
+			complete();
+		} catch {
+			/* If cleanup fails, the stored submission can still be replayed safely. */
+		}
+		pending = null;
+		try {
+			await goto('/activity', { replace: true });
+		} finally {
+			draftReady = true;
+		}
 	}
+
 	async function submit() {
-		if (savingNotificationPreference) return;
+		const reviewed = submission;
+		if (!reviewed || submitting || busy || savingNotificationPreference) return;
+		submitError = '';
+		let attempt: ReturnType<typeof draftStorage.beginAttempt>;
+		try {
+			attempt = draftStorage.beginAttempt({ ...draft, selected, payerId: payer.id }, reviewed, !!pending);
+		} catch {
+			submitError = 'Không lưu được thông tin thử lại trên trình duyệt. Vui lòng thử lại.';
+			return;
+		}
+		pending = attempt.submission;
+		// If another tab started saving, show its exact submission for review before retrying it.
+		if (JSON.stringify(attempt.submission) !== JSON.stringify(reviewed)) return;
+
+		submitting = true;
 		try {
 			await run(
 				'createBill',
-				{
-					id: submissionId,
-					description,
-					date: new Date(`${date}T12:00:00+07:00`).toISOString(),
-					lines,
-					payerId: payer.id,
-					discordNotification,
-					alreadyPaid,
-					...(imageId ? { image: imageId } : {})
-				},
-				alreadyPaid
+				attempt.submission,
+				attempt.submission.alreadyPaid
 					? 'Đã lưu hóa đơn đã thanh toán; số dư nợ không thay đổi.'
 					: 'Đã ghi hóa đơn và cập nhật nợ.'
 			);
-			await clearSubmittedBill();
-			await goto('/activity', { replace: true });
-		} catch {
-			/* Preserve draft and submission ID for a safe retry. */
+		} catch (cause) {
+			try {
+				if (attempt.reject(cause)) {
+					pending = null;
+					reviewSubmission = null;
+					confirmOpen = false;
+				}
+			} catch {
+				submitError = 'Không xóa được thông tin thử lại trên trình duyệt.';
+			}
+			return;
+		} finally {
+			submitting = false;
 		}
+		await clearSubmittedBill(attempt.complete);
 	}
 </script>
 
@@ -390,11 +330,11 @@
 	</div>
 </div>
 <div class="composer-layout">
-	<div class="composer-main">
+	<fieldset class="composer-main min-w-0" disabled={!!pending} aria-label="Nội dung hóa đơn">
 		<section class="panel form-panel bill-details-panel" aria-label="Thông tin hóa đơn và thành viên">
 			<div class="form-two-columns">
 				<label class="field" class:ai-updated={aiChanges.date}
-					>Ngày thanh toán<BillDateInput bind:value={date} invalid={dateInvalid} /></label
+					>Ngày thanh toán<BillDateInput bind:value={draft.date} invalid={dateInvalid} /></label
 				>
 				{#if isAdmin}<label class="field"
 						>Người thanh toán
@@ -402,7 +342,7 @@
 							aria-label="Người thanh toán"
 							value={payer.id}
 							disabled={busy}
-							onchange={(event) => (payerId = event.currentTarget.value)}
+							onchange={(event) => (draft.payerId = event.currentTarget.value)}
 						>
 							{#each people as member}<option value={member.id}
 									>{member.name}{member.id === actor ? ' (Bạn)' : ''}</option
@@ -418,7 +358,7 @@
 			<label class="field" class:ai-updated={aiChanges.name}
 				>Tên hóa đơn<Input
 					placeholder="Ví dụ: Cơm trưa thứ hai, cà phê chiều…"
-					bind:value={description}
+					bind:value={draft.description}
 					aria-invalid={nameInvalid}
 					maxlength={300}
 				/></label
@@ -432,7 +372,7 @@
 								class="bill-image-remove"
 								aria-label="Bỏ ảnh hóa đơn"
 								disabled={imageBusy}
-								onclick={() => (imageId = '')}><X size={14} /></button
+								onclick={() => (draft.imageId = '')}><X size={14} /></button
 							>
 						</div>{/if}
 					<label class="bill-image-picker" aria-disabled={imageBusy}
@@ -477,7 +417,7 @@
 				<h2>Thành viên tham gia</h2>
 				<button
 					class="text-link"
-					onclick={() => (selected = selected.length === people.length ? [] : people.map((m) => m.id))}
+					onclick={() => (draft.selected = selected.length === people.length ? [] : people.map((m) => m.id))}
 					>{selected.length === people.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</button
 				>
 			</div>
@@ -498,9 +438,13 @@
 			</div>
 			<div class="split-controls">
 				<div class="segmented-control">
-					<button class:active={mode === 'manual'} onclick={() => changeMode('manual')}
-						>Nhập từng người</button
-					><button class:active={mode === 'equal'} onclick={() => changeMode('equal')}>Chia đều</button>
+					<button
+						class:active={mode === 'manual'}
+						onclick={() => (draft = changeBillDraftMode(draft, 'manual'))}>Nhập từng người</button
+					><button
+						class:active={mode === 'equal'}
+						onclick={() => (draft = changeBillDraftMode(draft, 'equal'))}>Chia đều</button
+					>
 				</div>
 				<div class="unit-control">
 					<span>Đơn vị</span>
@@ -509,13 +453,13 @@
 							type="button"
 							class:active={unit === 1000}
 							aria-pressed={unit === 1000}
-							onclick={() => changeUnit(1000)}>Nghìn đồng</button
+							onclick={() => (draft = changeBillDraftUnit(draft, 1000))}>Nghìn đồng</button
 						>
 						<button
 							type="button"
 							class:active={unit === 1}
 							aria-pressed={unit === 1}
-							onclick={() => changeUnit(1)}>Đồng</button
+							onclick={() => (draft = changeBillDraftUnit(draft, 1))}>Đồng</button
 						>
 					</div>
 				</div>
@@ -527,7 +471,7 @@
 							label="Tổng tiền cần chia"
 							{unit}
 							invalid={totalInvalid}
-							bind:value={totalInput}
+							bind:value={draft.totalInput}
 						/></label
 					>
 				{:else}<label class="field total-entry"
@@ -536,13 +480,13 @@
 							{unit}
 							invalid={discountInvalid}
 							placeholder={listedTotal ? String(listedTotal / unit) : '0'}
-							bind:value={discountInput}
+							bind:value={draft.discountInput}
 						/></label
 					>{/if}
 				{#if mode === 'equal' || hasDiscount}<label class="field"
-						>Làm tròn lên mỗi phần<select bind:value={rounding}
+						>Làm tròn lên mỗi phần<select bind:value={draft.rounding}
 							>{#each ROUNDING_OPTIONS as digits}<option value={digits}
-									>{digits === 0 ? 'Không làm tròn' : formatStep(digits)}</option
+									>{digits === 0 ? 'Không làm tròn' : currency(10 ** digits)}</option
 								>{/each}</select
 						></label
 					>{/if}
@@ -559,8 +503,8 @@
 							{#if mode === 'manual'}<MoneyInput
 									label={`Số tiền của ${person.name}`}
 									{unit}
-									invalid={amountInvalid(id, i)}
-									bind:value={amounts[id]}
+									invalid={amountInvalid[i]}
+									bind:value={draft.amounts[id]}
 								/>{#if hasDiscount}<span class="discounted-share">→ {currency(shares[i] ?? 0)}</span
 									>{/if}{:else}<strong>{currency(shares[i] ?? 0)}</strong>{/if}
 						</div>
@@ -568,7 +512,7 @@
 							<Input
 								aria-label={`Món ăn của ${person.name}`}
 								placeholder="Món ăn (không bắt buộc)"
-								bind:value={descriptions[id]}
+								bind:value={draft.descriptions[id]}
 								maxlength={300}
 							/>
 						</div>
@@ -581,33 +525,48 @@
 					</div>{/if}
 			</div>
 		</section>
-	</div>
+	</fieldset>
 	<div class="composer-side">
 		<section class="panel bill-summary">
 			<div class="bill-summary-heading">
 				<span class="summary-icon"><ReceiptText size={27} /></span>
 				<h2>Tóm tắt hóa đơn</h2>
 			</div>
-			<p class="bill-summary-description" class:placeholder={!description}>
-				{description || 'Chưa có mô tả'}
+			<p class="bill-summary-description" class:placeholder={!pending && !draft.description}>
+				{pending?.description ?? (draft.description || 'Chưa có mô tả')}
 			</p>
-			<div class="summary-pair"><span>Người tham gia</span><strong>{selected.length} người</strong></div>
 			<div class="summary-pair">
-				<span>Phương thức</span><strong>{mode === 'equal' ? 'Chia đều' : 'Theo từng người'}</strong>
+				<span>Người tham gia</span><strong>{pending?.lines.length ?? selected.length} người</strong>
 			</div>
-			{#if hasDiscount}<div class="summary-pair">
-					<span>Giá gốc</span><strong>{currency(listedTotal)}</strong>
-				</div>{/if}
-			{#if roundingExtra}<div class="summary-pair">
-					<span>Làm tròn</span><strong>+{currency(roundingExtra)}</strong>
-				</div>{/if}
-			<div class="summary-total"><span>Tổng hóa đơn</span><strong>{currency(total)}</strong></div>
+			{#if !pending}
+				<div class="summary-pair">
+					<span>Phương thức</span><strong>{mode === 'equal' ? 'Chia đều' : 'Theo từng người'}</strong>
+				</div>
+				{#if hasDiscount}<div class="summary-pair">
+						<span>Giá gốc</span><strong>{currency(listedTotal)}</strong>
+					</div>{/if}
+				{#if roundingExtra}<div class="summary-pair">
+						<span>Làm tròn</span><strong>+{currency(roundingExtra)}</strong>
+					</div>{/if}
+			{/if}
+			<div class="summary-total">
+				<span>Tổng hóa đơn</span><strong>{currency(pending && bill ? bill.total : total)}</strong>
+			</div>
 			<div class="paid-bill-option">
 				<div class="receipt-toggle">
-					<button type="button" tabindex="-1" onclick={() => (alreadyPaid = !alreadyPaid)}
+					<button
+						type="button"
+						tabindex="-1"
+						disabled={!!pending}
+						onclick={() => (draft.alreadyPaid = !draft.alreadyPaid)}
 						><Check size={17} /><strong>Mọi người đã thanh toán</strong></button
 					>
-					<Switch aria-label="Mọi người đã thanh toán" bind:checked={alreadyPaid} />
+					<Switch
+						aria-label="Mọi người đã thanh toán"
+						checked={pending?.alreadyPaid ?? draft.alreadyPaid}
+						onCheckedChange={(checked) => (draft.alreadyPaid = checked)}
+						disabled={!!pending}
+					/>
 				</div>
 				<p class="fine-print">Chỉ lưu hóa đơn vào lịch sử, không phát sinh nợ mới.</p>
 			</div>
@@ -615,19 +574,22 @@
 				<button
 					type="button"
 					tabindex="-1"
-					disabled={savingNotificationPreference || busy}
+					disabled={!!pending || savingNotificationPreference || busy}
 					onclick={() => void changeNotificationPreference(!discordNotification)}
 					><MessageCircle size={17} /><strong>Gửi thông báo qua Discord</strong></button
 				>
 				<Switch
 					aria-label="Gửi thông báo qua Discord"
-					checked={discordNotification}
+					checked={pending?.discordNotification ?? discordNotification}
 					onCheckedChange={(enabled) => void changeNotificationPreference(enabled)}
-					disabled={savingNotificationPreference || busy}
+					disabled={!!pending || savingNotificationPreference || busy}
 				/>
 			</div>
 			{#if notificationPreferenceError}<p class="validation-error" role="alert">
 					{notificationPreferenceError}
+				</p>{/if}
+			{#if pending && !confirmOpen && !submitting}<p class="fine-print" role="status">
+					Chưa xác nhận được lần lưu trước. Xem lại để gửi lại đúng nội dung đã xác nhận.
 				</p>{/if}
 			{#if validation}<p class="validation-error" role="alert">{validation}</p>{/if}<Button
 				class="full-width"
@@ -638,48 +600,60 @@
 		</section>
 	</div>
 </div>
-<Modal bind:open={confirmOpen} title="Xác nhận hóa đơn" wide compact
-	><div class="confirm-bill-title">
-		<h3>{description}</h3>
-		<p>Ăn vào {billDateLabel(date)} · {payer.name} thanh toán</p>
-	</div>
-	{#if alreadyPaid}<p class="paid-bill-status" role="status">
-			<Check size={16} />Mọi người đã thanh toán đầy đủ. Không phát sinh nợ mới.
-		</p>{/if}
-	{#if imageId && confirmOpen}<div class="bill-detail-image">
-			<BillImage {groupId} {imageId} />
-		</div>{/if}
-	<div class="review-lines bill-detail-lines">
-		{#each lines as line}<div>
-				<span
-					><strong>{appState.members.find((m) => m.id === line.memberId)?.name}</strong><small
-						>{line.description}</small
-					></span
-				><strong>{currency(line.amount)}</strong>
-			</div>{/each}
-	</div>
-	<div class="summary-total"><span>Tổng cộng</span><strong>{currency(total)}</strong></div>
-	<div class="modal-actions">
-		{#if discordNotification}<Button
-				variant="outline"
-				disabled={busy}
-				onclick={() => {
-					previewRecipient = selected.find((id) => id !== payer.id) ?? selected[0];
-					previewOpen = true;
-				}}
+<Modal bind:open={confirmOpen} title="Xác nhận hóa đơn" wide compact locked={submitting}>
+	{#if bill}
+		<div class="confirm-bill-title">
+			<h3>{bill.description}</h3>
+			<p>
+				Ăn vào {billDateLabel(bill.date)} · {bill.memberNames?.[bill.organizer] ?? bill.organizer} thanh toán
+			</p>
+		</div>
+		{#if bill.alreadyPaid}<p class="paid-bill-status" role="status">
+				<Check size={16} />Mọi người đã thanh toán đầy đủ. Không phát sinh nợ mới.
+			</p>{/if}
+		{#if reviewImageId && confirmOpen}<div class="bill-detail-image">
+				<BillImage {groupId} imageId={reviewImageId} />
+			</div>{/if}
+		<div class="review-lines bill-detail-lines">
+			{#each bill.lines as line}<div>
+					<span
+						><strong>{bill.memberNames?.[line.memberId] ?? line.memberId}</strong><small
+							>{line.description}</small
+						></span
+					>
+					<strong>{currency(line.amount)}</strong>
+				</div>{/each}
+		</div>
+		<div class="summary-total"><span>Tổng cộng</span><strong>{currency(bill.total)}</strong></div>
+		{#if pending && !submitting}<p class="fine-print" role="status">
+				Chưa xác nhận được lần lưu trước. Lần thử lại sẽ gửi đúng nội dung này.
+			</p>{/if}
+		{#if submitError}<p class="validation-error" role="alert">{submitError}</p>{/if}
+		<div class="modal-actions">
+			{#if bill.discordNotification}<Button
+					variant="outline"
+					disabled={busy || submitting}
+					onclick={() => {
+						previewRecipient =
+							bill.lines.find((line) => line.memberId !== bill.organizer)?.memberId ?? bill.lines[0].memberId;
+						previewOpen = true;
+					}}
+				>
+					<MessageCircle size={16} />Xem trước Discord</Button
+				>{/if}
+			<Button onclick={submit} disabled={busy || submitting}>
+				<Check size={16} />{busy || submitting ? 'Đang ghi…' : 'Xác nhận'}</Button
 			>
-				<MessageCircle size={16} />Xem trước Discord</Button
-			>{/if}
-		<Button onclick={submit} disabled={busy}><Check size={16} />{busy ? 'Đang ghi…' : 'Xác nhận'}</Button>
-	</div></Modal
->
+		</div>
+	{/if}
+</Modal>
 <Modal bind:open={previewOpen} title="Xem trước Discord" wide>
 	<label class="field"
 		>Người nhận<select bind:value={previewRecipient}
-			>{#each lines as line}<option value={line.memberId}
-					>{appState.members.find((member) => member.id === line.memberId)?.name}</option
+			>{#each bill?.lines ?? [] as line}<option value={line.memberId}
+					>{bill?.memberNames?.[line.memberId] ?? line.memberId}</option
 				>{/each}</select
-		></label
-	>
-	{#if previewMessage}<DiscordPreview message={previewMessage} {groupId} {imageId} />{/if}
+		>
+	</label>
+	{#if previewMessage}<DiscordPreview message={previewMessage} {groupId} imageId={reviewImageId} />{/if}
 </Modal>

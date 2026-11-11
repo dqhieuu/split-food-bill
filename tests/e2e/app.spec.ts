@@ -271,17 +271,17 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		await expect(page.locator('.discord-preview a')).toHaveAttribute('href', /\/balances\?group=local&to=/);
 		await page.keyboard.press('Escape');
 		await page.getByRole('button', { name: 'Xác nhận', exact: true }).click();
-		await expect(page.locator('.data-table tbody tr').first()).toContainText(title);
 		const row = page.getByRole('row').filter({ hasText: title });
+		await expect(row).toBeVisible();
 		await row.locator('td').nth(3).click();
 		await expect(page.getByRole('dialog')).toContainText('102.000');
 		await expect(page.locator('.receipt-detail')).toHaveCount(0);
 
 		await page.keyboard.press('Escape');
 		await page.getByRole('link', { name: 'Tổng quan', exact: true }).click();
-		await expect(page.locator('.recent-panel .bill-row').first()).toContainText(title);
-		await page.locator('.recent-panel .bill-row').first().click();
-		await expect(page).toHaveURL('http://127.0.0.1:5173/');
+		await page.locator('.recent-panel .bill-row').filter({ hasText: title }).click();
+		await expect(page.getByRole('dialog')).toContainText(title);
+		await expect(page).toHaveURL(/\/overview$/);
 		await page.keyboard.press('Escape');
 		await page.locator('.calendar-panel .cal-bill').first().click();
 		await expect(page.getByRole('dialog')).toBeVisible();

@@ -17,6 +17,26 @@ const amount = z.number().int().positive().max(1_000_000_000);
 /** A server-issued upload name: random UUID plus the extension detected from the image bytes. */
 export const BILL_IMAGE_ID =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpg|png|webp)$/;
+export const createBillInput = z.object({
+	id: identifier,
+	description: text,
+	date: z.iso.datetime(),
+	payerId: identifier.optional(),
+	discordNotification: z.boolean(),
+	alreadyPaid: z.boolean().optional().default(false),
+	image: z.string().regex(BILL_IMAGE_ID).optional(),
+	lines: z
+		.array(
+			z.object({
+				memberId: identifier,
+				amount,
+				description: z.string().trim().max(300),
+				note: z.string().trim().max(500)
+			})
+		)
+		.min(1)
+		.max(100)
+});
 export const currency = (value: number) => new Intl.NumberFormat('vi-VN').format(value) + ' ₫';
 // Vietnamese currency has no decimals: compact labels are whole thousands of đồng.
 export const shortCurrency = (value: number) =>
@@ -226,28 +246,7 @@ export function applyCommand(
 	requireMember(state, actor, true);
 	let reference = '';
 	if (command === 'createBill') {
-		const data = z
-			.object({
-				id: identifier,
-				description: text,
-				date: z.iso.datetime(),
-				payerId: identifier.optional(),
-				discordNotification: z.boolean(),
-				alreadyPaid: z.boolean().optional().default(false),
-				image: z.string().regex(BILL_IMAGE_ID).optional(),
-				lines: z
-					.array(
-						z.object({
-							memberId: identifier,
-							amount,
-							description: z.string().trim().max(300),
-							note: z.string().trim().max(500)
-						})
-					)
-					.min(1)
-					.max(100)
-			})
-			.parse(input);
+		const data = createBillInput.parse(input);
 		const payerId = data.payerId ?? actor;
 		if (payerId !== actor) requireAdmin(state, actor);
 		const existing = state.bills.find((b) => b.id === data.id);
