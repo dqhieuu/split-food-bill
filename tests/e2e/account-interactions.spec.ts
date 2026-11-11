@@ -142,7 +142,7 @@ async function openFixture(
 	await page.goto(`${path}#auth_code=${'a'.repeat(43)}`);
 	await expect(page.locator('.account-button')).toContainText('Minh An');
 	await expect(page.locator('.loading-panel')).toHaveCount(0);
-	return { image: Buffer.from(image, 'base64'), state, userPreferences };
+	return { image: Buffer.from(image, 'base64'), state, group, userPreferences };
 }
 
 for (const width of [1280, 390]) {
@@ -165,9 +165,10 @@ for (const width of [1280, 390]) {
 				const input = route.request().postDataJSON();
 				saved.push(input);
 				settings = { ...settings, reasoningEffort: input.reasoningEffort };
-				return route.fulfill({ json: {} });
+				group.version = ++state.version;
+				return route.fulfill({ json: { group, state, actor: ACTOR, result: { reference: group.id } } });
 			});
-			await openFixture(page, '/groups');
+			const { group, state } = await openFixture(page, '/groups', undefined, { aiEnabled: true });
 			const dialog = page.getByRole('dialog', { name: 'Cấu hình nhóm', exact: true });
 			for (const value of ['high', '']) {
 				await page.locator('.group-choice').filter({ hasText: 'Nhóm mẫu' }).click();
@@ -185,6 +186,24 @@ for (const width of [1280, 390]) {
 			}
 			await page.locator('.group-choice').filter({ hasText: 'Nhóm mẫu' }).click();
 			await expect(dialog.getByRole('combobox', { name: /^Reasoning effort/ })).toHaveValue('');
+		});
+
+		test('revoked access leaves a repayment link open and clears the group snapshot', async ({ page }) => {
+			const sessionResponse = page.waitForResponse((response) => response.url().endsWith('/api/session'));
+			await openFixture(page, '/balances?group=local&member=linh');
+			const { user } = await (await sessionResponse).json();
+			await page.route('**/api/session', (route) =>
+				route.fulfill({ json: { user, groups: [], selectedGroupId: null } })
+			);
+			await page.route('**/api/groups/local/state*', (route) =>
+				route.fulfill({ status: 403, json: { message: 'Bạn chưa được kích hoạt trong nhóm này.' } })
+			);
+
+			await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+
+			await expect(page.getByText('Bạn chưa được kích hoạt trong nhóm của liên kết này.')).toBeVisible();
+			await expect(page.locator('.workspace-label')).toHaveText('Chọn nhóm');
+			await expect(page).toHaveURL(/\/balances\?group=local&member=linh$/);
 		});
 
 		test('home opens your account and the picker keeps focus through repeated changes', async ({ page }) => {

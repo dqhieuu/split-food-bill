@@ -39,7 +39,6 @@
 	import Groups from '$lib/components/views/Groups.svelte';
 	import { Switch } from '$lib/components/ui/switch';
 	import {
-		ApiError,
 		fetchState,
 		initializeAuth,
 		beginDiscordLogin,
@@ -50,6 +49,7 @@
 		saveSettlementFlowPreference,
 		sendCommand
 	} from '$lib/client/api';
+	import { createActiveGroupSession, GroupSessionChanged } from '$lib/client/active-group-session';
 	import {
 		initPreferences,
 		isTestEnv,
@@ -57,22 +57,27 @@
 		setTestView,
 		setTheme
 	} from '$lib/client/preferences.svelte';
-	import {
-		updateSettlementFlowPreference,
-		type AppState,
-		type Session,
-		type Group,
-		type SettlementFlowUpdate
-	} from '$lib/domain/types';
+	import type { SettlementFlowUpdate } from '$lib/domain/types';
 	const loadBalancesDebug = isTestEnv ? () => import('$lib/components/views/BalancesDebug.svelte') : null;
-	let appState = $state<AppState | null>(null);
-	let sessionData = $state<Session | null>(null);
-	let group = $state<Group | null>(null);
-	let selectedGroupId = $state('');
-	let actor = $state('');
-	let loading = $state(true);
-	let error = $state('');
-	let busy = $state(false);
+	const groupSession = createActiveGroupSession(
+		{
+			initializeAuth,
+			logout,
+			getSession,
+			selectGroup,
+			fetchState,
+			sendCommand,
+			saveDiscordNotificationPreference,
+			saveSettlementFlowPreference
+		},
+		() => page.url.searchParams.get('group')
+	);
+	const sessionData = $derived($groupSession.session);
+	const appState = $derived($groupSession.active?.state ?? null);
+	const group = $derived($groupSession.active?.group ?? null);
+	const selectedGroupId = $derived(group?.id ?? '');
+	const actor = $derived(sessionData?.user.id ?? '');
+	const { loading, error, busy } = $derived($groupSession);
 	let toast = $state('');
 	let toastIsError = $state(false);
 	let mobileMenu = $state(false);
@@ -122,7 +127,6 @@
 			.toLocaleUpperCase('vi') || '?'
 	);
 	let toastTimer: ReturnType<typeof setTimeout>;
-	let settlementPreferenceWrites = Promise.resolve();
 	async function navigateFromBottomBar(event: MouseEvent, path: string) {
 		mobileMenu = false;
 		if (
@@ -146,54 +150,16 @@
 			{ duration: 200, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' }
 		);
 	}
-	/** Keeps the header and the group picker in step when an admin renames the group. */
-	function applyGroup(next: Group) {
-		if (group?.id === next.id) group = next;
-		if (sessionData)
-			sessionData = {
-				...sessionData,
-				groups: sessionData.groups.map((item) => (item.id === next.id ? { ...item, ...next } : item))
-			};
-	}
 	function notify(message: string, isError = false) {
 		clearTimeout(toastTimer);
 		toast = message;
 		toastIsError = isError;
 		toastTimer = setTimeout(() => (toast = ''), 5500);
 	}
-	async function changeDiscordNotificationPreference(enabled: boolean) {
-		const uid = sessionData?.user.id;
-		const {
-			preferences: { discordBillNotifications }
-		} = await saveDiscordNotificationPreference(enabled);
-		if (sessionData && sessionData.user.id === uid)
-			sessionData = {
-				...sessionData,
-				user: {
-					...sessionData.user,
-					preferences: { ...sessionData.user.preferences, discordBillNotifications }
-				}
-			};
-	}
 	function changeSettlementFlowPreference(groupId: string, change: SettlementFlowUpdate) {
-		if (!sessionData) return;
-		const { user } = sessionData;
-		const flowPreferences = user.preferences?.settlementFlow;
-		const updated = updateSettlementFlowPreference(flowPreferences?.[groupId], change);
-		sessionData = {
-			...sessionData,
-			user: {
-				...user,
-				preferences: { ...user.preferences, settlementFlow: { ...flowPreferences, [groupId]: updated } }
-			}
-		};
-		settlementPreferenceWrites = settlementPreferenceWrites
-			.then(async () => {
-				if (sessionData?.user.id === user.id) await saveSettlementFlowPreference(groupId, change);
-			})
-			.catch(() => {
-				if (sessionData?.user.id === user.id) notify('Chưa lưu được tùy chọn dòng tiền.', true);
-			});
+		void groupSession.changeSettlementFlowPreference(groupId, change).catch(() => {
+			notify('Chưa lưu được tùy chọn dòng tiền.', true);
+		});
 	}
 	function openBillCamera() {
 		cameraContext = { groupId: selectedGroupId, actor };
@@ -227,106 +193,42 @@
 			cameraBusy = false;
 		}
 	}
-	async function changeGroup(id: string) {
+	function changeGroup(id: string) {
 		profileOpen = false;
 		accountOpen = false;
-		busy = true;
-		error = '';
-		try {
-			await settlementPreferenceWrites;
-			sessionData = await getSession();
-			await selectGroup(id);
-			const result = await fetchState(id);
-			selectedGroupId = id;
-			appState = result.state;
-			actor = result.actor;
-			group = result.group;
-		} catch (cause) {
-			error = (cause as Error).message;
-			appState = null;
-		} finally {
-			busy = false;
-		}
+		return groupSession.select(id);
 	}
-	async function restoreSession() {
-		sessionData = await getSession();
-		actor = sessionData.user.id;
-		const requestedGroup = page.url.searchParams.get('group');
-		if (requestedGroup && !sessionData.groups.some((item) => item.id === requestedGroup))
-			throw new Error('Bạn chưa được kích hoạt trong nhóm của liên kết này.');
-		const initialGroup = requestedGroup || sessionData.selectedGroupId;
-		if (initialGroup) await changeGroup(initialGroup);
-		else {
-			selectedGroupId = '';
-			appState = null;
-			group = null;
-		}
-	}
-	async function refresh() {
-		if (!selectedGroupId) return;
-		try {
-			// Notification deliveries update receipts without bumping the ledger version.
-			const delivering = appState?.receipts.some((receipt) => ['queued', 'sending'].includes(receipt.status));
-			const result = await fetchState(selectedGroupId, delivering ? undefined : appState?.version);
-			applyGroup(result.group);
-			if ('unchanged' in result) return;
-			appState = result.state;
-		} catch (cause) {
-			if (cause instanceof ApiError && cause.status === 401) await signOutUser();
-			else if (cause instanceof ApiError && cause.status === 403) {
-				appState = null;
-				await restoreSession();
-			} else throw cause;
-		}
-	}
-	async function initialize() {
-		loading = true;
-		error = '';
-		try {
-			const auth = await initializeAuth();
-			if (auth.uid) actor = auth.uid;
-			if (auth.signedIn) await restoreSession();
-		} catch (cause) {
-			error = (cause as Error).message;
-		} finally {
-			loading = false;
-		}
-	}
-	async function signOutUser() {
-		await logout();
-		sessionData = null;
-		appState = null;
-		group = null;
-		selectedGroupId = '';
-		actor = '';
+	function signOutUser() {
 		accountOpen = false;
 		profileOpen = false;
+		return groupSession.signOut();
 	}
-	async function run(
-		command: string,
-		input: unknown,
-		message = 'Đã lưu thay đổi.'
-	): Promise<string | undefined> {
-		busy = true;
-		try {
-			const response = await sendCommand(selectedGroupId, command, input);
-			appState = response.state;
-			if (response.group) applyGroup(response.group);
-			if (message) notify(message);
-			return response.result.reference || 'ok';
-		} catch (cause) {
-			notify((cause as Error).message, true);
-			if (cause instanceof ApiError && [401, 403].includes(cause.status)) void refresh();
-			throw cause;
-		} finally {
-			busy = false;
+	$effect(() => {
+		if (!selectedGroupId) {
+			accountOpen = false;
+			profileOpen = false;
 		}
-	}
+	});
+	const activeCommand = $derived($groupSession.active?.command);
+	const run = $derived.by(() => {
+		const send = activeCommand;
+		return async (command: string, input: unknown, message = 'Đã lưu thay đổi.') => {
+			if (!send) throw new GroupSessionChanged();
+			try {
+				const reference = await send(command, input);
+				if (message) notify(message);
+				return reference;
+			} catch (cause) {
+				if (!(cause instanceof GroupSessionChanged)) notify((cause as Error).message, true);
+				throw cause;
+			}
+		};
+	});
 	onMount(() => {
 		initPreferences();
-		void initialize();
+		void groupSession.initialize();
 		const poll = () => {
-			if (appState && !busy && document.visibilityState === 'visible') void refresh().catch(() => {});
+			if (!busy && document.visibilityState === 'visible') void groupSession.refresh().catch(() => {});
 		};
 		const interval = setInterval(poll, 15000);
 		document.addEventListener('visibilitychange', poll);
@@ -360,7 +262,7 @@
 			>
 				{error}
 			</p>
-			<Button variant="outline" onclick={initialize}>Kết nối lại</Button>{/if}
+			<Button variant="outline" onclick={groupSession.initialize}>Kết nối lại</Button>{/if}
 	</div>
 {:else}<a class="skip-link" href="#main-content">Đến nội dung chính</a>
 	<div class="app-shell" class:has-mobile-camera={canCaptureBill}>
@@ -494,16 +396,15 @@
 						<CircleAlert size={35} />
 						<h1>Chưa kết nối được dữ liệu</h1>
 						<p>{error}</p>
-						<Button onclick={initialize}><RefreshCw size={16} /> Kết nối lại</Button>
+						<Button onclick={groupSession.initialize}><RefreshCw size={16} /> Kết nối lại</Button>
 					</div>
 				{:else if sessionData && (section === '/groups' || !appState)}
 					<Groups
 						session={sessionData}
 						onReset={() => (resetOpen = true)}
-						onUpdated={applyGroup}
+						onConfigure={groupSession.configure}
 						onSelect={async (id) => {
-							await changeGroup(id);
-							if (!error) await goto('/', { replace: true });
+							if (await changeGroup(id)) await goto('/', { replace: true });
 						}}
 					/>
 				{:else if appState && currentMember}
@@ -526,7 +427,7 @@
 									groupName={group?.name ?? ''}
 									discordNotificationPreference={sessionData?.user.preferences?.discordBillNotifications ??
 										true}
-									onDiscordNotificationPreferenceChange={changeDiscordNotificationPreference}
+									onDiscordNotificationPreferenceChange={groupSession.changeDiscordNotificationPreference}
 								/>{/key}
 						{:else if section === '/balances'}
 							{@const balanceProps = {
@@ -643,8 +544,5 @@
 <DatabaseReset
 	bind:open={resetOpen}
 	{actor}
-	onComplete={async () => {
-		error = '';
-		await signOutUser();
-	}}
+	onComplete={signOutUser}
 />

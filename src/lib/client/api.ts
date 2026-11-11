@@ -10,15 +10,9 @@ import {
 	type Auth
 } from 'firebase/auth';
 import type { AppState, Group, Session, SettlementFlowUpdate } from '$lib/domain/types';
+import { ApiError } from './api-error';
 
-export class ApiError extends Error {
-	constructor(
-		message: string,
-		public status: number
-	) {
-		super(message);
-	}
-}
+export { ApiError } from './api-error';
 const apiBase = () =>
 	import.meta.env.VITE_WORKER_API_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8787' : '');
 let auth: Auth | undefined;

@@ -3,21 +3,23 @@
 	import { Plus, Users, Trash } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import type { Group, GroupSummary, Session } from '$lib/domain/types';
+	import type { ConfigureGroup } from '$lib/client/types';
+	import type { Group, Session } from '$lib/domain/types';
 	import GroupConfig from '../GroupConfig.svelte';
 	import { requestJson } from '$lib/client/api';
 	let {
 		session,
 		onSelect,
 		onReset,
-		onUpdated
+		onConfigure
 	}: {
 		session: Session;
 		onSelect: (id: string) => Promise<void>;
 		onReset: () => void;
-		onUpdated: (group: Group) => void;
+		onConfigure: ConfigureGroup;
 	} = $props();
-	let configGroup = $state<GroupSummary | null>(null);
+	let configGroupId = $state('');
+	const configGroup = $derived(session.groups.find((group) => group.id === configGroupId));
 	let configOpen = $state(false);
 	let guilds = $state<{ id: string; name: string }[]>([]);
 	let preview = $state<{ id: string; name: string }[]>([]);
@@ -76,7 +78,7 @@
 				aria-haspopup={group.role === 'admin' ? 'dialog' : undefined}
 				onclick={() => {
 					if (group.role !== 'admin') return;
-					configGroup = group;
+					configGroupId = group.id;
 					configOpen = true;
 				}}
 				><Users size={20} /><span
@@ -118,8 +120,5 @@
 {#if configOpen && configGroup?.role === 'admin'}<GroupConfig
 		bind:open={configOpen}
 		group={configGroup}
-		onUpdated={(next) => {
-			if (configGroup) configGroup = { ...configGroup, ...next };
-			onUpdated(next);
-		}}
+		{onConfigure}
 	/>{/if}

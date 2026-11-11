@@ -3,18 +3,19 @@
 	import { Sparkles } from '@lucide/svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { fetchAiSettings, requestJson, sendCommand } from '$lib/client/api';
-	import type { Group, GroupSummary } from '$lib/domain/types';
+	import { fetchAiSettings, requestJson } from '$lib/client/api';
+	import type { ConfigureGroup } from '$lib/client/types';
+	import type { GroupSummary } from '$lib/domain/types';
 	import { REASONING_EFFORTS, type ReasoningEffort } from '$lib/domain/ai';
 	import Modal from './Modal.svelte';
 	let {
 		open = $bindable(true),
 		group,
-		onUpdated
+		onConfigure
 	}: {
 		open: boolean;
 		group: GroupSummary;
-		onUpdated: (group: Group) => void;
+		onConfigure: ConfigureGroup;
 	} = $props();
 	const groupId = $derived(group.id);
 	const groupName = $derived(group.name);
@@ -34,8 +35,7 @@
 	let aiHasKey = $state(false);
 	async function run(command: string, input: unknown) {
 		if (!isAdmin) throw new Error('Chỉ quản trị viên nhóm được cấu hình nhóm.');
-		const response = await sendCommand(groupId, command, input);
-		if (response.group) onUpdated(response.group);
+		await onConfigure(groupId, command, input);
 	}
 	onMount(() => {
 		groupNameDraft = groupName;
