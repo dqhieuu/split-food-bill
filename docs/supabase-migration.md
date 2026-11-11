@@ -31,8 +31,8 @@ Do not replace the existing file with just this example: Firebase's service-acco
 The current Hyperdrive resource is `e844f7d050434a9982b5e220073971b7`, named `split-food-bill-supabase`; its public CA resource is `29db96bc-923f-4f45-a7d6-19ad753a0baf`. The production binding is declared in `wrangler.jsonc`. Named local development does not inherit it and remains on the loopback Firestore/Auth emulators. Never add the remote binding to the local mock environment.
 
 ```powershell
-npm run migrate:supabase -- check
-npm run migrate:supabase -- schema
+pnpm migrate:supabase check
+pnpm migrate:supabase schema
 ```
 
 `check` only connects and checks schema availability. `schema` creates the private schema and table without dropping or replacing existing data.
@@ -42,9 +42,9 @@ npm run migrate:supabase -- schema
 Use a new ignored snapshot filename for each export:
 
 ```powershell
-npm run migrate:supabase -- export --snapshot artifacts/migration/firestore-final.json
-npm run migrate:supabase -- import --snapshot artifacts/migration/firestore-final.json
-npm run migrate:supabase -- verify --snapshot artifacts/migration/firestore-final.json
+pnpm migrate:supabase export --snapshot artifacts/migration/firestore-final.json
+pnpm migrate:supabase import --snapshot artifacts/migration/firestore-final.json
+pnpm migrate:supabase verify --snapshot artifacts/migration/firestore-final.json
 ```
 
 The source defaults to Firebase project `split-food-bill`; use `--project` for another project. `--secrets` selects another ignored secrets file. Local testing requires `--mode local`, the demo project and loopback emulator/database endpoints.
@@ -67,17 +67,17 @@ Do not enable automatic deployment of a Supabase provider change before the data
 ## Verification
 
 ```powershell
-npm run check
-npm run check:worker
-npm test
-npm run build:worker
+pnpm check
+pnpm check:worker
+pnpm test
+pnpm build:worker
 ```
 
 The integration suite requires a disposable local PostgreSQL database ending in `_test`. It truncates only `app_data.documents` in that test database:
 
 ```powershell
 $env:LOCAL_DATABASE_TEST_URL = 'postgresql://postgres:local-migration-tests-only@127.0.0.1:54329/lunchroom_test'
-npm run test:supabase
+pnpm test:supabase
 ```
 
 Tests cover preservation of nested fields and amounts, group/collection isolation, serializable concurrency and retries, all-or-nothing writes, create-only conflicts, orphan traversal and pagination, live membership enforcement, idempotent already-paid bills, private-schema permissions, exact import/retry verification, conflict refusal and backup tamper detection.

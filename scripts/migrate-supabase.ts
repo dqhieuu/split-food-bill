@@ -21,7 +21,7 @@ if (
 	)
 ) {
 	console.log(
-		'Usage: npm run migrate:supabase -- <check|schema|export|import|verify> --secrets .dev.vars.production.json --snapshot artifacts/migration/firestore.json --project split-food-bill --mode production'
+		'Usage: pnpm migrate:supabase <check|schema|export|import|verify> --secrets .dev.vars.production.json --snapshot artifacts/migration/firestore.json --project split-food-bill --mode production'
 	);
 	process.exit(action ? 1 : 0);
 }

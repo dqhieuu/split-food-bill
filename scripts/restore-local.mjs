@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { collectionKeys } from '../src/lib/domain/types.ts';
 
 const [path, ...extra] = process.argv.slice(2);
-if (!path || extra.length) throw new Error('Usage: npm run restore:local -- <group-backup.json>');
+if (!path || extra.length) throw new Error('Usage: pnpm restore:local <group-backup.json>');
 
 process.env.FIRESTORE_EMULATOR_HOST ??= '127.0.0.1:8080';
 if (process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8080')
@@ -44,7 +44,7 @@ try {
 	const group = db.doc('groups/local');
 	await db.runTransaction(async (transaction) => {
 		const metadata = await transaction.get(group);
-		if (!metadata.exists) throw new Error('Start npm run dev to initialize the local group first.');
+		if (!metadata.exists) throw new Error('Start pnpm dev to initialize the local group first.');
 		const current = await Promise.all(
 			collectionKeys.map(async (key) => [key, await transaction.get(group.collection(key))])
 		);

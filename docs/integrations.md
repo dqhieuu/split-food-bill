@@ -119,13 +119,14 @@ Cloudflare Durable Object storage holds short-lived OAuth states, one-use handof
 ## Local development
 
 ```powershell
-npm ci
-npm run dev
+corepack enable pnpm
+pnpm i
+pnpm dev
 ```
 
-Prerequisites: Node.js 24 LTS and Java 21+. The local launcher runs Firebase emulators for `demo-lunchroom`, seeds a fresh Discord-based fixture when needed, starts Wrangler on `127.0.0.1:8787`, and starts Vite on `127.0.0.1:5173`. The first Firebase run may download emulator binaries. Use the login button and pick one of the mock Discord accounts.
+Use Node.js 24.12 or later in the 24.x line and Java 21 or later. The local launcher runs Firebase emulators for `demo-lunchroom`, seeds a fresh Discord-based fixture when needed, starts Wrangler on `127.0.0.1:8787`, and starts Vite on `127.0.0.1:5173`. The first Firebase run may download emulator binaries. Use the login button and pick one of the mock Discord accounts.
 
-The repository pins Node.js 24 through `.node-version` and npm 11.19.1 through `packageManager` in `package.json`. Cloudflare Workers Builds reads these files to select its toolchain; the GitHub workflow also installs the pinned npm explicitly. Use `npm install --global npm@11.19.1` if your local npm differs. npm 10 resolves optional SvelteKit peer dependencies differently and can reject this npm 11 lockfile as out of sync. Keep the pinned npm version when updating dependencies and commit `package.json` and `package-lock.json` together. See [Cloudflare build image configuration](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/).
+The repository selects Node.js 24 through `.node-version` and pins pnpm through `packageManager` in `package.json`. Cloudflare Workers Builds and the GitHub workflow use these pins. Commit `package.json` and `pnpm-lock.yaml` together when updating dependencies. See [Cloudflare build image configuration](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/).
 
 The seeded Minh An (`discord_100000000000000001`) is the global admin and local group's active admin. The other users are inactive. Activate Thảo Linh or Quang Huy in member management before testing their group access. A second mock server is available for testing group creation. No real OAuth, Discord API calls or DMs occur in local mode, even if credentials exist in the shell.
 
@@ -134,12 +135,12 @@ Local configuration is committed under `env.local` in `wrangler.jsonc`. The fron
 Separate processes, if desired:
 
 ```powershell
-npm run emulators
+pnpm emulators
 # In another terminal, after emulator startup:
-npm run seed:local
-npm run dev:worker
+pnpm seed:local
+pnpm dev:worker
 # In a third terminal:
-npm run dev:web
+pnpm dev:web
 ```
 
 ## Connect Discord
@@ -165,8 +166,8 @@ Synchronization adds missing users and inactive memberships. Existing names/bank
 5. Publish this repository's deny-all client rules, explicitly selecting the real project:
 
 ```powershell
-npx firebase login
-npx firebase deploy --only firestore:rules --project YOUR_FIREBASE_PROJECT_ID
+pnpm exec firebase login
+pnpm exec firebase deploy --only firestore:rules --project YOUR_FIREBASE_PROJECT_ID
 ```
 
 Do not change the launcher's demo project into a production project. There are no browser Firestore reads or writes: all data goes through the Worker, whose Google OAuth service-account requests use IAM authorization. Consequently the Worker enforces every group/role boundary; client security rules do not restrict service-account access. See [Firestore REST authentication](https://firebase.google.com/docs/firestore/use-rest-api).
@@ -192,7 +193,7 @@ The production Worker name is `split-food-bill`, matching `https://split-food-bi
 Authenticate the CLI without deploying:
 
 ```powershell
-npx wrangler login
+pnpm exec wrangler login
 ```
 
 Prepare `.dev.vars.production.json` locally with these keys: `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, `DISCORD_ADMIN_IDS`, and optional `DISCORD_GUILD_IDS`. This filename is ignored by the repository's `.dev.vars.*` rule. Copy `client_email` and `private_key` from the downloaded service-account JSON. The private key accepts PEM newlines or escaped `\n` characters; use a JSON serializer when copying a multiline key. Admin/server ID values are comma-separated numeric Discord IDs.
@@ -202,21 +203,21 @@ Keep service-account JSON, OAuth secrets and bot tokens out of Git and frontend 
 Check the bundle without deploying:
 
 ```powershell
-npm run check:worker
-npm run build:worker
+pnpm check:worker
+pnpm build:worker
 ```
 
 After reviewing the app and completing configuration, deploy the top-level production environment with code and secrets together:
 
 ```powershell
-npm run deploy:worker -- --secrets-file .dev.vars.production.json
+pnpm deploy:worker --secrets-file .dev.vars.production.json
 ```
 
-It deploys the API and provisions its declared Durable Object class. Set Discord's callback to the resulting stable Worker hostname. A successful production `/health` confirms required configuration is present; it does not test every external permission or credential. Validate real OAuth, a small server sync and a bill notification in a staging environment before general use. Future `npm run deploy:worker` calls preserve remote secrets; use `wrangler secret put` when deliberately rotating a remote secret.
+It deploys the API and provisions its declared Durable Object class. Set Discord's callback to the resulting stable Worker hostname. A successful production `/health` confirms required configuration is present; it does not test every external permission or credential. Validate real OAuth, a small server sync and a bill notification in a staging environment before general use. Future `pnpm deploy:worker` calls preserve remote secrets. Use `pnpm exec wrangler secret put` when deliberately rotating a remote secret.
 
 ## Connect Vercel
 
-1. Import this Git repository into Vercel. Use the repository root, SvelteKit framework detection, and `npm run build`. The install command in `vercel.json` runs `npm ci` with the npm version pinned in `package.json`. Leave output directory detection to the adapter. Under Project Settings → Environments → Production → Branch Tracking, select `master`; an existing `main` branch may otherwise remain the production source and serve an older app. Deploy the latest `master` commit after changing this setting. See [Vercel production branch configuration](https://vercel.com/docs/git#production-branch). The Vite configuration selects the Vercel adapter when `VERCEL` is set.
+1. Import this Git repository into Vercel. Use the repository root and SvelteKit framework detection. The commands in `vercel.json` use Corepack to install from the frozen lockfile and build with the pnpm version pinned in `package.json`. Leave output directory detection to the adapter. Under Project Settings → Environments → Production → Branch Tracking, select `master`. Deploy the latest `master` commit after changing this setting. See [Vercel production branch configuration](https://vercel.com/docs/git#production-branch). The Vite configuration selects the Vercel adapter when `VERCEL` is set.
 2. Set production `VITE_WORKER_API_URL=https://YOUR-WORKER-HOST`. Optionally set `VITE_APP_ENV=production` explicitly. Vite variables are embedded at build time, so redeploy after changes. Use Node.js 24 for the Vercel build to satisfy the Firebase SDK's install requirements. The adapter targets Node.js 22 for the generated functions.
 3. Set the chosen frontend domain as the Worker's exact `FRONTEND_ORIGIN`. The Worker allows this origin rather than arbitrary preview domains.
 4. Keep Firebase service-account, Discord client secret and bot token exclusively on Cloudflare. Vercel only needs the public backend URL for this architecture.
@@ -288,13 +289,13 @@ The Discord member preview refresh button passes `?refresh=true` to the member e
 ## Verification and current limits
 
 ```powershell
-npm run check
-npm run check:worker
-npm test
-npm run build
-npm run build:worker
+pnpm check
+pnpm check:worker
+pnpm test
+pnpm build
+pnpm build:worker
 # Requires the local development stack:
-npm run test:e2e
+pnpm test:e2e
 ```
 
 Unit and local browser tests cover identity/permission rules, OAuth replay rejection, unauthorized origins, inactive access denial, global/group role separation, independent group state, last group selection and bill/payment workflows. Local tests do not establish that real Firebase IAM, Discord intent approval or live bank scanning are configured.

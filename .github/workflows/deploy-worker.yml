@@ -9,7 +9,8 @@ on:
         'src/lib/domain/**',
         'wrangler.jsonc',
         'package.json',
-        'package-lock.json',
+        'pnpm-lock.yaml',
+        'pnpm-workspace.yaml',
         '.node-version',
         '.github/workflows/deploy-worker.yml'
       ]
@@ -28,11 +29,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: '.node-version'
-          cache: npm
-      - run: npm install --global npm@11.19.1
-      - run: npm ci
-      - run: npm run check:worker
-      - run: npm test
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:worker
+      - run: pnpm test
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

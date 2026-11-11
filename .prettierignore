@@ -3,7 +3,7 @@ node_modules
 .vercel
 build
 .emulator-data
-package-lock.json
+pnpm-lock.yaml
 artifacts
 test-results
 .playwright-mcp
