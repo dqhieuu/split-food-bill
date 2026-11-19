@@ -128,19 +128,14 @@
 		if (!savingNotificationPreference) discordNotification = discordNotificationPreference;
 	});
 	onMount(() => {
+		let stored: string | null = null;
 		try {
-			const stored = draftStorage.read();
+			stored = draftStorage.read();
 			pending = draftStorage.readAttempt();
-			draft = restoreBillDraft(
-				stored,
-				draft,
-				editor,
-				people,
-				pending ? null : page.url.searchParams.get('date')
-			);
 		} catch {
 			/* A browser that blocks storage can still show the form. */
 		}
+		draft = restoreBillDraft(stored, draft, editor, people, pending ? null : page.url.searchParams.get('date'));
 		draftReady = true;
 	});
 	$effect(() => {

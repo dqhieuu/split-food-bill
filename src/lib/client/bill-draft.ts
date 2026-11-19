@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import type { BillScan } from '../domain/ai';
-import { BILL_IMAGE_ID, createBillInput, discountShares, equalShares, localDate } from '../domain/ledger';
+import { BILL_IMAGE_ID, createBillInput, discountShares, equalShares } from '../domain/ledger';
 import type { Bill, Member } from '../domain/types';
 import { ApiError } from './api-error';
 
 export const ROUNDING_OPTIONS = [0, 1, 2, 3, 4] as const;
+const draftIdleExpiryMs = 10 * 60 * 1000;
 const billDay = z.iso.date();
 const inputAmount = z.number().nullable().catch(null);
 const draftFields = z.object({
@@ -37,12 +38,12 @@ type BillDraft = Omit<z.output<typeof draftFields>, 'date' | 'selected' | 'payer
 
 export function newBillDraft(
 	actor: string,
-	today = localDate(new Date()),
+	date = '',
 	id: string = crypto.randomUUID()
 ): BillDraft {
 	return {
 		...draftFields.parse({}),
-		date: today,
+		date,
 		selected: [actor],
 		payerId: actor,
 		submissionId: id
@@ -233,26 +234,73 @@ export function createBillDraftStorage(
 	const key = `lunchroom-draft-${groupId}-${actor}`;
 	// Ordinary draft autosaves cannot overwrite an in-flight submission.
 	const attemptKey = `${key}-attempt`;
+	const editedAtKey = `${key}-edited-at`;
+	let expiryTimer: ReturnType<typeof setTimeout> | undefined;
 
 	function readAttempt() {
 		const raw = getStorage().getItem(attemptKey);
 		return raw ? submissionFields.parse(JSON.parse(raw)) : null;
 	}
 
+	function read() {
+		const storage = getStorage();
+		const raw = storage.getItem(key);
+		if (raw === null) return null;
+
+		const editedAt = Number(storage.getItem(editedAtKey));
+		const age = Date.now() - editedAt;
+		if (!Number.isFinite(editedAt) || age < 0 || age >= draftIdleExpiryMs) {
+			storage.removeItem(key);
+			storage.removeItem(editedAtKey);
+			return null;
+		}
+		scheduleExpiry(storage, editedAt, draftIdleExpiryMs - age);
+		return raw;
+	}
+
 	function save(draft: BillDraft) {
-		getStorage().setItem(key, JSON.stringify(draft));
+		const storage = getStorage();
+		const next = JSON.stringify(draft);
+		if (storage.getItem(key) !== next) {
+			storage.setItem(key, next);
+			markEdited(storage);
+		} else if (storage.getItem(editedAtKey) === null) {
+			markEdited(storage);
+		}
+	}
+
+	function markEdited(storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>) {
+		const editedAt = Date.now();
+		storage.setItem(editedAtKey, String(editedAt));
+		scheduleExpiry(storage, editedAt, draftIdleExpiryMs);
+	}
+
+	function scheduleExpiry(
+		storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
+		editedAt: number,
+		delay: number
+	) {
+		if (expiryTimer) clearTimeout(expiryTimer);
+		expiryTimer = setTimeout(() => {
+			if (storage.getItem(editedAtKey) !== String(editedAt)) return;
+			storage.removeItem(key);
+			storage.removeItem(editedAtKey);
+		}, delay);
 	}
 
 	function finishAttempt(submission: BillSubmission, saved: boolean) {
 		if (JSON.stringify(readAttempt()) !== JSON.stringify(submission)) return false;
 		const storage = getStorage();
-		if (saved && decodeDraft(storage.getItem(key))?.submissionId === submission.id) storage.removeItem(key);
+		if (saved && decodeDraft(storage.getItem(key))?.submissionId === submission.id) {
+			storage.removeItem(key);
+			storage.removeItem(editedAtKey);
+		}
 		storage.removeItem(attemptKey);
 		return true;
 	}
 
 	return {
-		read: () => getStorage().getItem(key),
+		read,
 		save,
 		readAttempt,
 		beginAttempt(draft: BillDraft, reviewed: BillSubmission, retrying = false) {

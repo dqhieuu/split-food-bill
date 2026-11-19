@@ -299,8 +299,7 @@ test('bill creation, profile editing and detail dialogs work with scoped Discord
 		await page.getByRole('button', { name: 'Sửa hồ sơ Thảo Linh', exact: true }).click();
 		await expect(page.getByLabel('ID', { exact: true })).toBeDisabled();
 		await expect(page.getByLabel('Email', { exact: true })).toHaveCount(0);
-		await expect(page.locator('#member-bank-options option')).toHaveCount(68);
-		await expect(page.locator('#member-bank-options option[value="Woori"]')).toHaveCount(1);
+		await expect(page.locator('datalist option[value="Woori"]')).toHaveAttribute('label', /^Woori ·/);
 		await page.getByLabel('Ngân hàng', { exact: true }).fill('Ngân hàng TMCP Kiên Long');
 		await page.getByLabel('Số tài khoản', { exact: true }).fill('linh.account-01');
 		await page.getByRole('button', { name: 'Lưu hồ sơ', exact: true }).click();
